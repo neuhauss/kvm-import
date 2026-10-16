@@ -41,3 +41,39 @@ export default defineComponent({
   },
 });
 </script>
+
+<style scoped>
+/* Keep VM controls legible against Rancher's dark theme. These styles belong
+   to this component because the Cloud Native page's scoped CSS cannot reach
+   its buttons directly. */
+.vm-name {
+  max-width: 100%;
+  border: 0 !important;
+  padding: 2px 0 !important;
+  color: var(--link, #7db8ff) !important;
+  background: transparent !important;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.vm-name:hover { text-decoration: underline; }
+.toggle-pill {
+  min-width: 70px;
+  border: 1px solid var(--border, #4b5563) !important;
+  border-radius: 5px !important;
+  padding: 6px 10px !important;
+  color: var(--body-text, #e5e7eb) !important;
+  background: var(--body-bg, #252b33) !important;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+.toggle-pill.enabled {
+  border-color: #3b8458 !important;
+  color: #b9f0ca !important;
+  background: #173d2b !important;
+}
+.toggle-pill:disabled { cursor: wait; opacity: .72; }
+</style>

@@ -39,10 +39,9 @@
             <td>{{ dateLabel(host.last_checked_at) }}</td>
             <td class="actions">
               <div class="host-menu-wrap">
-                <button class="btn role-secondary btn-sm host-menu-trigger" :aria-expanded="openMenu === host.id" :aria-label="`${t('hosts.administer')} ${host.hostname || host.name}`" @click.stop="toggleMenu(host)"><span aria-hidden="true">☰</span><span>{{ t('hosts.administer') }}</span></button>
-                <div v-if="openMenu === host.id" class="host-menu" role="menu">
-                  <form class="cockpit-launch" :action="cockpitUrl(host)" method="post" target="_blank" @submit="openMenu = ''"><button class="host-menu-item" type="submit" role="menuitem">{{ t('hosts.cockpit') }}</button></form>
-                  <button class="host-menu-item" role="menuitem" @click="openCloudNative(host)">{{ t('hosts.cloudNative') }}</button>
+                <button :id="`host-ui-${host.id}`" class="btn role-secondary btn-sm host-menu-trigger" :aria-expanded="openMenu === host.id" :aria-controls="`host-ui-menu-${host.id}`" :aria-label="`${t('hosts.uiMenu')} ${host.hostname || host.name}`" @click.stop="toggleMenu(host, $event)"><span aria-hidden="true">☰</span><span>{{ t('hosts.uiMenu') }}</span></button>
+                <div v-if="openMenu === host.id" :id="`host-ui-menu-${host.id}`" class="host-menu" :style="hostMenuStyle" role="menu">
+                  <button class="host-menu-item" role="menuitem" @click="openCloudNative(host)">{{ t('hosts.uiMenu') }}</button>
                 </div>
               </div>
               <button class="btn role-link btn-sm" :disabled="refreshing === host.id" @click="refresh(host)">{{ refreshing === host.id ? t('hosts.refreshing') : t('hosts.refresh') }}</button>
@@ -102,12 +101,24 @@ export default defineComponent({
   data() {
     return {
       hosts: [] as Host[], loading: false, refreshing: '' as string, dialog: false, editing: '' as string,
-      saving: false, error: '', formError: '', openMenu: '' as string,
+      saving: false, error: '', formError: '', openMenu: '' as string, hostMenuStyle: {} as Record<string, string>,
       form: { name: '', address: '', port: 22, username: '', password: '', ssh_private_key: '', ssh_key_passphrase: '', remove_ssh_key: false, accept_new_host_key: false },
       showingAudit: false, auditEvents: [] as AuditEvent[], auditLoading: false, auditError: '',
     };
   },
-  mounted() { this.load(); },
+  mounted() {
+    this.load();
+    document.addEventListener('click', this.closeMenu);
+    document.addEventListener('keydown', this.onMenuKeydown);
+    window.addEventListener('resize', this.closeMenu);
+    window.addEventListener('scroll', this.closeMenu, true);
+  },
+  beforeUnmount() {
+    document.removeEventListener('click', this.closeMenu);
+    document.removeEventListener('keydown', this.onMenuKeydown);
+    window.removeEventListener('resize', this.closeMenu);
+    window.removeEventListener('scroll', this.closeMenu, true);
+  },
   methods: {
     t(key: string, args?: Record<string, unknown>): string { const translate = (this as any).$store?.getters?.['i18n/t']; return translate ? translate(`kvmManager.${key}`, args) : key; },
     async request(path: string, options: RequestInit = {}) {
@@ -170,7 +181,18 @@ export default defineComponent({
       // full navigation keeps the request on this extension's own page route.
       window.location.assign(`${path}?hostId=${encodeURIComponent(host.id)}`);
     },
-    toggleMenu(host: Host) { this.openMenu = this.openMenu === host.id ? '' : host.id; },
+    toggleMenu(host: Host, event: MouseEvent) {
+      if (this.openMenu === host.id) { this.openMenu = ''; return; }
+      const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+      const menuHeight = 48;
+      const top = rect.bottom + menuHeight <= window.innerHeight - 12 ? rect.bottom + 4 : Math.max(12, rect.top - menuHeight - 4);
+      const width = 210;
+      const left = Math.min(Math.max(12, rect.right - width), window.innerWidth - width - 12);
+      this.hostMenuStyle = { top: `${top}px`, left: `${left}px` };
+      this.openMenu = host.id;
+    },
+    closeMenu() { this.openMenu = ''; },
+    onMenuKeydown(event: KeyboardEvent) { if (event.key === 'Escape') this.openMenu = ''; },
     async toggleAudit() {
       this.showingAudit = !this.showingAudit;
       if (!this.showingAudit) return;
@@ -180,7 +202,6 @@ export default defineComponent({
       finally { this.auditLoading = false; }
     },
     vmStateClass(state: string) { return state.toLowerCase().includes('running') ? 'ready' : 'unreachable'; },
-    cockpitUrl(host: Host) { return `${apiBase}/hosts/${host.id}/cockpit`; },
     async remove(host: Host) {
       if (!window.confirm(this.t('hosts.removeConfirm', { name: host.name }))) return;
       try { await this.request(`/hosts/${host.id}`, { method: 'DELETE' }); this.hosts = this.hosts.filter((item) => item.id !== host.id); }
@@ -206,13 +227,10 @@ small { display: block; font-size: 12px; margin-top: 4px; }
 .state { display: inline-block; padding: 3px 9px; border-radius: 12px; background: #edf0f4; }
 .state.ready { background: #e3f5e8; color: #23733a; }
 .state.unreachable { background: #fde8e7; color: #a52822; }
-.cockpit-launch { margin: 0; }
-.cockpit-link { padding: 0; border: 0; color: var(--link, #2563eb); background: transparent; cursor: pointer; text-align: left; }
-.cockpit-link:hover { text-decoration: underline; }
 .actions { text-align: right !important; }
-.host-menu-wrap { position:relative; display:inline-block; margin-right:5px; }
+.host-menu-wrap { display:inline-block; margin-right:5px; }
 .host-menu-trigger { display:inline-flex; align-items:center; gap:8px; }
-.host-menu { position:absolute; z-index:20; top:calc(100% + 4px); right:0; min-width:180px; padding:5px; border:1px solid var(--border); border-radius:var(--border-radius); background:var(--input-bg); box-shadow:0 6px 20px #0002; text-align:left; }
+.host-menu { position:fixed; z-index:2000; width:210px; padding:6px; border:1px solid var(--border, #d8dde6); border-radius:var(--border-radius, 6px); background:var(--input-bg, var(--body-bg, #fff)); box-shadow:0 8px 24px #0003; text-align:left; }
 .host-menu-item { display:block; width:100%; border:0; border-radius:var(--border-radius); padding:9px 11px; color:var(--body-text); background:transparent; cursor:pointer; text-align:left; font:inherit; }
 .host-menu-item:hover,.host-menu-item:focus-visible { background:var(--hover-bg, rgba(120,135,160,.12)); outline:none; }
 .btn-sm { margin-left: 4px; }

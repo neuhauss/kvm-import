@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="430" viewBox="0 0 1200 430">
+  <rect width="1200" height="430" fill="#20252c"/>
+  <text x="44" y="52" fill="#f4f7f9" font-family="Arial,sans-serif" font-size="24" font-weight="700">KVM extension icon options</text>
+  <text x="44" y="80" fill="#a9b2bf" font-family="Arial,sans-serif" font-size="14">Three vector concepts previewed at sidebar size and enlarged for review</text>
+
+  <g transform="translate(35 105)">
+    <rect width="355" height="285" rx="12" fill="#2a3038" stroke="#424b56"/>
+    <text x="22" y="34" fill="#dce4eb" font-family="Arial,sans-serif" font-size="13" font-weight="700">1 · RANCHER OUTLINE</text>
+    <rect x="24" y="62" width="60" height="118" rx="8" fill="#20252c"/>
+    <path d="M54 79v9m-10 9h20v17H44zm0 0 10-7 10 7M49 121h10v17H49z" fill="none" stroke="#53d6aa" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="54" y="158" text-anchor="middle" fill="#f5f7fa" font-family="Arial,sans-serif" font-size="8" font-weight="700" letter-spacing=".5">KVM</text>
+    <text x="110" y="104" fill="#eef2f5" font-family="Arial,sans-serif" font-size="20" font-weight="600">Server + wordmark</text>
+    <text x="110" y="132" fill="#a9b2bf" font-family="Arial,sans-serif" font-size="13">Rancher-style thin outline</text>
+    <text x="110" y="152" fill="#a9b2bf" font-family="Arial,sans-serif" font-size="13">with KVM clearly inside.</text>
+    <rect x="247" y="205" width="76" height="58" rx="10" fill="#20252c"/>
+    <rect x="266" y="215" width="38" height="10" rx="2" fill="none" stroke="#53d6aa" stroke-width="2"/>
+    <rect x="266" y="230" width="38" height="10" rx="2" fill="none" stroke="#53d6aa" stroke-width="2"/>
+    <circle cx="271" cy="220" r="1.5" fill="#53d6aa"/><circle cx="271" cy="235" r="1.5" fill="#53d6aa"/>
+    <text x="286" y="256" text-anchor="middle" fill="#f5f7fa" font-family="Arial,sans-serif" font-size="8" font-weight="700" letter-spacing=".5">KVM</text>
+  </g>
+
+  <g transform="translate(422 105)">
+    <rect width="355" height="285" rx="12" fill="#2a3038" stroke="#424b56"/>
+    <text x="22" y="34" fill="#dce4eb" font-family="Arial,sans-serif" font-size="13" font-weight="700">2 · HEXAGON BADGE</text>
+    <rect x="24" y="62" width="60" height="118" rx="8" fill="#20252c"/>
+    <path d="M54 82 70 91v18l-16 9-16-9V91z" fill="none" stroke="#53d6aa" stroke-width="2.4" stroke-linejoin="round"/>
+    <text x="54" y="103" text-anchor="middle" fill="#f5f7fa" font-family="Arial,sans-serif" font-size="7.3" font-weight="700" letter-spacing=".2">KVM</text>
+    <text x="110" y="104" fill="#eef2f5" font-family="Arial,sans-serif" font-size="20" font-weight="600">Compact badge</text>
+    <text x="110" y="132" fill="#a9b2bf" font-family="Arial,sans-serif" font-size="13">Hexagonal outline nods to</text>
+    <text x="110" y="152" fill="#a9b2bf" font-family="Arial,sans-serif" font-size="13">virtualization, with the name.</text>
+    <rect x="247" y="205" width="76" height="58" rx="10" fill="#20252c"/>
+    <path d="M285 212 306 224v23l-21 12-21-12v-23z" fill="none" stroke="#53d6aa" stroke-width="2.4" stroke-linejoin="round"/>
+    <text x="285" y="239" text-anchor="middle" fill="#f5f7fa" font-family="Arial,sans-serif" font-size="10" font-weight="700" letter-spacing=".2">KVM</text>
+  </g>
+
+  <g transform="translate(809 105)">
+    <rect width="355" height="285" rx="12" fill="#2a3038" stroke="#424b56"/>
+    <text x="22" y="34" fill="#dce4eb" font-family="Arial,sans-serif" font-size="13" font-weight="700">3 · KVM MONOGRAM</text>
+    <rect x="24" y="62" width="60" height="118" rx="8" fill="#20252c"/>
+    <rect x="36" y="91" width="36" height="22" rx="5" fill="#53d6aa"/>
+    <text x="54" y="106" text-anchor="middle" fill="#17252a" font-family="Arial,sans-serif" font-size="8" font-weight="800" letter-spacing=".2">KVM</text>
+    <circle cx="41" cy="124" r="2" fill="#53d6aa"/><circle cx="54" cy="124" r="2" fill="#53d6aa"/><circle cx="67" cy="124" r="2" fill="#53d6aa"/>
+    <text x="110" y="104" fill="#eef2f5" font-family="Arial,sans-serif" font-size="20" font-weight="600">Bold monogram</text>
+    <text x="110" y="132" fill="#a9b2bf" font-family="Arial,sans-serif" font-size="13">Maximum legibility at small</text>
+    <text x="110" y="152" fill="#a9b2bf" font-family="Arial,sans-serif" font-size="13">sizes, in the Rancher mint.</text>
+    <rect x="247" y="205" width="76" height="58" rx="10" fill="#20252c"/>
+    <rect x="258" y="220" width="54" height="28" rx="6" fill="#53d6aa"/>
+    <text x="285" y="239" text-anchor="middle" fill="#17252a" font-family="Arial,sans-serif" font-size="12" font-weight="800" letter-spacing=".2">KVM</text>
+    <circle cx="269" cy="254" r="2" fill="#53d6aa"/><circle cx="285" cy="254" r="2" fill="#53d6aa"/><circle cx="301" cy="254" r="2" fill="#53d6aa"/>
+  </g>
+</svg>

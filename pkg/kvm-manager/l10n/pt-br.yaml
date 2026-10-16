@@ -14,10 +14,7 @@ kvmManager:
     memory: Memory
     lastCheck: Last check
     manage: Manage
-    cockpit: Cockpit
-    cockpitHelp: Open Cockpit on this host. SSH account needs sudo on first access.
-    cloudNative: Cloud Native interface
-    administer: Administer
+    uiMenu: UI
     refresh: Refresh
     refreshing: Checking...
     edit: Edit
@@ -77,6 +74,77 @@ kvmManager:
     network: Network
     services: Services
     logs: Logs
+    accounts: Contas
+    repositories: Repositórios
+    selinux: SELinux
+    subscriptions: Assinaturas
+    terminal: Terminal
+    group_system: Sistema
+    group_tools: Ferramentas
+    accountsDescription: Usuários locais, grupos, diretórios pessoais e shells de login.
+    account: Conta
+    homeDirectory: Diretório pessoal
+    shell: Shell
+    groups: Grupos
+    noAccounts: O host não retornou contas locais.
+    locked: Bloqueada
+    unlocked: Ativa
+    lock: Bloquear
+    unlock: Desbloquear
+    setPassword: Definir senha
+    newPassword: Nova senha
+    accountsWarning: Alterações nas contas afetam o acesso ao host. A conta SSH usada pela extensão não pode ser bloqueada aqui.
+    confirmAccountAction: "{action} a conta {username}? Isso altera o acesso ao host."
+    repositoriesDescription: Fontes de software registradas no Zypper.
+    repository: Repositório
+    alias: Apelido
+    status: Estado
+    uri: URL do repositório
+    enabled: Ativado
+    disabled: Desativado
+    enable: Ativar
+    disable: Desativar
+    refreshRepositories: Atualizar repositórios
+    noRepositories: O host não retornou repositórios de software.
+    repositoryWarning: Ativar, desativar ou atualizar repositórios altera a configuração de software do host.
+    confirmRepositoryRefresh: Atualizar os metadados dos repositórios agora? Isso pode usar a rede do host e levar alguns minutos.
+    confirmRepositoryChange: "{action} o repositório {alias}? Isso altera a configuração de software do host."
+    selinuxDescription: Estado do SELinux e modo de aplicação de políticas neste host.
+    selinuxStatus: Estado de segurança
+    selinuxMode: Modo SELinux
+    selinuxPolicy: Política carregada
+    selinuxUnavailable: SELinux não está disponível neste host. O estado do AppArmor será mostrado se estiver instalado.
+    setEnforcing: Ativar modo obrigatório
+    setPermissive: Ativar modo permissivo
+    confirmSecurityMode: "Alterar o SELinux para {mode}? Isso altera a política de segurança do host."
+    subscriptionsDescription: Estado de registro no SUSE Customer Center informado pelo SUSEConnect.
+    client: Cliente
+    notInstalled: Não instalado
+    registrationStatus: Estado do registro
+    noSubscriptionData: O host não retornou o estado do registro.
+    refreshStatus: Atualizar estado
+    subscriptionWarning: O registro e a remoção do registro não são feitos aqui; use seu processo aprovado da SUSE para códigos de registro.
+    terminalDescription: Os comandos são executados no host como o usuário SSH {user}. Execute apenas comandos autorizados.
+    command: Comando
+    commandPlaceholder: "uname -a"
+    runCommand: Executar comando
+    runningCommand: Executando...
+    terminalWarning: Os comandos são executados como o usuário SSH importado. O uso do terminal é auditado, mas o texto dos comandos não é armazenado.
+    commandResult: Resultado do comando
+    exitCode: Código de saída
+    noOutput: O comando terminou sem saída.
+    networkConnections: Conexões do NetworkManager
+    connection: Conexão
+    noConnection: Nenhuma conexão do NetworkManager foi encontrada.
+    activate: Ativar
+    deactivate: Desativar
+    up: Ativar
+    down: Desativar
+    networkWarning: Desativar a conexão usada pela sessão SSH pode interromper o acesso ao host.
+    confirmNetworkConnection: "{action} a conexão de rede {name}? Isso pode desconectar o host."
+    confirmLibvirtAction: "{action} {name}? Isso pode afetar as máquinas virtuais que usam esse recurso."
+    enableAutostart: Ativar inicialização automática
+    disableAutostart: Desativar inicialização automática
     systemSummary: System summary
     uptime: Uptime
     system: System
@@ -90,7 +158,7 @@ kvmManager:
     filterVms: Filter virtual machines
     vmLifecycle: Lifecycle, disk and network details, and autostart.
     adminAreas: Administration areas
-    storageDescription: Libvirt pools, host devices, and filesystems.
+    storageDescription: Pools de armazenamento libvirt, dispositivos de bloco e sistemas de arquivos montados.
     noVm: No virtual machines found.
     storagePools: Libvirt storage pools
     noPool: No libvirt storage pools found.
@@ -103,7 +171,7 @@ kvmManager:
     mountedFilesystems: Mounted filesystems
     used: Used
     usage: Usage
-    networkReadOnly: Interfaces, libvirt networks, and routes. This area is read-only to protect host access.
+    networkReadOnly: Gerencie redes libvirt e conexões do NetworkManager; consulte interfaces e rotas do host.
     virtualNetworks: Libvirt virtual networks
     noNetwork: No libvirt virtual networks found.
     persistent: Persistent

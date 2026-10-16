@@ -20,7 +20,8 @@ export function init($plugin: IPlugin, store: any): void {
     name: 'kvm-c-cluster-cloud-native',
     path: 'kvm/c/:cluster/cloud-native',
     component: CloudNative,
-    params: { cluster: '_' },
+    params: { product: 'kvm', cluster: '_' },
+    meta: { product: 'kvm', cluster: '_' },
   });
 }
 

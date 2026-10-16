@@ -31,6 +31,7 @@ export default function(plugin: IPlugin): void {
     component: CloudNative,
     // Keep this route available for the per-host menu without registering a
     // second page in the KVM product side navigation.
-    params: { cluster: '_' },
+    params: { product: 'kvm', cluster: '_' },
+    meta: { product: 'kvm', cluster: '_' },
   });
 }

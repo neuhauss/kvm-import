@@ -14,10 +14,7 @@ kvmManager:
     memory: Memory
     lastCheck: Last check
     manage: Manage
-    cockpit: Cockpit
-    cockpitHelp: Open Cockpit on this host. SSH account needs sudo on first access.
-    cloudNative: Cloud Native interface
-    administer: Administer
+    uiMenu: UI
     refresh: Refresh
     refreshing: Checking...
     edit: Edit
@@ -77,6 +74,77 @@ kvmManager:
     network: Network
     services: Services
     logs: Logs
+    accounts: Accounts
+    repositories: Repositories
+    selinux: SELinux
+    subscriptions: Subscriptions
+    terminal: Terminal
+    group_system: System
+    group_tools: Tools
+    accountsDescription: Local users and their login shells, groups, and home directories.
+    account: Account
+    homeDirectory: Home directory
+    shell: Shell
+    groups: Groups
+    noAccounts: No local accounts were returned by the host.
+    locked: Locked
+    unlocked: Active
+    lock: Lock
+    unlock: Unlock
+    setPassword: Set password
+    newPassword: New password
+    accountsWarning: Account changes affect host login access. The SSH account used by this extension cannot be locked here.
+    confirmAccountAction: "{action} account {username}? This changes host login access."
+    repositoriesDescription: Software sources registered with Zypper.
+    repository: Repository
+    alias: Alias
+    status: Status
+    uri: Repository URL
+    enabled: Enabled
+    disabled: Disabled
+    enable: Enable
+    disable: Disable
+    refreshRepositories: Refresh repositories
+    noRepositories: No software repositories were returned by the host.
+    repositoryWarning: Enabling, disabling, or refreshing repositories changes the host software configuration.
+    confirmRepositoryRefresh: Refresh repository metadata now? This may use the host network and take several minutes.
+    confirmRepositoryChange: "{action} repository {alias}? This changes the host software configuration."
+    selinuxDescription: SELinux status and enforcement mode on this host.
+    selinuxStatus: Security status
+    selinuxMode: SELinux mode
+    selinuxPolicy: Loaded policy
+    selinuxUnavailable: SELinux is not available on this host. AppArmor status is shown when installed.
+    setEnforcing: Set enforcing
+    setPermissive: Set permissive
+    confirmSecurityMode: "Change SELinux to {mode}? This changes the host security policy."
+    subscriptionsDescription: SUSE Customer Center registration state reported by SUSEConnect.
+    client: Client
+    notInstalled: Not installed
+    registrationStatus: Registration status
+    noSubscriptionData: No registration status was returned by the host.
+    refreshStatus: Refresh status
+    subscriptionWarning: Registration and deregistration are not exposed here; manage registration codes through your approved SUSE process.
+    terminalDescription: Commands run on the host as SSH user {user}. Use only commands you are authorized to run.
+    command: Command
+    commandPlaceholder: "uname -a"
+    runCommand: Run command
+    runningCommand: Running...
+    terminalWarning: Commands run as the imported SSH user. This terminal is audited, but command text is not stored.
+    commandResult: Command result
+    exitCode: Exit code
+    noOutput: Command completed without output.
+    networkConnections: NetworkManager connections
+    connection: Connection
+    noConnection: No NetworkManager connections found.
+    activate: Activate
+    deactivate: Deactivate
+    up: Activate
+    down: Deactivate
+    networkWarning: Deactivating the connection used by this SSH session can disconnect host management.
+    confirmNetworkConnection: "{action} network connection {name}? This can disconnect the host."
+    confirmLibvirtAction: "{action} {name}? This may affect virtual machines using this resource."
+    enableAutostart: Enable autostart
+    disableAutostart: Disable autostart
     systemSummary: System summary
     uptime: Uptime
     system: System
@@ -90,7 +158,7 @@ kvmManager:
     filterVms: Filter virtual machines
     vmLifecycle: Lifecycle, disk and network details, and autostart.
     adminAreas: Administration areas
-    storageDescription: Libvirt pools, host devices, and filesystems.
+    storageDescription: Libvirt storage pools, host block devices, and mounted filesystems.
     noVm: No virtual machines found.
     storagePools: Libvirt storage pools
     noPool: No libvirt storage pools found.
@@ -103,7 +171,7 @@ kvmManager:
     mountedFilesystems: Mounted filesystems
     used: Used
     usage: Usage
-    networkReadOnly: Interfaces, libvirt networks, and routes. This area is read-only to protect host access.
+    networkReadOnly: Manage libvirt networks and NetworkManager connections; view host interfaces and routes.
     virtualNetworks: Libvirt virtual networks
     noNetwork: No libvirt virtual networks found.
     persistent: Persistent

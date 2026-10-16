@@ -90,6 +90,35 @@ class ServiceAction(BaseModel):
     action: Literal["start", "stop", "restart"]
 
 
+class NamedAdminAction(BaseModel):
+    name: str = Field(min_length=1, max_length=128)
+    action: Literal["start", "stop", "enable", "disable"]
+
+
+class RepositoryAction(BaseModel):
+    alias: str = Field(min_length=1, max_length=128)
+    action: Literal["enable", "disable", "refresh"]
+
+
+class SecurityModeAction(BaseModel):
+    mode: Literal["enforcing", "permissive"]
+
+
+class TerminalCommand(BaseModel):
+    command: str = Field(min_length=1, max_length=4000)
+
+
+class NetworkConnectionAction(BaseModel):
+    uuid: str = Field(min_length=1, max_length=64)
+    action: Literal["up", "down"]
+
+
+class AccountAction(BaseModel):
+    username: str = Field(min_length=1, max_length=32)
+    action: Literal["lock", "unlock", "password"]
+    password: str | None = Field(default=None, min_length=8, max_length=1024)
+
+
 def now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -283,12 +312,19 @@ root = os.environ['KVM_COCKPIT_ROOT']
 origin = os.environ['KVM_RANCHER_ORIGIN']
 host_id = os.environ['KVM_HOST_ID']
 previous_host_id = marker.read_text().strip() if marker.exists() else ''
+existing_text = path.read_text() if path.exists() else ''
+existing_root = re.search(r'(?im)^\s*UrlRoot\s*=\s*(.*?)\s*$', existing_text)
+legacy_extension_root = bool(
+    existing_root
+    and existing_root.group(1) != root
+    and re.fullmatch(r'/kvm-cockpit/[0-9a-fA-F-]{36}', existing_root.group(1))
+    and not previous_host_id
+)
 if previous_host_id and previous_host_id != host_id:
     # A Rancher record can be removed while the host is unreachable. Reclaim the
     # extension-owned config on re-import, but only if its UrlRoot still matches
     # the previous record ID. Keep the original backup for eventual cleanup.
     previous_root = '/kvm-cockpit/' + previous_host_id
-    existing_text = path.read_text() if path.exists() else ''
     old_root = re.search(r'(?im)^\s*UrlRoot\s*=\s*(.*?)\s*$', existing_text)
     if not old_root or old_root.group(1) != previous_root:
         raise SystemExit('Cockpit is already configured for another KVM registration; no changes were made')
@@ -299,7 +335,7 @@ if section:
     original_body = body
     current = re.search(r'(?im)^\s*UrlRoot\s*=\s*(.*?)\s*$', body)
     if current and current.group(1) != root:
-        if previous_host_id and current.group(1) == '/kvm-cockpit/' + previous_host_id:
+        if (previous_host_id and current.group(1) == '/kvm-cockpit/' + previous_host_id) or legacy_extension_root:
             body = body[:current.start(1)] + root + body[current.end(1):]
             current = re.search(r'(?im)^\s*UrlRoot\s*=\s*(.*?)\s*$', body)
         else:
@@ -326,7 +362,7 @@ if section:
         text = text[:start] + body + ('\n' if body and not body.endswith('\n') else '') + '\n'.join(lines) + '\n' + text[end:]
 else:
     text = text.rstrip() + ('\n\n' if text.strip() else '') + '[WebService]\nUrlRoot = ' + root + '\nProtocolHeader = X-Forwarded-Proto\nOrigins = ' + origin + '\n'
-if path.exists() and not backup.exists():
+if path.exists() and not backup.exists() and not legacy_extension_root:
     shutil.copy2(path, backup)
 path.parent.mkdir(parents=True, exist_ok=True)
 mode = stat.S_IMODE(path.stat().st_mode) if path.exists() else 0o644
@@ -918,7 +954,7 @@ result = {'name':name, 'uuid':info.get('uuid',''), 'state':info.get('state') or 
 print(json.dumps(result))
 '''
 
-HOST_ADMIN_SCRIPT = r'''import json, os, platform, re, subprocess
+HOST_ADMIN_SCRIPT = r'''import grp, json, os, platform, pwd, re, shutil, subprocess, xml.etree.ElementTree as ET
 errors = []
 def run(args, timeout=20):
     result = subprocess.run(args, capture_output=True, text=True, timeout=timeout)
@@ -983,7 +1019,7 @@ try:
         for line in run(['virsh','-c','qemu:///system','pool-info',pool_name]).splitlines():
             if ':' in line:
                 key,value=line.split(':',1); pool_info[key.strip().lower()]=value.strip()
-        storage_pools.append({'name':pool_name,'state':pool_info.get('state','unknown'),'capacity':pool_info.get('capacity','—'),
+        storage_pools.append({'name':pool_name,'state':pool_info.get('state','unknown'),'autostart':pool_info.get('autostart','no').lower(),'capacity':pool_info.get('capacity','—'),
             'allocation':pool_info.get('allocation','—'),'available':pool_info.get('available','—')})
 except Exception as error: errors.append('storage pools: '+str(error))
 libvirt_networks=[]
@@ -993,6 +1029,57 @@ try:
         if len(parts)>=4 and parts[0].lower() not in ('name','-'):
             libvirt_networks.append({'name':parts[0],'state':parts[1],'autostart':parts[2],'persistent':parts[3]})
 except Exception as error: errors.append('libvirt networks: '+str(error))
+accounts=[]
+try:
+    groups_by_user={entry.pw_name:[] for entry in pwd.getpwall()}
+    for group in grp.getgrall():
+        for username in group.gr_mem: groups_by_user.setdefault(username,[]).append(group.gr_name)
+    for entry in pwd.getpwall():
+        if entry.pw_uid == 0 or entry.pw_uid >= 1000:
+            status=subprocess.run(['passwd','-S',entry.pw_name],capture_output=True,text=True,timeout=10)
+            parts=status.stdout.split()
+            accounts.append({'username':entry.pw_name,'uid':entry.pw_uid,'gid':entry.pw_gid,
+                'home':entry.pw_dir,'shell':entry.pw_shell,'groups':groups_by_user.get(entry.pw_name,[]),
+                'locked':len(parts)>1 and parts[1]=='L'})
+except Exception as error: errors.append('accounts: '+str(error))
+repositories=[]
+try:
+    result=subprocess.run(['zypper','--xmlout','lr','-d'],capture_output=True,text=True,timeout=30)
+    if result.returncode: raise RuntimeError(result.stderr.strip() or result.stdout.strip())
+    xml=ET.fromstring(result.stdout)
+    for repo in xml.iter('repo'):
+        repositories.append({'alias':repo.get('alias',''),'name':repo.get('name',''),'enabled':repo.get('enabled','0')=='1',
+            'autorefresh':repo.get('autorefresh','0')=='1','uri':repo.get('url') or repo.get('uri') or ''})
+except Exception as error: errors.append('repositories: '+str(error))
+selinux={'available':False,'mode':'unavailable','policy':'','apparmor':'unavailable'}
+try:
+    if shutil.which('getenforce'):
+        result=subprocess.run(['getenforce'],capture_output=True,text=True,timeout=10)
+        selinux.update({'available':result.returncode==0,'mode':result.stdout.strip().lower() or 'unknown'})
+    if shutil.which('sestatus'):
+        result=subprocess.run(['sestatus'],capture_output=True,text=True,timeout=10)
+        selinux['policy']=next((line.split(':',1)[1].strip() for line in result.stdout.splitlines() if line.lower().startswith('loaded policy name:')),'')
+    if shutil.which('aa-status'):
+        result=subprocess.run(['aa-status','--enabled'],capture_output=True,text=True,timeout=10)
+        selinux['apparmor']='enabled' if result.returncode==0 else 'disabled'
+except Exception as error: errors.append('security status: '+str(error))
+subscription={'available':False,'status':'SUSEConnect is not installed'}
+try:
+    if shutil.which('SUSEConnect'):
+        result=subprocess.run(['SUSEConnect','--status-text'],capture_output=True,text=True,timeout=30)
+        subscription={'available':True,'status':(result.stdout or result.stderr).strip(),'return_code':result.returncode}
+except Exception as error: errors.append('subscription status: '+str(error))
+network_connections=[]
+try:
+    if shutil.which('nmcli'):
+        active_result=subprocess.run(['nmcli','-t','-f','UUID','connection','show','--active'],capture_output=True,text=True,timeout=20)
+        active_uuids=set(active_result.stdout.splitlines())
+        result=subprocess.run(['nmcli','-t','-f','NAME,UUID,TYPE,DEVICE','connection','show'],capture_output=True,text=True,timeout=20)
+        if result.returncode: raise RuntimeError(result.stderr.strip())
+        for line in result.stdout.splitlines():
+            parts=line.split(':',3)
+            if len(parts)==4: network_connections.append({'name':parts[0],'uuid':parts[1],'type':parts[2],'device':parts[3],'active':parts[1] in active_uuids})
+except Exception as error: errors.append('network connections: '+str(error))
 release={}
 try:
     for line in open('/etc/os-release'):
@@ -1012,7 +1099,9 @@ print(json.dumps({'system':{'hostname':platform.node(),'os':release.get('PRETTY_
     'architecture':platform.machine(),'cpu_count':os.cpu_count() or 0,'memory_total_kib':memory.get('MemTotal',0),
     'memory_available_kib':memory.get('MemAvailable',0),'uptime_seconds':int(uptime_seconds),'load_average':list(os.getloadavg())},
     'vms':vms,'storage':{'devices':devices,'filesystems':filesystems},'network':{'interfaces':interfaces,'routes':routes},
-    'services':services,'logs':logs,'storage_pools':storage_pools,'libvirt_networks':libvirt_networks,'errors':errors}))
+    'services':services,'logs':logs,'storage_pools':storage_pools,'libvirt_networks':libvirt_networks,
+    'accounts':accounts,'repositories':repositories,'selinux':selinux,'subscription':subscription,
+    'network_connections':network_connections,'errors':errors}))
 '''
 
 SERVICE_ACTION_SCRIPT = r'''import re, subprocess, sys
@@ -1055,6 +1144,151 @@ def get_host_cloud_native(host_id: str) -> dict[str, Any]:
         raise HTTPException(502, f"Could not load host administration data: {exc}") from exc
 
 
+@app.post("/kvm-api/hosts/{host_id}/repositories/actions", dependencies=[Depends(require_auth)])
+def control_repository(host_id: str, payload: RepositoryAction, actor: str = Depends(require_auth)) -> dict[str, bool]:
+    if payload.alias != "*" and not re.fullmatch(r"[A-Za-z0-9_.:-]+", payload.alias):
+        raise HTTPException(422, "Invalid repository alias")
+    host = cockpit_host_record(host_id)
+    if payload.action == "refresh":
+        args = ["zypper", "--non-interactive", "refresh"] + ([] if payload.alias == "*" else [payload.alias])
+    else:
+        args = ["zypper", "--non-interactive", "modifyrepo", "--" + payload.action, payload.alias]
+    script = "import subprocess,sys; r=subprocess.run(sys.argv[1:],capture_output=True,text=True,timeout=120); print(r.stdout); print(r.stderr,file=sys.stderr); sys.exit(r.returncode)"
+    try:
+        run_sudo_python(host, script, args, timeout=150)
+    except Exception as exc:
+        record_audit(actor, f"repository.{payload.action}", f"{host_id}/{payload.alias}", "failure", str(exc)[:500])
+        raise HTTPException(502, f"Could not perform the repository action: {exc}") from exc
+    record_audit(actor, f"repository.{payload.action}", f"{host_id}/{payload.alias}")
+    return {"success": True}
+
+
+@app.post("/kvm-api/hosts/{host_id}/security/selinux", dependencies=[Depends(require_auth)])
+def set_selinux_mode(host_id: str, payload: SecurityModeAction, actor: str = Depends(require_auth)) -> dict[str, bool]:
+    host = cockpit_host_record(host_id)
+    script = r'''import shutil,subprocess,sys
+if not shutil.which('setenforce'): raise SystemExit('SELinux is not available on this host')
+r=subprocess.run(['setenforce','1' if sys.argv[1]=='enforcing' else '0'],capture_output=True,text=True)
+if r.returncode: raise SystemExit(r.stderr.strip() or r.stdout.strip() or 'Could not change SELinux mode')
+'''
+    try:
+        run_sudo_python(host, script, [payload.mode], timeout=30)
+    except Exception as exc:
+        record_audit(actor, "selinux.mode", host_id, "failure", str(exc)[:500])
+        raise HTTPException(502, f"Could not change SELinux mode: {exc}") from exc
+    record_audit(actor, "selinux.mode", host_id, detail=payload.mode)
+    return {"success": True}
+
+
+@app.post("/kvm-api/hosts/{host_id}/libvirt/{resource}/actions", dependencies=[Depends(require_auth)])
+def control_libvirt_resource(host_id: str, resource: Literal["storage-pools", "networks"], payload: NamedAdminAction, actor: str = Depends(require_auth)) -> dict[str, bool]:
+    if not re.fullmatch(r"[A-Za-z0-9_.+-]+", payload.name):
+        raise HTTPException(422, "Invalid libvirt resource name")
+    host = cockpit_host_record(host_id)
+    script = r'''import subprocess,sys
+kind,action,name=sys.argv[1:]
+base=['virsh','-c','qemu:///system']
+if kind=='storage-pools':
+    listing=subprocess.run(base+['pool-list','--all','--name'],capture_output=True,text=True,timeout=20)
+    command={'start':'pool-start','stop':'pool-destroy','enable':'pool-autostart','disable':'pool-autostart'}[action]
+else:
+    listing=subprocess.run(base+['net-list','--all','--name'],capture_output=True,text=True,timeout=20)
+    command={'start':'net-start','stop':'net-destroy','enable':'net-autostart','disable':'net-autostart'}[action]
+if listing.returncode or name not in listing.stdout.splitlines(): raise SystemExit('Libvirt resource not found')
+args=base+[command]
+if action=='disable': args.append('--disable')
+args.append(name)
+r=subprocess.run(args,capture_output=True,text=True,timeout=45)
+if r.returncode: raise SystemExit(r.stderr.strip() or r.stdout.strip() or 'Libvirt action failed')
+'''
+    try:
+        run_sudo_python(host, script, [resource, payload.action, payload.name], timeout=60)
+    except Exception as exc:
+        record_audit(actor, f"libvirt.{resource}.{payload.action}", f"{host_id}/{payload.name}", "failure", str(exc)[:500])
+        raise HTTPException(502, f"Could not perform the libvirt action: {exc}") from exc
+    record_audit(actor, f"libvirt.{resource}.{payload.action}", f"{host_id}/{payload.name}")
+    return {"success": True}
+
+
+@app.post("/kvm-api/hosts/{host_id}/terminal/command", dependencies=[Depends(require_auth)])
+def run_terminal_command(host_id: str, payload: TerminalCommand, actor: str = Depends(require_auth)) -> dict[str, Any]:
+    host = cockpit_host_record(host_id)
+    client = ssh_client_for_host(host)
+    try:
+        _stdin, stdout, stderr = client.exec_command(f"bash -lc {shlex.quote(payload.command)}", timeout=60)
+        output = stdout.read().decode("utf-8", "replace")
+        error = stderr.read().decode("utf-8", "replace")
+        status = stdout.channel.recv_exit_status()
+    except Exception as exc:
+        record_audit(actor, "terminal.command", host_id, "failure", str(exc)[:500])
+        raise HTTPException(502, f"Terminal command failed: {exc}") from exc
+    finally:
+        client.close()
+    record_audit(actor, "terminal.command", host_id, detail="Command executed as the imported SSH user")
+    return {"stdout": output[-32000:], "stderr": error[-32000:], "return_code": status}
+
+
+@app.post("/kvm-api/hosts/{host_id}/network-connections/actions", dependencies=[Depends(require_auth)])
+def control_network_connection(host_id: str, payload: NetworkConnectionAction, actor: str = Depends(require_auth)) -> dict[str, bool]:
+    if not re.fullmatch(r"[A-Fa-f0-9-]{16,64}", payload.uuid):
+        raise HTTPException(422, "Invalid NetworkManager connection ID")
+    host = cockpit_host_record(host_id)
+    script = r'''import shutil,subprocess,sys
+action,uuid=sys.argv[1:]
+if not shutil.which('nmcli'): raise SystemExit('NetworkManager is not installed')
+listing=subprocess.run(['nmcli','-t','-f','UUID','connection','show'],capture_output=True,text=True,timeout=20)
+if listing.returncode or uuid not in listing.stdout.splitlines(): raise SystemExit('Network connection not found')
+r=subprocess.run(['nmcli','connection',action,uuid],capture_output=True,text=True,timeout=60)
+if r.returncode: raise SystemExit(r.stderr.strip() or r.stdout.strip() or 'NetworkManager action failed')
+'''
+    try:
+        run_sudo_python(host, script, [payload.action, payload.uuid], timeout=75)
+    except Exception as exc:
+        record_audit(actor, f"network-connection.{payload.action}", f"{host_id}/{payload.uuid}", "failure", str(exc)[:500])
+        raise HTTPException(502, f"Could not change the network connection: {exc}") from exc
+    record_audit(actor, f"network-connection.{payload.action}", f"{host_id}/{payload.uuid}")
+    return {"success": True}
+
+
+@app.post("/kvm-api/hosts/{host_id}/accounts/actions", dependencies=[Depends(require_auth)])
+def control_account(host_id: str, payload: AccountAction, actor: str = Depends(require_auth)) -> dict[str, bool]:
+    if not re.fullmatch(r"[a-z_][a-z0-9_-]{0,31}", payload.username):
+        raise HTTPException(422, "Invalid account name")
+    host = cockpit_host_record(host_id)
+    if payload.username == host["username"] and payload.action == "lock":
+        raise HTTPException(422, "The SSH account used by this extension cannot be locked here")
+    if payload.username == "root" and payload.action == "lock":
+        raise HTTPException(422, "The root account cannot be locked here")
+    if payload.action == "password" and (not payload.password or any(char in payload.password for char in ("\n", "\r", ":"))):
+        raise HTTPException(422, "Enter a new password with at least 8 characters; colons and line breaks are not allowed")
+    script = r'''import pwd,subprocess,sys
+username,action=sys.argv[1:]
+try: account=pwd.getpwnam(username)
+except KeyError: raise SystemExit('Account not found')
+if account.pw_uid==0 and action=='lock': raise SystemExit('The root account cannot be locked here')
+if action=='lock': args=['usermod','--lock',username]
+elif action=='unlock': args=['usermod','--unlock',username]
+elif action=='password':
+    print('KVM_STDIN_READY',flush=True)
+    password=sys.stdin.readline().rstrip('\n')
+    if len(password)<8: raise SystemExit('Password must contain at least 8 characters')
+    result=subprocess.run(['chpasswd'],input=f'{username}:{password}\n',text=True,capture_output=True)
+    if result.returncode: raise SystemExit(result.stderr.strip() or 'Could not update password')
+    sys.exit(0)
+else: raise SystemExit('Invalid account action')
+result=subprocess.run(args,capture_output=True,text=True)
+if result.returncode: raise SystemExit(result.stderr.strip() or result.stdout.strip() or 'Account action failed')
+'''
+    extra_input = (payload.password or "") + "\n" if payload.action == "password" else None
+    try:
+        run_sudo_python(host, script, [payload.username, payload.action], timeout=30, stdin_data=extra_input)
+    except Exception as exc:
+        record_audit(actor, f"account.{payload.action}", f"{host_id}/{payload.username}", "failure", str(exc)[:500])
+        raise HTTPException(502, f"Could not update the account: {exc}") from exc
+    record_audit(actor, f"account.{payload.action}", f"{host_id}/{payload.username}")
+    return {"success": True}
+
+
 @app.post("/kvm-api/hosts/{host_id}/services/actions", dependencies=[Depends(require_auth)])
 def control_service(host_id: str, payload: ServiceAction, service_name: str, actor: str = Depends(require_auth)) -> dict[str, bool]:
     if not re.fullmatch(r"[A-Za-z0-9_.@:-]+", service_name):
@@ -1069,7 +1303,7 @@ def control_service(host_id: str, payload: ServiceAction, service_name: str, act
     return {"success": True}
 
 
-def run_sudo_python(host: dict[str, Any], script: str, args: list[str] | None = None, timeout: int = 30) -> str:
+def run_sudo_python(host: dict[str, Any], script: str, args: list[str] | None = None, timeout: int = 30, stdin_data: str | None = None) -> str:
     client = ssh_client_for_host(host)
     command = f"sudo -S -p '' python3 -c {shlex.quote(script)}"
     if args:
@@ -1078,8 +1312,18 @@ def run_sudo_python(host: dict[str, Any], script: str, args: list[str] | None = 
         stdin, stdout, stderr = client.exec_command(command, timeout=timeout)
         stdin.write(host["password"] + "\n")
         stdin.flush()
+        prelude = ""
+        if stdin_data:
+            ready, _, _ = select.select([stdout.channel], [], [], 8)
+            if not ready:
+                raise RuntimeError("The remote account command did not request its password input")
+            prelude = stdout.channel.recv(4096).decode("utf-8", "replace")
+            if "KVM_STDIN_READY" not in prelude:
+                raise RuntimeError("The remote account command did not reach its password prompt")
+            stdin.write(stdin_data)
+            stdin.flush()
         stdin.channel.shutdown_write()
-        output = stdout.read().decode("utf-8", "replace").strip()
+        output = (prelude + stdout.read().decode("utf-8", "replace")).strip()
         error = stderr.read().decode("utf-8", "replace").strip()
         if stdout.channel.recv_exit_status():
             raise RuntimeError(error or output or "Could not run the remote command with sudo")
