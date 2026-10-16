@@ -2,6 +2,11 @@ name: Build and Release Extension Charts
 
 on:
   workflow_dispatch:
+    inputs:
+      tagged_release:
+        description: "Extension package tag, for example kvm-manager-0.7.5"
+        required: true
+        type: string
   release:
     types: [released]
 
@@ -18,4 +23,4 @@ jobs:
       pull-requests: write
     with:
       target_branch: gh-pages
-      tagged_release: ${{ github.ref_name }}
+      tagged_release: ${{ inputs.tagged_release || github.ref_name }}
