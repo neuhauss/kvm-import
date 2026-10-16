@@ -149,7 +149,7 @@ spec:
     name: kvm-manager
     version: 0.5.8
     endpoint: http://kvm-extension-assets.rancher-kvm-registry.svc:8080/kvm-manager/0.5.8
-    noCache: false
+    noCache: true
     noAuth: false
     metadata:
       catalog.cattle.io/rancher-version: '>=2.10.0'
