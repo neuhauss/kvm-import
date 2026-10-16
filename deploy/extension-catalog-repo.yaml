@@ -1,0 +1,9 @@
+apiVersion: catalog.cattle.io/v1
+kind: ClusterRepo
+metadata:
+  name: kvm-extension-catalog
+spec:
+  url: https://OWNER.github.io/REPOSITORY/charts
+  refreshInterval: 300
+  enabled: true
+  forceUpdate: "2026-10-15T23:46:00Z"

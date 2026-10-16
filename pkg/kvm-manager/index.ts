@@ -1,0 +1,35 @@
+import { importTypes } from '@rancher/auto-import';
+import { IPlugin } from '@shell/core/types';
+import Hosts from './pages/Hosts.vue';
+import CloudNative from './pages/CloudNative.vue';
+import './assets/kvm.css';
+
+// Init the package
+export default function(plugin: IPlugin): void {
+  // Auto-import model, detail, edit from the folders
+  importTypes(plugin);
+
+  // Provide plugin metadata from package.json
+  plugin.metadata = require('./package.json');
+
+  plugin.addProduct({
+    name: 'kvm',
+    label: 'KVM',
+    sideBar: { icon: { name: 'kvm' }, weight: 95 },
+    resources: { store: 'management' },
+  }, [{
+    name: 'hosts',
+    label: 'Hosts',
+    component: Hosts,
+  }]);
+
+  // Keep the Cloud Native page routable for the per-host administration menu,
+  // without exposing it as a second item in the KVM side navigation.
+  plugin.addRoute('default', {
+    name: 'kvm-c-cluster-cloud-native',
+    path: 'kvm/c/:cluster/cloud-native',
+    component: CloudNative,
+    params: { product: 'kvm', cluster: '_' },
+    meta: { product: 'kvm', cluster: '_' },
+  });
+}

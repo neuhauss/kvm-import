@@ -1,0 +1,207 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rancher-kvm-registry
+  labels:
+    app.kubernetes.io/name: registry
+    app.kubernetes.io/part-of: rancher-kvm
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: registry-config
+  namespace: rancher-kvm-registry
+  labels:
+    app.kubernetes.io/name: registry
+    app.kubernetes.io/part-of: rancher-kvm
+data:
+  config.yml: |
+    version: 0.1
+    log:
+      level: info
+    storage:
+      filesystem:
+        rootdirectory: /var/lib/registry
+    http:
+      addr: :5000
+      tls:
+        certificate: /tls/tls.crt
+        key: /tls/tls.key
+    auth:
+      htpasswd:
+        realm: Rancher KVM Registry
+        path: /auth/htpasswd
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: registry
+  namespace: rancher-kvm-registry
+  labels:
+    app.kubernetes.io/name: registry
+    app.kubernetes.io/part-of: rancher-kvm
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: registry
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: registry
+        app.kubernetes.io/part-of: rancher-kvm
+    spec:
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+      initContainers:
+        - name: create-htpasswd
+          image: httpd:2.4-alpine
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              printf '%s\n' "$REGISTRY_PASSWORD" | htpasswd -B -i -c /auth/htpasswd "$REGISTRY_USERNAME"
+              chmod 0440 /auth/htpasswd
+          env:
+            - name: REGISTRY_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: registry-auth
+                  key: username
+            - name: REGISTRY_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: registry-auth
+                  key: password
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            runAsNonRoot: false
+          volumeMounts:
+            - name: auth
+              mountPath: /auth
+        - name: set-data-permissions
+          image: busybox:1.37.0
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -ec
+            - chown -R 1000:1000 /var/lib/registry
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsUser: 0
+            runAsGroup: 0
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - CHOWN
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/registry
+      containers:
+        - name: registry
+          image: registry:3.1.2
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: REGISTRY_HTTP_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: registry-auth
+                  key: http-secret
+          ports:
+            - name: https
+              containerPort: 5000
+              protocol: TCP
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+          startupProbe:
+            tcpSocket:
+              port: https
+            periodSeconds: 5
+            failureThreshold: 30
+          readinessProbe:
+            tcpSocket:
+              port: https
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: https
+            periodSeconds: 20
+          volumeMounts:
+            - name: config
+              mountPath: /etc/distribution/config.yml
+              subPath: config.yml
+              readOnly: true
+            - name: data
+              mountPath: /var/lib/registry
+            - name: tls
+              mountPath: /tls
+              readOnly: true
+            - name: auth
+              mountPath: /auth
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: registry-config
+        - name: data
+          persistentVolumeClaim:
+            claimName: registry-data
+        - name: tls
+          secret:
+            secretName: registry-tls
+        - name: auth
+          emptyDir:
+            medium: Memory
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: registry-data
+  namespace: rancher-kvm-registry
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: default
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: registry
+  namespace: rancher-kvm-registry
+  labels:
+    app.kubernetes.io/name: registry
+    app.kubernetes.io/part-of: rancher-kvm
+spec:
+  type: NodePort
+  selector:
+    app.kubernetes.io/name: registry
+  ports:
+    - name: https
+      port: 5000
+      targetPort: https
+      nodePort: 30500
+      protocol: TCP

@@ -1,0 +1,289 @@
+<template>
+  <div class="cloud-native-page">
+    <div class="breadcrumbs"><button @click="backToHosts">KVM</button><span>›</span><button @click="backToHosts">{{ t('hosts.title') }}</button><span>›</span><strong>{{ host?.hostname || host?.name || t('cloudNative.title') }}</strong></div>
+    <header class="page-header">
+      <div class="title-block"><span class="eyebrow">{{ t('cloudNative.title') }}</span><h1>{{ host ? host.hostname || host.name : t('cloudNative.title') }}</h1><p class="muted">{{ t('cloudNative.subtitle') }}</p></div>
+      <div v-if="host" class="toolbar">
+        <span class="state" :class="host.status"><i></i>{{ statusLabel(host.status) }}</span>
+        <form :action="cockpitUrl(host)" method="post" target="_blank"><button class="btn role-secondary" type="submit">{{ t('cloudNative.openCockpit') }}</button></form>
+        <button class="btn role-primary" :disabled="loading" @click="load">{{ loading ? t('cloudNative.updating') : t('cloudNative.updateData') }}</button>
+      </div>
+    </header>
+
+    <div v-if="error" class="banner error">{{ error }}</div>
+    <div v-else-if="loading && !inventory" class="loading">{{ t('cloudNative.queryHost') }}</div>
+    <template v-else-if="inventory">
+      <div class="cluster-summary">
+        <article class="summary-card host-card"><div><span>Host</span><strong>{{ inventory.system.hostname }}</strong><small>{{ inventory.system.os }}</small></div><span class="state ready"><i></i>{{ t('cloudNative.connected') }}</span></article>
+        <article class="summary-card"><div class="card-top"><span>{{ t('cloudNative.vms') }}</span></div><strong class="metric">{{ inventory.vms.length }}</strong><small>{{ t('cloudNative.runningStopped', { running: runningVmCount, stopped: inventory.vms.length - runningVmCount }) }}</small><div class="metric-track"><i :style="{ width: vmRunningPercent + '%' }"></i></div></article>
+        <article class="summary-card"><div class="card-top"><span>{{ t('cloudNative.hostCpu') }}</span></div><strong class="metric">{{ inventory.system.cpu_count }} <small>{{ t('cloudNative.cores') }}</small></strong><small>Load average {{ inventory.system.load_average.map((n) => n.toFixed(2)).join(' · ') }}</small><div class="metric-track"><i :style="{ width: cpuLoadPercent + '%' }"></i></div></article>
+        <article class="summary-card"><div class="card-top"><span>{{ t('cloudNative.memory') }}</span></div><strong class="metric">{{ memoryLabel(inventory.system.memory_total_kib) }}</strong><small>{{ memoryLabel(inventory.system.memory_total_kib - inventory.system.memory_available_kib) }} {{ t('cloudNative.inUse') }}</small><div class="metric-track"><i :style="{ width: memoryUsedPercent + '%' }"></i></div></article>
+      </div>
+
+      <nav class="admin-tabs" :aria-label="t('cloudNative.adminAreas')">
+        <button v-for="tab in tabs" :key="tab.id" :class="{ active: activeTab === tab.id }" @click="selectTab(tab.id)">{{ t(`cloudNative.${tab.id}`) }}<span v-if="tab.countKey !== undefined">{{ tabCount(tab.countKey) }}</span></button>
+      </nav>
+
+      <div v-if="inventory.errors.length" class="banner warning">{{ t('cloudNative.loadError') }}: {{ inventory.errors.join('; ') }}</div>
+      <section v-if="activeTab === 'overview'" class="section-panel">
+        <div class="section-heading"><div><span class="eyebrow">{{ t('cloudNative.systemSummary') }}</span><h2>{{ t('cloudNative.overview') }}</h2></div><span class="updated-at">{{ t('cloudNative.uptime') }} {{ uptimeLabel(inventory.system.uptime_seconds) }}</span></div>
+        <div class="overview-grid">
+          <article class="info-panel"><div class="panel-heading"><div><h3>{{ t('cloudNative.system') }}</h3><p>{{ t('cloudNative.hostIdentity') }}</p></div></div><dl><dt>{{ t('cloudNative.os') }}</dt><dd>{{ inventory.system.os }}</dd><dt>{{ t('cloudNative.kernel') }}</dt><dd>{{ inventory.system.kernel }}</dd><dt>{{ t('cloudNative.architecture') }}</dt><dd>{{ inventory.system.architecture }}</dd><dt>{{ t('cloudNative.uptime') }}</dt><dd>{{ uptimeLabel(inventory.system.uptime_seconds) }}</dd></dl></article>
+          <article class="info-panel"><div class="panel-heading"><div><h3>{{ t('cloudNative.resources') }}</h3><p>{{ t('cloudNative.currentUsage') }}</p></div></div><div class="resource-row"><span>CPU</span><strong>{{ inventory.system.cpu_count }} {{ t('cloudNative.cores') }}</strong></div><div class="resource-row"><span>Load average</span><strong>{{ inventory.system.load_average.map((n) => n.toFixed(2)).join(' · ') }}</strong></div><div class="resource-row"><span>{{ t('cloudNative.availableMemory') }}</span><strong>{{ memoryLabel(inventory.system.memory_available_kib) }}</strong></div><div class="resource-row"><span>{{ t('cloudNative.devices') }}</span><strong>{{ inventory.storage.devices.length }}</strong></div></article>
+        </div>
+        <div class="section-heading vm-heading"><div><span class="eyebrow">LIBVIRT</span><h2>{{ t('cloudNative.vms') }}</h2></div><button class="text-button" @click="selectTab('vms')">{{ t('cloudNative.fullInventory') }}</button></div>
+        <VmTable :vms="inventory.vms.slice(0, 5)" :busy="busy" @action="actOnVm" @details="showVmDetails" @autostart="setAutostart" />
+      </section>
+
+      <section v-else-if="activeTab === 'vms'" class="section-panel"><div class="section-heading"><div><span class="eyebrow">LIBVIRT</span><h2>{{ t('cloudNative.vms') }}</h2><p class="muted">{{ t('cloudNative.vmLifecycle') }}</p></div><input v-model="vmFilter" class="search-input" :placeholder="t('cloudNative.filterVms')" :aria-label="t('cloudNative.filterVms')" /></div><VmTable :vms="filteredVms" :busy="busy" @action="actOnVm" @details="showVmDetails" @autostart="setAutostart" /></section>
+
+      <section v-else-if="activeTab === 'storage'" class="section-panel">
+        <div class="section-heading"><div><span class="eyebrow">HOST + LIBVIRT</span><h2>{{ t('cloudNative.storage') }}</h2><p class="muted">{{ t('cloudNative.storageDescription') }}</p></div></div>
+        <div class="subsection"><h3>{{ t('cloudNative.storagePools') }} <span class="count-badge">{{ inventory.storage_pools.length }}</span></h3><div v-if="!inventory.storage_pools.length" class="empty-state">{{ t('cloudNative.noPool') }}</div><div v-else class="pool-grid"><article v-for="pool in inventory.storage_pools" :key="pool.name" class="pool-card"><div><strong>{{ pool.name }}</strong><span class="state" :class="pool.state.toLowerCase()">{{ pool.state }}</span></div><dl><dt>{{ t('cloudNative.capacity') }}</dt><dd>{{ pool.capacity }}</dd><dt>{{ t('cloudNative.allocated') }}</dt><dd>{{ pool.allocation }}</dd><dt>{{ t('cloudNative.available') }}</dt><dd>{{ pool.available }}</dd></dl></article></div></div>
+        <div class="subsection"><h3>{{ t('cloudNative.devicesTitle') }}</h3><div class="table-wrap"><table class="table"><thead><tr><th>{{ t('cloudNative.devices') }}</th><th>{{ t('cloudNative.type') }}</th><th>{{ t('cloudNative.size') }}</th><th>{{ t('cloudNative.filesystem') }}</th><th>{{ t('cloudNative.mount') }}</th><th>{{ t('cloudNative.model') }}</th></tr></thead><tbody><tr v-for="disk in inventory.storage.devices" :key="disk.path || disk.name"><td><strong>{{ disk.name }}</strong><small>{{ disk.path }}</small></td><td>{{ disk.type }}</td><td>{{ bytesLabel(disk.size) }}</td><td>{{ disk.filesystem || '—' }}</td><td>{{ disk.mountpoints.join(', ') || '—' }}</td><td>{{ disk.model || '—' }}</td></tr><tr v-if="!inventory.storage.devices.length"><td colspan="6">{{ t('cloudNative.noDevice') }}</td></tr></tbody></table></div></div>
+        <div class="subsection"><h3>{{ t('cloudNative.mountedFilesystems') }}</h3><div class="table-wrap"><table class="table"><thead><tr><th>{{ t('cloudNative.device') }}</th><th>{{ t('cloudNative.type') }}</th><th>{{ t('cloudNative.size') }}</th><th>{{ t('cloudNative.used') }}</th><th>{{ t('cloudNative.available') }}</th><th>{{ t('cloudNative.usage') }}</th><th>{{ t('cloudNative.mount') }}</th></tr></thead><tbody><tr v-for="fs in inventory.storage.filesystems" :key="`${fs.device}-${fs.mountpoint}`"><td>{{ fs.device }}</td><td>{{ fs.type }}</td><td>{{ bytesLabel(fs.size) }}</td><td>{{ bytesLabel(fs.used) }}</td><td>{{ bytesLabel(fs.available) }}</td><td><span class="usage-pill" :class="usageClass(fs.use_percent)">{{ fs.use_percent }}</span></td><td>{{ fs.mountpoint }}</td></tr></tbody></table></div></div>
+      </section>
+
+      <section v-else-if="activeTab === 'network'" class="section-panel">
+        <div class="section-heading"><div><span class="eyebrow">HOST + LIBVIRT</span><h2>{{ t('cloudNative.network') }}</h2><p class="muted">{{ t('cloudNative.networkReadOnly') }}</p></div></div>
+        <div class="subsection"><h3>{{ t('cloudNative.virtualNetworks') }} <span class="count-badge">{{ inventory.libvirt_networks.length }}</span></h3><div v-if="!inventory.libvirt_networks.length" class="empty-state">{{ t('cloudNative.noNetwork') }}</div><div v-else class="network-grid"><article v-for="network in inventory.libvirt_networks" :key="network.name" class="network-card"><div><strong>{{ network.name }}</strong><small>{{ network.persistent === 'yes' ? t('cloudNative.persistent') : t('cloudNative.temporary') }} · {{ network.autostart === 'yes' ? t('cloudNative.autostart') : t('cloudNative.noAutostart') }}</small></div><span class="state" :class="network.state === 'active' ? 'ready' : 'unknown'">{{ network.state }}</span></article></div></div>
+        <div class="subsection"><h3>{{ t('cloudNative.interfaces') }}</h3><div class="table-wrap"><table class="table"><thead><tr><th>{{ t('cloudNative.interface') }}</th><th>{{ t('cloudNative.state') }}</th><th>{{ t('cloudNative.mac') }}</th><th>{{ t('cloudNative.addresses') }}</th><th>MTU</th></tr></thead><tbody><tr v-for="nic in inventory.network.interfaces" :key="nic.ifname"><td><strong>{{ nic.ifname }}</strong></td><td><span class="state" :class="nic.operstate === 'UP' ? 'ready' : 'unknown'"><i></i>{{ nic.operstate || '—' }}</span></td><td>{{ nic.address || '—' }}</td><td>{{ addresses(nic) }}</td><td>{{ nic.mtu || '—' }}</td></tr><tr v-if="!inventory.network.interfaces.length"><td colspan="5">{{ t('cloudNative.noInterface') }}</td></tr></tbody></table></div></div>
+        <div class="subsection"><h3>{{ t('cloudNative.routes') }}</h3><div class="table-wrap"><table class="table"><thead><tr><th>{{ t('cloudNative.destination') }}</th><th>{{ t('cloudNative.gateway') }}</th><th>{{ t('cloudNative.interface') }}</th><th>{{ t('cloudNative.protocol') }}</th></tr></thead><tbody><tr v-for="(route, index) in inventory.network.routes" :key="`${route.dst}-${route.dev}-${index}`"><td>{{ route.dst || 'default' }}</td><td>{{ route.gateway || '—' }}</td><td>{{ route.dev || '—' }}</td><td>{{ route.protocol || '—' }}</td></tr></tbody></table></div></div>
+      </section>
+
+      <section v-else-if="activeTab === 'services'" class="section-panel">
+        <div class="section-heading"><div><span class="eyebrow">SYSTEMD</span><h2>{{ t('cloudNative.systemServices') }}</h2><p class="muted">{{ t('cloudNative.failedServices', { count: failedServiceCount }) }}</p></div><div class="filter-bar"><input v-model="serviceFilter" class="search-input" :placeholder="t('cloudNative.searchService')" :aria-label="t('cloudNative.searchService')" /><select v-model="serviceStateFilter" class="search-input" :aria-label="t('cloudNative.filterState')"><option value="all">{{ t('cloudNative.allStates') }}</option><option value="active">{{ t('cloudNative.active') }}</option><option value="failed">{{ t('cloudNative.failed') }}</option><option value="inactive">{{ t('cloudNative.inactive') }}</option></select></div></div>
+        <div class="table-wrap"><table class="table"><thead><tr><th>{{ t('cloudNative.service') }}</th><th>{{ t('cloudNative.state') }}</th><th>{{ t('cloudNative.substate') }}</th><th>{{ t('cloudNative.description') }}</th><th>{{ t('hosts.action') }}</th></tr></thead><tbody><tr v-for="service in visibleServices" :key="service.name"><td><strong>{{ service.name }}</strong></td><td><span class="state" :class="service.active === 'active' ? 'ready' : service.active === 'failed' ? 'unreachable' : 'unknown'">{{ t(`cloudNative.${service.active}`) }}</span></td><td>{{ service.sub }}</td><td class="description-cell">{{ service.description }}</td><td class="row-actions"><button class="btn role-secondary btn-sm" :disabled="busy === service.name || service.active === 'active'" @click="actOnService(service, 'start')">{{ t('cloudNative.start') }}</button><button class="btn role-secondary btn-sm" :disabled="busy === service.name || service.active !== 'active'" @click="actOnService(service, 'restart')">{{ t('cloudNative.restart') }}</button><button class="btn role-link btn-sm" :disabled="busy === service.name || service.active !== 'active'" @click="actOnService(service, 'stop')">{{ t('cloudNative.stop') }}</button></td></tr><tr v-if="!filteredServices.length"><td colspan="5" class="empty-row">{{ t('cloudNative.noServiceMatch') }}</td></tr></tbody></table></div><div v-if="filteredServices.length" class="pagination-row"><span>{{ t('cloudNative.showingServices', { shown: visibleServices.length, total: filteredServices.length }) }}</span><button v-if="visibleServices.length < filteredServices.length" class="btn role-secondary btn-sm" @click="showMoreServices">{{ t('cloudNative.showMore') }}</button></div><p class="safety-note">{{ t('cloudNative.serviceWarning') }}</p>
+      </section>
+
+      <section v-else class="section-panel"><div class="section-heading"><div><span class="eyebrow">JOURNALD</span><h2>{{ t('cloudNative.systemLogs') }}</h2><p class="muted">{{ t('cloudNative.lastJournal', { count: inventory.logs.length }) }}</p></div><input v-model="logFilter" class="search-input" :placeholder="t('cloudNative.filterLogs')" :aria-label="t('cloudNative.filterLogs')" /></div><pre class="log-view"><span v-for="(line, index) in filteredLogs" :key="index" :class="logLineClass(line)">{{ line }}</span><span v-if="!filteredLogs.length">{{ t('cloudNative.noLogMatch') }}</span></pre></section>
+    </template>
+    <div v-if="actionError" class="banner error">{{ actionError }}</div>
+    <div v-if="selectedVmName" class="modal-backdrop" @click.self="closeVmDetails">
+      <section class="details-modal" role="dialog" aria-modal="true" :aria-label="t('cloudNative.vmDetails')">
+        <header><div><span class="eyebrow">{{ t('cloudNative.vmDetails') }}</span><h2>{{ selectedVmName }}</h2></div><button class="btn role-secondary btn-sm" @click="closeVmDetails">{{ t('cloudNative.close') }}</button></header>
+        <p v-if="vmDetailLoading" class="loading">{{ t('cloudNative.loadingVmDetails') }}</p>
+        <div v-else-if="vmDetail" class="details-content"><div class="detail-stats"><div><span>{{ t('cloudNative.stateLabel') }}</span><strong>{{ vmDetail.state }}</strong></div><div><span>vCPU</span><strong>{{ vmDetail.current_vcpus || vmDetail.vcpus }}</strong></div><div><span>{{ t('cloudNative.maxMemory') }}</span><strong>{{ memoryLabel(vmDetail.memory_kib) }}</strong></div></div><h3>{{ t('cloudNative.disk') }}</h3><div v-if="!vmDetail.disks?.length" class="empty-state">{{ t('cloudNative.noDisk') }}</div><div v-for="disk in vmDetail.disks" :key="disk.target" class="detail-row"><b>{{ disk.target }}</b><span>{{ disk.source }}</span><small>{{ disk.type }} · {{ disk.device }}</small></div><h3>{{ t('cloudNative.interfaces') }}</h3><div v-if="!vmDetail.interfaces?.length" class="empty-state">{{ t('cloudNative.noInterface') }}</div><div v-for="nic in vmDetail.interfaces" :key="nic.mac" class="detail-row"><b>{{ nic.name }}</b><span>{{ nic.mac }}</span><small>{{ nic.type }} · {{ nic.source }} · {{ nic.model }}</small></div></div>
+        <div v-if="vmDetailError" class="banner error">{{ vmDetailError }}</div>
+      </section>
+    </div>
+  </div>
+</template>
+
+<script lang="ts">
+import { defineComponent } from 'vue';
+import VmTable from './VmTable.vue';
+
+type Host = { id: string; name: string; address: string; port: number; hostname?: string; status: string };
+type Vm = { name: string; uuid: string; state: string; vcpus: number; current_vcpus: number; max_vcpus: number; memory_kib: number; used_memory_kib: number; autostart: string };
+type VmDetail = Vm & { disks: { type: string; device: string; target: string; source: string }[]; interfaces: { name: string; type: string; source: string; model: string; mac: string }[] };
+type Service = { name: string; load: string; active: string; sub: string; description: string };
+type SystemInfo = { hostname: string; os: string; kernel: string; architecture: string; cpu_count: number; memory_total_kib: number; memory_available_kib: number; uptime_seconds: number; load_average: number[] };
+type Inventory = {
+  system: SystemInfo; vms: Vm[];
+  storage: { devices: { name: string; path: string; type: string; size: number; filesystem: string; mountpoints: string[]; model: string }[]; filesystems: { device: string; type: string; size: number; used: number; available: number; use_percent: string; mountpoint: string }[] };
+  network: { interfaces: any[]; routes: any[] }; services: Service[]; logs: string[];
+  storage_pools: { name: string; state: string; capacity: string; allocation: string; available: string }[];
+  libvirt_networks: { name: string; state: string; autostart: string; persistent: string }[]; errors: string[];
+};
+
+const apiBase = (process.env.VUE_APP_KVM_API || '/kvm-api').replace(/\/$/, '');
+
+export default defineComponent({
+  name: 'KvmCloudNativeHost',
+  components: { VmTable },
+  data() {
+    return {
+      host: null as Host | null, inventory: null as Inventory | null, loading: false, error: '', actionError: '',
+      busy: '' as string, activeTab: 'overview', vmFilter: '', serviceFilter: '', serviceStateFilter: 'all', serviceLimit: 25, logFilter: '',
+      selectedVmName: '', vmDetail: null as VmDetail | null, vmDetailLoading: false, vmDetailError: '',
+      tabs: [
+        { id: 'overview' }, { id: 'vms', countKey: 'vms' },
+        { id: 'storage', countKey: 'storage' }, { id: 'network', countKey: 'network' },
+        { id: 'services', countKey: 'services' }, { id: 'logs' },
+      ],
+    };
+  },
+  computed: {
+    hostId(): string { return String(this.$route.query.hostId || ''); },
+    runningVmCount(): number { return this.inventory?.vms.filter((vm) => vm.state.toLowerCase().includes('running')).length || 0; },
+    vmRunningPercent(): number { return this.inventory?.vms.length ? Math.round(this.runningVmCount / this.inventory.vms.length * 100) : 0; },
+    cpuLoadPercent(): number { return Math.min(100, Math.round((this.inventory?.system.load_average?.[0] || 0) / Math.max(1, this.inventory?.system.cpu_count || 1) * 100)); },
+    memoryUsedPercent(): number { const total = this.inventory?.system.memory_total_kib || 0; return total ? Math.round((total - (this.inventory?.system.memory_available_kib || 0)) / total * 100) : 0; },
+    failedServiceCount(): number { return this.inventory?.services.filter((service) => service.active === 'failed').length || 0; },
+    filteredVms(): Vm[] { const term = this.vmFilter.toLowerCase().trim(); return (this.inventory?.vms || []).filter((vm) => !term || `${vm.name} ${vm.uuid}`.toLowerCase().includes(term)); },
+    filteredServices(): Service[] { const term = this.serviceFilter.toLowerCase().trim(); return (this.inventory?.services || []).filter((service) => { const matchesTerm = !term || `${service.name} ${service.description}`.toLowerCase().includes(term); const matchesState = this.serviceStateFilter === 'all' || service.active === this.serviceStateFilter; return matchesTerm && matchesState; }); },
+    visibleServices(): Service[] { return this.filteredServices.slice(0, this.serviceLimit); },
+    filteredLogs(): string[] { const term = this.logFilter.toLowerCase().trim(); return (this.inventory?.logs || []).filter((line) => !term || line.toLowerCase().includes(term)); },
+  },
+  watch: {
+    serviceFilter() { this.serviceLimit = 25; },
+    serviceStateFilter() { this.serviceLimit = 25; },
+  },
+  mounted() { this.load(); },
+  methods: {
+    t(key: string, args?: Record<string, unknown>): string { const translate = (this as any).$store?.getters?.['i18n/t']; return translate ? translate(`kvmManager.${key}`, args) : key; },
+    showMoreServices() { this.serviceLimit += 25; },
+    async request(path: string, options: RequestInit = {}) {
+      const response = await fetch(`${apiBase}${path}`, { ...options, headers: { 'Content-Type': 'application/json', ...options.headers }, credentials: 'same-origin' });
+      if (!response.ok) { const body = await response.json().catch(() => ({})); throw new Error(body.detail || `Falha na API (${response.status})`); }
+      return response.status === 204 ? null : response.json();
+    },
+    async load() {
+      if (!this.hostId) { this.error = this.t('cloudNative.hostRequired'); return; }
+      this.loading = true; this.error = ''; this.actionError = '';
+      try {
+        const [hosts, inventory] = await Promise.all([this.request('/hosts'), this.request(`/hosts/${this.hostId}/cloud-native`)]);
+        this.host = hosts.find((item: Host) => item.id === this.hostId) || null;
+        if (!this.host) throw new Error(this.t('cloudNative.hostRemoved'));
+        this.inventory = inventory;
+      } catch (error) { this.error = (error as Error).message; }
+      finally { this.loading = false; }
+    },
+    async actOnVm(vm: Vm, action: 'start' | 'shutdown' | 'reboot' | 'pause' | 'resume') {
+      const labelKey = action === 'shutdown' ? 'shutdownVm' : action === 'reboot' ? 'rebootVm' : action === 'pause' ? 'pauseVm' : action === 'resume' ? 'resumeVm' : 'startVm';
+      if (!window.confirm(this.t('cloudNative.confirmAction', { action: this.t(`cloudNative.${labelKey}`).toLowerCase(), name: vm.name }))) return;
+      this.busy = vm.name; this.actionError = '';
+      try { await this.request(`/hosts/${this.hostId}/vms/actions?vm_name=${encodeURIComponent(vm.name)}`, { method: 'POST', body: JSON.stringify({ action }) }); await this.load(); }
+      catch (error) { this.actionError = (error as Error).message; }
+      finally { this.busy = ''; }
+    },
+    async actOnService(service: Service, action: 'start' | 'stop' | 'restart') {
+      const labelKey = action === 'stop' ? 'stop' : action === 'restart' ? 'restart' : 'start';
+      if (!window.confirm(this.t('cloudNative.confirmService', { action: this.t(`cloudNative.${labelKey}`).toLowerCase(), name: service.name }))) return;
+      this.busy = service.name; this.actionError = '';
+      try { await this.request(`/hosts/${this.hostId}/services/actions?service_name=${encodeURIComponent(service.name)}`, { method: 'POST', body: JSON.stringify({ action }) }); await this.load(); }
+      catch (error) { this.actionError = (error as Error).message; }
+      finally { this.busy = ''; }
+    },
+    async setAutostart(vm: Vm) {
+      const enabled = !(vm.autostart === 'enable' || vm.autostart === 'yes');
+      if (!window.confirm(this.t('cloudNative.confirmAutostart', { action: enabled ? this.t('cloudNative.autostartOn').toLowerCase() : this.t('cloudNative.autostartOff').toLowerCase(), name: vm.name }))) return;
+      this.busy = vm.name; this.actionError = '';
+      try { await this.request(`/hosts/${this.hostId}/vms/autostart?vm_name=${encodeURIComponent(vm.name)}`, { method: 'POST', body: JSON.stringify({ enabled }) }); await this.load(); }
+      catch (error) { this.actionError = (error as Error).message; }
+      finally { this.busy = ''; }
+    },
+    async showVmDetails(vm: Vm) {
+      this.selectedVmName = vm.name; this.vmDetail = null; this.vmDetailError = ''; this.vmDetailLoading = true;
+      try { this.vmDetail = await this.request(`/hosts/${this.hostId}/vms/detail?vm_name=${encodeURIComponent(vm.name)}`); }
+      catch (error) { this.vmDetailError = (error as Error).message; }
+      finally { this.vmDetailLoading = false; }
+    },
+    closeVmDetails() { this.selectedVmName = ''; this.vmDetail = null; this.vmDetailError = ''; },
+    logLineClass(line: string) { return /\b(err|error|failed|critical|panic)\b/i.test(line) ? 'log-error' : /\b(warn|warning)\b/i.test(line) ? 'log-warning' : ''; },
+    usageClass(value: string) { const percent = Number.parseInt(value, 10); return percent >= 90 ? 'usage-high' : percent >= 75 ? 'usage-medium' : 'usage-normal'; },
+    selectTab(tab: string) { this.activeTab = tab; },
+    tabCount(key?: string) {
+      if (key === 'vms') return this.inventory?.vms.length || 0;
+      if (key === 'storage') return this.inventory?.storage_pools.length || 0;
+      if (key === 'network') return this.inventory?.network.interfaces.length || 0;
+      if (key === 'services') return this.inventory?.services.length || 0;
+      return '';
+    },
+    backToHosts() { window.location.assign(window.location.pathname.replace(/\/cloud-native\/?$/, '/hosts')); },
+    cockpitUrl(host: Host) { return `${apiBase}/hosts/${host.id}/cockpit`; },
+    statusLabel(status: string) { return this.t(`hosts.${status}`); },
+    memoryLabel(kib: number) { return `${(kib / 1048576).toFixed(1)} GiB`; },
+    bytesLabel(value: number) {
+      if (!value) return '0 B';
+      const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB']; const index = Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1);
+      return `${(value / (1024 ** index)).toFixed(index > 1 ? 1 : 0)} ${units[index]}`;
+    },
+    uptimeLabel(seconds: number) { const days = Math.floor(seconds / 86400); const hours = Math.floor((seconds % 86400) / 3600); return days ? `${days}d ${hours}h` : `${hours}h ${Math.floor((seconds % 3600) / 60)}m`; },
+    addresses(nic: any) { return (nic.addr_info || []).map((item: any) => `${item.local}/${item.prefixlen}`).join(', ') || '—'; },
+  },
+});
+</script>
+
+<style scoped>
+.cloud-native-page { --cn-border: var(--border, #d9dee8); --cn-muted: var(--muted, #6e7888); --cn-panel: var(--input-bg, var(--body-bg, #fff)); padding: 28px clamp(18px, 3vw, 42px) 48px; color: var(--body-text, #243043); }
+.breadcrumbs { display:flex; align-items:center; gap:10px; margin-bottom:22px; color:var(--cn-muted); font-size:13px; }
+.breadcrumbs button,.text-button { border:0; padding:0; color:var(--link, #2563eb); background:transparent; cursor:pointer; }
+.breadcrumbs button:hover,.text-button:hover { text-decoration:underline; }
+.page-header,.section-heading { display:flex; align-items:flex-end; justify-content:space-between; gap:22px; margin-bottom:20px; }
+.title-block h1 { margin:5px 0 7px; font-size:28px; font-weight:600; letter-spacing:-.025em; }
+.eyebrow { color:var(--cn-muted); font-size:10px; font-weight:700; letter-spacing:.11em; }
+.muted,small { color:var(--cn-muted); }
+small { display:block; margin-top:4px; font-size:12px; }
+.toolbar,.filter-bar { display:flex; align-items:center; gap:10px; }
+.toolbar form { margin:0; }
+.cluster-summary { display:grid; grid-template-columns:1.35fr repeat(3,1fr); gap:14px; margin:26px 0 28px; }
+.summary-card { position:relative; display:flex; flex-direction:column; gap:12px; min-width:0; padding:19px; border:1px solid var(--cn-border); border-radius:8px; background:var(--cn-panel); box-shadow:0 2px 6px rgba(20,34,58,.035); }
+.summary-card.host-card { flex-direction:row; align-items:center; gap:13px; }
+.host-card>div:nth-child(2) { min-width:0; flex:1; }
+.host-card strong,.host-card small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.card-top { display:flex; align-items:center; justify-content:space-between; color:var(--cn-muted); font-size:13px; }
+.summary-card>div>span,.summary-card>span { color:var(--cn-muted); font-size:12px; }
+.summary-card strong { font-size:16px; }
+.summary-card .metric { font-size:23px; line-height:1; }
+.summary-card .metric small { display:inline; font-size:12px; font-weight:500; }
+.metric-track { height:4px; overflow:hidden; border-radius:10px; background:#edf0f5; }
+.metric-track i { display:block; height:100%; min-width:2px; border-radius:10px; background:linear-gradient(90deg,#4c83e8,#2563eb); }
+.admin-tabs { display:flex; overflow-x:auto; gap:4px; margin:0 0 25px; border-bottom:1px solid var(--cn-border); }
+.admin-tabs button { display:flex; flex:0 0 auto; align-items:center; gap:8px; border:0; border-bottom:2px solid transparent; margin-bottom:-1px; padding:12px 15px; color:var(--cn-muted); background:transparent; cursor:pointer; font-size:13px; }
+.admin-tabs button>b { color:inherit; font-size:16px; }
+.admin-tabs button.active { border-color:var(--link,#2563eb); color:var(--link,#2563eb); font-weight:600; }
+.admin-tabs button span,.count-badge { padding:2px 7px; border-radius:10px; color:#58657a; background:#eef1f5; font-size:11px; }
+.section-panel h2 { margin:4px 0 6px; font-size:21px; font-weight:600; letter-spacing:-.015em; }
+.section-panel h3 { margin:0 0 14px; font-size:15px; font-weight:600; }
+.updated-at { color:var(--cn-muted); font-size:12px; }
+.overview-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+.info-panel,.pool-card,.network-card { border:1px solid var(--cn-border); border-radius:8px; padding:19px; background:var(--cn-panel); }
+.panel-heading { display:flex; align-items:center; gap:12px; margin-bottom:18px; }
+.panel-heading h3 { margin:0 0 4px; }
+.panel-heading p { margin:0; color:var(--cn-muted); font-size:12px; }
+.info-panel dl { display:grid; grid-template-columns:minmax(130px,.8fr) 1fr; gap:13px; margin:0; font-size:13px; }
+.info-panel dt,.resource-row>span { color:var(--cn-muted); }
+.info-panel dd { margin:0; overflow-wrap:anywhere; font-weight:500; }
+.resource-row { display:flex; justify-content:space-between; gap:15px; padding:11px 0; border-bottom:1px solid var(--cn-border); font-size:13px; }
+.resource-row:last-child { border-bottom:0; }
+.vm-heading { margin:28px 0 12px; }
+.vm-heading h2 { margin-top:4px; }
+.text-button { font-size:13px; }
+.subsection { margin:24px 0 30px; }
+.subsection h3 { display:flex; align-items:center; gap:9px; }
+.pool-grid,.network-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:12px; }
+.pool-card>div,.network-card { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.pool-card>div strong { overflow-wrap:anywhere; }
+.pool-card dl { display:grid; grid-template-columns:1fr auto; gap:9px 15px; margin:18px 0 0; font-size:12px; }
+.pool-card dt { color:var(--cn-muted); }.pool-card dd { margin:0; font-weight:600; }
+.network-card { justify-content:flex-start; }.network-card>div { min-width:0; flex:1; }.network-card strong,.network-card small { overflow-wrap:anywhere; }
+.table-wrap { width:100%; overflow-x:auto; border:1px solid var(--cn-border); border-radius:8px; background:var(--cn-panel); }
+:deep(.table) { width:100%; border-collapse:collapse; }
+:deep(.table) { color:var(--body-text); background:var(--cn-panel); }
+:deep(.table th),:deep(.table td) { padding:12px 14px; color:var(--body-text); text-align:left; border-bottom:1px solid var(--cn-border); vertical-align:middle; font-size:13px; }
+:deep(.table th) { color:var(--cn-muted); background:rgba(120,135,160,.08); font-size:11px; font-weight:700; letter-spacing:.035em; white-space:nowrap; }
+:deep(.table tbody tr:last-child td) { border-bottom:0; }
+:deep(.table tbody tr:hover) { background:rgba(65,110,190,.035); }
+:deep(.table small) { max-width:240px; overflow-wrap:anywhere; }
+:deep(.table .empty-row) { padding:28px; color:var(--cn-muted); text-align:center; }
+.vm-name { border:0; padding:0; color:var(--link,#2563eb); background:transparent; cursor:pointer; font-weight:600; }
+.vm-name:hover { text-decoration:underline; }
+.state { display:inline-flex; align-items:center; gap:6px; padding:4px 9px; border-radius:12px; color:#536174; background:#eef1f5; font-size:11px; font-weight:600; white-space:nowrap; }
+.state i { width:6px; height:6px; border-radius:50%; background:currentColor; }
+.state.ready { color:#287447; background:#e8f6ed; }.state.unreachable { color:#a52822; background:#fdeceb; }.state.warning-state { color:#8b5a00; background:#fff4db; }.state.unknown { color:#596579; background:#eef1f5; }
+.toggle-pill { border:1px solid var(--cn-border); border-radius:14px; padding:4px 9px; color:#667085; background:transparent; cursor:pointer; font-size:11px; }
+.toggle-pill.enabled { border-color:#c7e9d0; color:#267644; background:#effaf2; }
+.row-actions { display:flex; flex-wrap:wrap; gap:5px; min-width:260px; }.btn-sm { padding:5px 9px; font-size:11px; }
+.description-cell { min-width:210px; white-space:normal; }
+.search-input { min-width:190px; max-width:270px; border:1px solid var(--cn-border); border-radius:var(--border-radius, 4px); padding:9px 11px; color:var(--input-text, var(--body-text)); background:var(--input-bg, var(--cn-panel)); font-size:13px; }
+.search-input:focus { border-color:#5288e5; outline:2px solid rgba(55,112,215,.13); }
+.filter-bar { flex-wrap:wrap; justify-content:flex-end; }
+.pagination-row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:11px 3px; color:var(--cn-muted); font-size:12px; }
+.safety-note { margin:12px 2px; color:var(--cn-muted); font-size:12px; }
+.usage-pill { display:inline-block; border-radius:12px; padding:3px 8px; font-size:11px; font-weight:600; }.usage-normal { color:#287447; background:#e8f6ed; }.usage-medium { color:#8b5a00; background:#fff4db; }.usage-high { color:#a52822; background:#fdeceb; }
+.empty-state { padding:20px; border:1px dashed var(--cn-border); border-radius:7px; color:var(--cn-muted); text-align:center; font-size:13px; }
+.log-view { max-height:65vh; overflow:auto; margin:0; padding:18px; border:1px solid #263345; border-radius:8px; background:#111a27; color:#d6dfeb; font:12px/1.65 ui-monospace,SFMono-Regular,Menlo,monospace; white-space:pre-wrap; overflow-wrap:anywhere; }
+.log-error { color:#ff9892; }.log-warning { color:#ffd27d; }
+.banner { margin:14px 0; padding:13px 15px; border-radius:6px; }.banner.error { color:#8f211a; background:#fff0ee; }.banner.warning { color:#6b4d0c; background:#fff7db; }
+.loading { padding:48px; color:var(--cn-muted); text-align:center; }
+.modal-backdrop { position:fixed; z-index:1000; inset:0; display:flex; justify-content:flex-end; background:rgba(15,24,38,.38); }
+.details-modal { width:min(560px,100vw); height:100%; overflow:auto; padding:26px; background:var(--cn-panel); box-shadow:-12px 0 40px rgba(15,24,38,.18); }
+.details-modal>header { display:flex; justify-content:space-between; align-items:flex-start; padding-bottom:18px; border-bottom:1px solid var(--cn-border); }.details-modal h2 { margin:5px 0; font-size:22px; }
+.close-button { border:0; color:var(--cn-muted); background:transparent; cursor:pointer; font-size:28px; }
+.details-content h3 { margin:24px 0 10px; font-size:14px; }.detail-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin:18px 0; }.detail-stats>div { display:flex; flex-direction:column; gap:6px; padding:12px; border:1px solid var(--cn-border); border-radius:6px; }.detail-stats span,.detail-row small { color:var(--cn-muted); font-size:11px; }.detail-stats strong { font-size:14px; }.detail-row { display:grid; grid-template-columns:70px 1fr; gap:4px 10px; padding:11px 0; border-bottom:1px solid var(--cn-border); font-size:12px; overflow-wrap:anywhere; }.detail-row small { grid-column:2; }
+@media (max-width:1100px) { .cluster-summary { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media (max-width:820px) { .page-header,.section-heading { align-items:flex-start; flex-direction:column; }.toolbar { flex-wrap:wrap; }.filter-bar { justify-content:flex-start; }.overview-grid { grid-template-columns:1fr; } }
+@media (max-width:560px) { .cloud-native-page { padding:18px 12px 32px; }.cluster-summary { grid-template-columns:1fr; }.host-card { flex-wrap:wrap; }.host-card .state { margin-left:48px; }.admin-tabs button { padding:11px 10px; }.search-input { max-width:100%; }.detail-stats { grid-template-columns:1fr; } }
+</style>

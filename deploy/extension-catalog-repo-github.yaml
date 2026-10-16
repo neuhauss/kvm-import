@@ -1,0 +1,9 @@
+apiVersion: catalog.cattle.io/v1
+kind: ClusterRepo
+metadata:
+  name: kvm-extension-catalog
+spec:
+  # Troque OWNER/REPOSITORY pela URL de Pages onde helm repo index publicou index.yaml.
+  url: https://OWNER.github.io/REPOSITORY/charts
+  refreshInterval: 300
+  enabled: true

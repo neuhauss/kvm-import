@@ -1,0 +1,150 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kvm-extension-assets
+  namespace: rancher-kvm-registry
+  labels:
+    app.kubernetes.io/name: kvm-extension-assets
+    app.kubernetes.io/part-of: rancher-kvm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kvm-extension-assets
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kvm-extension-assets
+        app.kubernetes.io/part-of: rancher-kvm
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: httpd
+        image: httpd:2.4-alpine
+        imagePullPolicy: IfNotPresent
+        command:
+        - /bin/sh
+        - -ec
+        args:
+        - sed 's/^Listen 80$/Listen 8080/' /usr/local/apache2/conf/httpd.conf > /tmp/httpd.conf && exec httpd -f /tmp/httpd.conf -DFOREGROUND
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 200m
+            memory: 128Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: assets
+          mountPath: /usr/local/apache2/htdocs
+          readOnly: true
+        - name: tmp
+          mountPath: /tmp
+        - name: logs
+          mountPath: /usr/local/apache2/logs
+      volumes:
+      - name: assets
+        configMap:
+          name: kvm-extension-assets
+          items:
+          - key: files-0.5.5.txt
+            path: kvm-manager/0.5.5/files.txt
+          - key: package-0.5.5.json
+            path: kvm-manager/0.5.5/plugin/package.json
+          - key: kvm-manager-0.5.5.umd.min.148.js
+            path: kvm-manager/0.5.5/plugin/kvm-manager-0.5.5.umd.min.148.js
+          - key: kvm-manager-0.5.5.umd.min.37.js
+            path: kvm-manager/0.5.5/plugin/kvm-manager-0.5.5.umd.min.37.js
+          - key: kvm-manager-0.5.5.umd.min.js
+            path: kvm-manager/0.5.5/plugin/kvm-manager-0.5.5.umd.min.js
+          - key: kvm-manager-0.5.5.umd.min.148.js.map
+            path: kvm-manager/0.5.5/plugin/kvm-manager-0.5.5.umd.min.148.js.map
+          - key: kvm-manager-0.5.5.umd.min.37.js.map
+            path: kvm-manager/0.5.5/plugin/kvm-manager-0.5.5.umd.min.37.js.map
+          - key: kvm-manager-0.5.5.umd.min.js.map
+            path: kvm-manager/0.5.5/plugin/kvm-manager-0.5.5.umd.min.js.map
+          - key: asset-0.5.5-kvm.4077b7e4.svg
+            path: kvm-manager/0.5.5/plugin/img/kvm.4077b7e4.svg
+          - key: catalog-index.yaml
+            path: catalog/index.yaml
+          - key: catalog-chart-0.1.6.tgz
+            path: catalog/kvm-manager-0.1.6.tgz
+          - key: catalog-chart.tgz
+            path: catalog/kvm-manager-0.1.5.tgz
+          - key: catalog-chart-0.1.7.tgz
+            path: catalog/kvm-manager-0.1.7.tgz
+          - key: catalog-chart-0.2.0.tgz
+            path: catalog/kvm-manager-0.2.0.tgz
+          - key: catalog-chart-0.2.1.tgz
+            path: catalog/kvm-manager-0.2.1.tgz
+          - key: catalog-chart-0.3.0.tgz
+            path: catalog/kvm-manager-0.3.0.tgz
+          - key: catalog-chart-0.4.0.tgz
+            path: catalog/kvm-manager-0.4.0.tgz
+          - key: catalog-chart-0.4.1.tgz
+            path: catalog/kvm-manager-0.4.1.tgz
+          - key: catalog-chart-0.5.0.tgz
+            path: catalog/kvm-manager-0.5.0.tgz
+          - key: catalog-chart-0.5.1.tgz
+            path: catalog/kvm-manager-0.5.1.tgz
+          - key: catalog-chart-0.5.2.tgz
+            path: catalog/kvm-manager-0.5.2.tgz
+          - key: catalog-chart-0.5.3.tgz
+            path: catalog/kvm-manager-0.5.3.tgz
+          - key: catalog-chart-0.5.4.tgz
+            path: catalog/kvm-manager-0.5.4.tgz
+          - key: catalog-chart-0.5.5.tgz
+            path: catalog/kvm-manager-0.5.5.tgz
+      - name: tmp
+        emptyDir: {}
+      - name: logs
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kvm-extension-assets
+  namespace: rancher-kvm-registry
+  labels:
+    app.kubernetes.io/name: kvm-extension-assets
+    app.kubernetes.io/part-of: rancher-kvm
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: kvm-extension-assets
+  ports:
+  - name: http
+    port: 8080
+    targetPort: http
+    protocol: TCP
+---
+apiVersion: catalog.cattle.io/v1
+kind: UIPlugin
+metadata:
+  name: kvm-manager
+  namespace: cattle-ui-plugin-system
+spec:
+  plugin:
+    name: kvm-manager
+    version: 0.5.5
+    endpoint: http://kvm-extension-assets.rancher-kvm-registry.svc:8080/kvm-manager/0.5.5
+    noCache: false
+    noAuth: false
+    metadata:
+      catalog.cattle.io/rancher-version: '>=2.10.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'

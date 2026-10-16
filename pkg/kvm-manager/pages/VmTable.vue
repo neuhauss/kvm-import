@@ -1,0 +1,43 @@
+<template>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>{{ t('vm') }}</th><th>{{ t('state') }}</th><th>vCPU</th><th>{{ t('memory') }}</th><th>{{ t('autostart') }}</th><th>{{ t('actions') }}</th></tr></thead>
+      <tbody>
+        <tr v-for="vm in vms" :key="vm.uuid || vm.name">
+          <td><button class="vm-name" @click="$emit('details', vm)">{{ vm.name }}</button><small>{{ vm.uuid }}</small></td>
+          <td><span class="state" :class="stateClass(vm.state)"><i></i>{{ vm.state }}</span></td>
+          <td>{{ vm.current_vcpus || vm.vcpus }}</td>
+          <td>{{ (Number(vm.memory_kib || 0) / 1048576).toFixed(1) }} GiB</td>
+          <td><button class="toggle-pill" :class="{ enabled: isAutostart(vm) }" :disabled="busy === vm.name" @click="$emit('autostart', vm)">{{ t(isAutostart(vm) ? 'enabled' : 'disabled') }}</button></td>
+          <td class="row-actions">
+            <button class="btn role-link btn-sm" @click="$emit('details', vm)">{{ t('details') }}</button>
+            <button v-if="isRunning(vm) || isPaused(vm)" class="btn role-secondary btn-sm" :disabled="busy === vm.name" @click="$emit('action', vm, isPaused(vm) ? 'resume' : 'pause')">{{ isPaused(vm) ? t('resume') : t('pause') }}</button>
+            <button v-if="!isRunning(vm) && !isPaused(vm)" class="btn role-primary btn-sm" :disabled="busy === vm.name" @click="$emit('action', vm, 'start')">{{ t('start') }}</button>
+            <button v-else class="btn role-secondary btn-sm" :disabled="busy === vm.name" @click="$emit('action', vm, 'shutdown')">{{ t('shutdown') }}</button>
+            <button class="btn role-link btn-sm" :disabled="busy === vm.name || !isRunning(vm)" @click="$emit('action', vm, 'reboot')">{{ t('restart') }}</button>
+          </td>
+        </tr>
+        <tr v-if="!vms.length"><td colspan="6" class="empty-row">{{ t('empty') }}</td></tr>
+      </tbody>
+    </table>
+  </div>
+</template>
+
+<script lang="ts">
+import { defineComponent, PropType } from 'vue';
+
+type VmRow = { name: string; uuid: string; state: string; vcpus: number; current_vcpus: number; memory_kib: number; autostart: string };
+
+export default defineComponent({
+  name: 'KvmVmTable',
+  props: { vms: { type: Array as PropType<VmRow[]>, required: true }, busy: { type: String, default: '' } },
+  emits: ['action', 'details', 'autostart'],
+  methods: {
+    t(key: string): string { const translate = (this as any).$store?.getters?.['i18n/t']; return translate ? translate(`kvmManager.vmTable.${key}`) : key; },
+    isRunning(vm: VmRow) { return vm.state.toLowerCase().includes('running'); },
+    isPaused(vm: VmRow) { return vm.state.toLowerCase().includes('paused'); },
+    isAutostart(vm: VmRow) { return vm.autostart === 'enable' || vm.autostart === 'yes'; },
+    stateClass(state: string) { const value = state.toLowerCase(); return value.includes('running') ? 'ready' : value.includes('paused') ? 'warning-state' : 'unknown'; },
+  },
+});
+</script>
