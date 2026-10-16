@@ -479,6 +479,42 @@ class SshCockpitTunnel:
         self.client.close()
 
 
+VM_CONSOLE_SCRIPT = r'''import subprocess, sys, os
+name = sys.argv[1]
+base = ['virsh', '-c', 'qemu:///system']
+listing = subprocess.run(base + ['list', '--all', '--name'], capture_output=True, text=True, timeout=20)
+if listing.returncode:
+    raise SystemExit(listing.stderr.strip() or listing.stdout.strip() or 'Could not query libvirt')
+if name not in [item.strip() for item in listing.stdout.splitlines()]:
+    raise SystemExit('Virtual machine not found')
+state = subprocess.run(base + ['domstate', name], capture_output=True, text=True, timeout=15)
+if state.returncode or state.stdout.strip().lower() != 'running':
+    raise SystemExit('The virtual machine must be running to open its serial console')
+os.execvp('virsh', base + ['console', name])
+'''
+
+
+def open_vm_console(host: dict[str, Any], vm_name: str) -> tuple[paramiko.SSHClient, paramiko.Channel]:
+    """Open a pinned SSH session and attach a PTY to an existing VM serial console."""
+    client = ssh_client_for_host(host)
+    try:
+        _stdin, stdout, _stderr = client.exec_command('sudo -n -v', timeout=8)
+        passwordless_sudo = stdout.channel.recv_exit_status() == 0
+        if not passwordless_sudo and not host.get('password'):
+            raise RuntimeError('The imported SSH account needs passwordless sudo to open a VM console')
+        channel = client.get_transport().open_session(timeout=10)
+        channel.get_pty(term='xterm-256color', width=100, height=30)
+        sudo_args = '-n' if passwordless_sudo else "-S -p ''"
+        command = f"sudo {sudo_args} python3 -c {shlex.quote(VM_CONSOLE_SCRIPT)} {shlex.quote(vm_name)}"
+        channel.exec_command(command)
+        if not passwordless_sudo:
+            channel.sendall((host['password'] + '\n').encode())
+        return client, channel
+    except Exception:
+        client.close()
+        raise
+
+
 def cockpit_host_record(host_id: str) -> dict[str, Any]:
     with connect_db() as db:
         row = read_host(db, host_id)
@@ -697,6 +733,92 @@ async def _proxy_cockpit_websocket(host_id: str, path: str, websocket: WebSocket
 @app.websocket("/kvm-cockpit/{host_id}/{path:path}")
 async def cockpit_websocket(host_id: str, path: str, websocket: WebSocket) -> None:
     await _proxy_cockpit_websocket(host_id, path, websocket)
+
+
+@app.websocket("/kvm-api/hosts/{host_id}/vms/console")
+async def vm_console_websocket(host_id: str, websocket: WebSocket) -> None:
+    """Relay an authenticated browser terminal to an imported VM's libvirt console."""
+    if websocket.headers.get("origin") != RANCHER_PUBLIC_ORIGIN:
+        await websocket.close(code=4403)
+        return
+    try:
+        actor = await asyncio.to_thread(
+            require_auth, websocket.headers.get("authorization"), websocket.headers.get("cookie")
+        )
+    except HTTPException as exc:
+        await websocket.close(code=4403 if exc.status_code == 403 else 4401)
+        return
+
+    vm_name = websocket.query_params.get("vm_name", "")
+    if not vm_name or len(vm_name) > 128 or "\x00" in vm_name:
+        await websocket.close(code=4400)
+        return
+    try:
+        host = cockpit_host_record(host_id)
+    except HTTPException as exc:
+        await websocket.close(code=4404 if exc.status_code == 404 else 1011)
+        return
+
+    await websocket.accept()
+    client: paramiko.SSHClient | None = None
+    channel: paramiko.Channel | None = None
+    outcome = "failure"
+    detail = "Console session closed before connection"
+    try:
+        client, channel = await asyncio.to_thread(open_vm_console, host, vm_name)
+        await websocket.send_text("KVM_CONTROL:" + json.dumps({"type": "status", "status": "connected"}))
+        outcome = "success"
+        detail = "Serial console session opened; terminal input is not stored"
+        while True:
+            if channel.recv_ready():
+                data = await asyncio.to_thread(channel.recv, 65536)
+                if not data:
+                    break
+                await websocket.send_bytes(data)
+            elif channel.exit_status_ready():
+                break
+
+            try:
+                message = await asyncio.wait_for(websocket.receive(), timeout=0.04)
+            except asyncio.TimeoutError:
+                continue
+            if message["type"] == "websocket.disconnect":
+                break
+            if message.get("bytes") is not None:
+                await asyncio.to_thread(channel.sendall, message["bytes"])
+                continue
+            data = message.get("text", "")
+            if data.startswith("KVM_CONTROL:"):
+                try:
+                    control = json.loads(data[len("KVM_CONTROL:"):])
+                except (json.JSONDecodeError, TypeError):
+                    control = None
+                if isinstance(control, dict) and control.get("type") == "resize":
+                    cols = control.get("cols")
+                    rows = control.get("rows")
+                    if isinstance(cols, int) and isinstance(rows, int):
+                        await asyncio.to_thread(channel.resize_pty, width=max(20, min(cols, 300)), height=max(5, min(rows, 120)))
+                    continue
+            await asyncio.to_thread(channel.sendall, data.encode("utf-8"))
+    except Exception as exc:
+        detail = str(exc)[:500] or "Could not open the VM serial console"
+        try:
+            await websocket.send_text("KVM_CONTROL:" + json.dumps({"type": "error", "message": detail}))
+        except Exception:
+            pass
+    finally:
+        if channel is not None:
+            channel.close()
+        if client is not None:
+            client.close()
+        try:
+            await asyncio.to_thread(record_audit, actor, "vm.console", f"{host_id}/{vm_name}", outcome, detail)
+        except Exception:
+            pass
+        try:
+            await websocket.close(code=1000)
+        except Exception:
+            pass
 
 
 def probe(

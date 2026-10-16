@@ -2,7 +2,7 @@
 
 Extensão Rancher para importar hosts SUSE Linux com KVM/libvirt já instalado e administrá-los sem instalar software no host. Para publicar o projeto e instalar em outro ambiente, siga o [guia de implantação em quatro passos](GUIA-INSTALACAO-4-PASSOS.md).
 
-## Recursos da versão 0.7.5
+## Recursos da versão 0.7.6
 
 - Cadastro, validação, edição, atualização e remoção de hosts KVM existentes.
 - Estado, última consulta, nome do host, CPU, memória e diagnóstico SSH/libvirt.
@@ -11,6 +11,7 @@ Extensão Rancher para importar hosts SUSE Linux com KVM/libvirt já instalado e
 - Interface localizada em português do Brasil e inglês, seguindo o idioma selecionado no Rancher.
 - Tabelas e formulários usando cores de texto, fundo e borda do tema Rancher, com visual simplificado sem ícones decorativos.
 - Visão geral do host com sistema operacional, kernel, disponibilidade, CPU, memória e tempo ativo.
+- Console serial interativo para abrir terminal em VMs ligadas e configuradas com console serial.
 - Áreas para VMs, armazenamento, rede, serviços systemd e logs, com ações de ciclo de vida de VMs e serviços registradas na auditoria.
 - Cockpit aberto no mesmo domínio do Rancher, autenticado com as credenciais já salvas.
 - Autenticação SSH por senha ou por chave privada; a frase secreta também é criptografada.
@@ -43,7 +44,7 @@ Para preparar a release e regenerar os manifests de assets/API:
 CHART_REPO_URL=https://<OWNER>.github.io/<REPOSITORY>/charts scripts/package-release.sh
 ```
 
-A release GitHub `v0.7.5` aciona o workflow único de publicação da API no GHCR e Docker Hub. Configure os secrets `DOCKERHUB_USERNAME` e `DOCKERHUB_TOKEN` em Actions. O workflow de charts publica o catálogo na branch `gh-pages`. O [guia de quatro passos](GUIA-INSTALACAO-4-PASSOS.md) cobre publicação, instalação e os componentes que precisam estar acessíveis ao Rancher.
+A release GitHub `v0.7.6` aciona o workflow único de publicação da API no GHCR e Docker Hub. Configure os secrets `DOCKERHUB_USERNAME` e `DOCKERHUB_TOKEN` em Actions. O workflow de charts publica o catálogo na branch `gh-pages`. O [guia de quatro passos](GUIA-INSTALACAO-4-PASSOS.md) cobre publicação, instalação e os componentes que precisam estar acessíveis ao Rancher.
 
 Os dados persistentes usam PVCs no StorageClass `default`, sem gravar diretamente no filesystem do nó. Ajuste o StorageClass para o padrão do cluster de destino, se necessário.
 

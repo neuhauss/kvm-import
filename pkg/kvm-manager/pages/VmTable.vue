@@ -11,6 +11,7 @@
           <td><button class="toggle-pill" :class="{ enabled: isAutostart(vm) }" :disabled="busy === vm.name" @click="$emit('autostart', vm)">{{ t(isAutostart(vm) ? 'enabled' : 'disabled') }}</button></td>
           <td class="row-actions">
             <button class="btn role-link btn-sm" @click="$emit('details', vm)">{{ t('details') }}</button>
+            <button v-if="isRunning(vm)" class="btn role-primary btn-sm" @click="$emit('console', vm)">{{ t('console') }}</button>
             <button v-if="isRunning(vm) || isPaused(vm)" class="btn role-secondary btn-sm" :disabled="busy === vm.name" @click="$emit('action', vm, isPaused(vm) ? 'resume' : 'pause')">{{ isPaused(vm) ? t('resume') : t('pause') }}</button>
             <button v-if="!isRunning(vm) && !isPaused(vm)" class="btn role-primary btn-sm" :disabled="busy === vm.name" @click="$emit('action', vm, 'start')">{{ t('start') }}</button>
             <button v-else class="btn role-secondary btn-sm" :disabled="busy === vm.name" @click="$emit('action', vm, 'shutdown')">{{ t('shutdown') }}</button>
@@ -31,7 +32,7 @@ type VmRow = { name: string; uuid: string; state: string; vcpus: number; current
 export default defineComponent({
   name: 'KvmVmTable',
   props: { vms: { type: Array as PropType<VmRow[]>, required: true }, busy: { type: String, default: '' } },
-  emits: ['action', 'details', 'autostart'],
+  emits: ['action', 'details', 'autostart', 'console'],
   methods: {
     t(key: string): string { const translate = (this as any).$store?.getters?.['i18n/t']; return translate ? translate(`kvmManager.vmTable.${key}`) : key; },
     isRunning(vm: VmRow) { return vm.state.toLowerCase().includes('running'); },

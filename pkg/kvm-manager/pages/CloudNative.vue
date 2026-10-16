@@ -36,10 +36,10 @@
           <article class="info-panel"><div class="panel-heading"><div><h3>{{ t('cloudNative.resources') }}</h3><p>{{ t('cloudNative.currentUsage') }}</p></div></div><div class="resource-row"><span>CPU</span><strong>{{ inventory.system.cpu_count }} {{ t('cloudNative.cores') }}</strong></div><div class="resource-row"><span>Load average</span><strong>{{ inventory.system.load_average.map((n) => n.toFixed(2)).join(' · ') }}</strong></div><div class="resource-row"><span>{{ t('cloudNative.availableMemory') }}</span><strong>{{ memoryLabel(inventory.system.memory_available_kib) }}</strong></div><div class="resource-row"><span>{{ t('cloudNative.devices') }}</span><strong>{{ inventory.storage.devices.length }}</strong></div></article>
         </div>
         <div class="section-heading vm-heading"><div><span class="eyebrow">LIBVIRT</span><h2>{{ t('cloudNative.vms') }}</h2></div><button class="text-button" @click="selectTab('vms')">{{ t('cloudNative.fullInventory') }}</button></div>
-        <VmTable :vms="inventory.vms.slice(0, 5)" :busy="busy" @action="actOnVm" @details="showVmDetails" @autostart="setAutostart" />
+        <VmTable :vms="inventory.vms.slice(0, 5)" :busy="busy" @action="actOnVm" @details="showVmDetails" @autostart="setAutostart" @console="openVmConsole" />
       </section>
 
-      <section v-else-if="activeTab === 'vms'" class="section-panel"><div class="section-heading"><div><span class="eyebrow">LIBVIRT</span><h2>{{ t('cloudNative.vms') }}</h2><p class="muted">{{ t('cloudNative.vmLifecycle') }}</p></div><input v-model="vmFilter" class="search-input" :placeholder="t('cloudNative.filterVms')" :aria-label="t('cloudNative.filterVms')" /></div><VmTable :vms="filteredVms" :busy="busy" @action="actOnVm" @details="showVmDetails" @autostart="setAutostart" /></section>
+      <section v-else-if="activeTab === 'vms'" class="section-panel"><div class="section-heading"><div><span class="eyebrow">LIBVIRT</span><h2>{{ t('cloudNative.vms') }}</h2><p class="muted">{{ t('cloudNative.vmLifecycle') }}</p></div><input v-model="vmFilter" class="search-input" :placeholder="t('cloudNative.filterVms')" :aria-label="t('cloudNative.filterVms')" /></div><VmTable :vms="filteredVms" :busy="busy" @action="actOnVm" @details="showVmDetails" @autostart="setAutostart" @console="openVmConsole" /></section>
 
       <section v-else-if="activeTab === 'storage'" class="section-panel">
         <div class="section-heading"><div><span class="eyebrow">HOST + LIBVIRT</span><h2>{{ t('cloudNative.storage') }}</h2><p class="muted">{{ t('cloudNative.storageDescription') }}</p></div></div>
@@ -100,12 +100,14 @@
         <div v-if="vmDetailError" class="banner error">{{ vmDetailError }}</div>
       </section>
     </div>
+    <VmConsole v-if="consoleVm" :host-id="hostId" :vm-name="consoleVm.name" @close="consoleVm = null" />
   </div>
 </template>
 
 <script lang="ts">
-import { defineComponent } from 'vue';
+import { defineAsyncComponent, defineComponent } from 'vue';
 import VmTable from './VmTable.vue';
+const VmConsole = defineAsyncComponent(() => import(/* webpackChunkName: "kvm-vm-console" */ './VmConsole.vue'));
 
 const shellLayoutSnapshots = new WeakMap<HTMLElement, { navWidth: string; navWidthPriority: string; sideNav: HTMLElement | null; sideNavDisplay: string; sideNavDisplayPriority: string }>();
 
@@ -132,12 +134,12 @@ const apiBase = (process.env.VUE_APP_KVM_API || '/kvm-api').replace(/\/$/, '');
 
 export default defineComponent({
   name: 'KvmCloudNativeHost',
-  components: { VmTable },
+  components: { VmTable, VmConsole },
   data() {
     return {
       host: null as Host | null, inventory: null as Inventory | null, loading: false, error: '', actionError: '',
       busy: '' as string, activeTab: 'overview', vmFilter: '', serviceFilter: '', serviceStateFilter: 'all', serviceLimit: 25, logFilter: '', terminalCommand: '', terminalResult: null as TerminalResult | null, accountPasswordTarget: '', accountPassword: '',
-      selectedVmName: '', vmDetail: null as VmDetail | null, vmDetailLoading: false, vmDetailError: '',
+      selectedVmName: '', vmDetail: null as VmDetail | null, vmDetailLoading: false, vmDetailError: '', consoleVm: null as Vm | null,
       navGroups: [{ id: 'system' }, { id: 'tools' }],
       tabs: [
         { id: 'overview', group: 'system', icon: '◉' }, { id: 'logs', group: 'system', icon: '≋' },
@@ -225,6 +227,7 @@ export default defineComponent({
       catch (error) { this.actionError = (error as Error).message; }
       finally { this.busy = ''; }
     },
+    openVmConsole(vm: Vm) { this.consoleVm = vm; },
     async actOnService(service: Service, action: 'start' | 'stop' | 'restart') {
       const labelKey = action === 'stop' ? 'stop' : action === 'restart' ? 'restart' : 'start';
       if (!window.confirm(this.t('cloudNative.confirmService', { action: this.t(`cloudNative.${labelKey}`).toLowerCase(), name: service.name }))) return;

@@ -6,7 +6,9 @@
     "node": ">=24"
   },
   "dependencies": {
-    "@rancher/shell": "^3.0.14"
+    "@rancher/shell": "^3.0.14",
+    "@xterm/addon-fit": "0.11.0",
+    "@xterm/xterm": "6.0.0"
   },
   "resolutions": {
     "@types/node": "~25.3.0",

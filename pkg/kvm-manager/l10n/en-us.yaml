@@ -130,6 +130,14 @@ kvmManager:
     runCommand: Run command
     runningCommand: Running...
     terminalWarning: Commands run as the imported SSH user. This terminal is audited, but command text is not stored.
+    vmConsole: Virtual machine terminal
+    consoleWarning: The VM must be running and configured with a serial console and a login prompt (for example, serial-getty on ttyS0). Terminal input is not stored.
+    reconnectConsole: Reconnect
+    console_connecting: Connecting
+    console_connected: Connected
+    console_disconnected: Disconnected
+    console_error: Error
+    consoleConnectionError: Could not connect to the VM serial console.
     commandResult: Command result
     exitCode: Exit code
     noOutput: Command completed without output.
@@ -258,6 +266,7 @@ kvmManager:
     enabled: Enabled
     disabled: Disabled
     details: Details
+    console: Terminal
     resume: Resume
     pause: Pause
     start: Start
