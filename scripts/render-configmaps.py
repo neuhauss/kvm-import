@@ -12,7 +12,6 @@ version = json.loads((ROOT / "pkg/kvm-manager/package.json").read_text())["versi
 bundle_dir = ROOT / "dist-pkg" / f"kvm-manager-{version}"
 bundle_name = f"kvm-manager-{version}.umd.min.js"
 bundle_js = sorted(bundle_dir.glob("*.js"))
-bundle_maps = sorted(bundle_dir.glob("*.js.map"))
 chart_path = ROOT / "deploy/extension-catalog" / f"kvm-manager-{version}.tgz"
 if not (bundle_dir / bundle_name).is_file() or not chart_path.is_file():
     raise SystemExit("Gere o bundle (yarn build-pkg) e o chart (helm package) antes de executar este script.")
@@ -31,12 +30,12 @@ assets_path = ROOT / "deploy/kvm-extension-assets-configmap.yaml"
 assets = yaml.safe_load(assets_path.read_text())
 asset_files = sorted(bundle_dir.rglob("*.svg"))
 asset_keys = {path: f"asset-{version}-{path.name}" for path in asset_files}
-files = [f"plugin/{path.name}" for path in bundle_js + bundle_maps]
+files = [f"plugin/{path.name}" for path in bundle_js]
 files.append("plugin/package.json")
 files.extend(f"plugin/{path.relative_to(bundle_dir).as_posix()}" for path in asset_files)
 assets["data"][f"files-{version}.txt"] = "\n".join(files) + "\n"
 assets["data"][f"package-{version}.json"] = (bundle_dir / "package.json").read_text()
-for path in bundle_js + bundle_maps:
+for path in bundle_js:
     assets["data"][path.name] = path.read_text()
 for path in asset_files:
     assets["data"][asset_keys[path]] = path.read_text()
@@ -44,7 +43,7 @@ for path in asset_files:
 # plugin bundle; historical Helm charts remain in binaryData for catalog use.
 for key in list(assets["data"]):
     if key.startswith(("files-", "package-", "kvm-manager-", "asset-")):
-        if key not in {f"files-{version}.txt", f"package-{version}.json", *(path.name for path in bundle_js + bundle_maps), *asset_keys.values()}:
+        if key not in {f"files-{version}.txt", f"package-{version}.json", *(path.name for path in bundle_js), *asset_keys.values()}:
             del assets["data"][key]
 assets["data"]["catalog-index.yaml"] = (ROOT / "deploy/extension-catalog/index.yaml").read_text()
 assets.setdefault("binaryData", {})[f"catalog-chart-{version}.tgz"] = base64.b64encode(chart_path.read_bytes()).decode()
@@ -59,7 +58,7 @@ for doc in ui_docs:
             (f"files-{version}.txt", f"kvm-manager/{version}/files.txt"),
             (f"package-{version}.json", f"kvm-manager/{version}/plugin/package.json"),
         ]
-        new_items.extend((path.name, f"kvm-manager/{version}/plugin/{path.name}") for path in bundle_js + bundle_maps)
+        new_items.extend((path.name, f"kvm-manager/{version}/plugin/{path.name}") for path in bundle_js)
         new_items.extend((asset_keys[path], f"kvm-manager/{version}/plugin/{path.relative_to(bundle_dir).as_posix()}") for path in asset_files)
         new_items.append(("catalog-index.yaml", "catalog/index.yaml"))
         for chart_key in assets.get("binaryData", {}):

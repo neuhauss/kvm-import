@@ -76,16 +76,6 @@ spec:
             path: kvm-manager/0.7.6/plugin/kvm-manager-0.7.6.umd.min.js
           - key: kvm-manager-0.7.6.umd.min.kvm-vm-console.js
             path: kvm-manager/0.7.6/plugin/kvm-manager-0.7.6.umd.min.kvm-vm-console.js
-          - key: kvm-manager-0.7.6.umd.min.148.js.map
-            path: kvm-manager/0.7.6/plugin/kvm-manager-0.7.6.umd.min.148.js.map
-          - key: kvm-manager-0.7.6.umd.min.303.js.map
-            path: kvm-manager/0.7.6/plugin/kvm-manager-0.7.6.umd.min.303.js.map
-          - key: kvm-manager-0.7.6.umd.min.37.js.map
-            path: kvm-manager/0.7.6/plugin/kvm-manager-0.7.6.umd.min.37.js.map
-          - key: kvm-manager-0.7.6.umd.min.js.map
-            path: kvm-manager/0.7.6/plugin/kvm-manager-0.7.6.umd.min.js.map
-          - key: kvm-manager-0.7.6.umd.min.kvm-vm-console.js.map
-            path: kvm-manager/0.7.6/plugin/kvm-manager-0.7.6.umd.min.kvm-vm-console.js.map
           - key: asset-0.7.6-kvm.f932afc0.svg
             path: kvm-manager/0.7.6/plugin/img/kvm.f932afc0.svg
           - key: catalog-index.yaml
