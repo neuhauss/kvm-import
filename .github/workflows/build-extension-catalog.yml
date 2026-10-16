@@ -2,6 +2,11 @@ name: Build and Release Extension Catalog
 
 on:
   workflow_dispatch:
+    inputs:
+      tagged_release:
+        description: "Extension catalog tag, for example rancher-kvm-extension-0.1.1"
+        required: true
+        type: string
   release:
     types: [released]
 
@@ -20,6 +25,6 @@ jobs:
     with:
       registry_target: ghcr.io
       registry_user: ${{ github.actor }}
-      tagged_release: ${{ github.ref_name }}
+      tagged_release: ${{ inputs.tagged_release || github.ref_name }}
     secrets:
       registry_token: ${{ secrets.GITHUB_TOKEN }}
