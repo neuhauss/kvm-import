@@ -267,6 +267,7 @@ kvmManager:
     disabled: Disabled
     details: Details
     console: Terminal
+    consoleRequiresRunning: Inicie a máquina virtual para abrir o terminal.
     resume: Resume
     pause: Pause
     start: Start

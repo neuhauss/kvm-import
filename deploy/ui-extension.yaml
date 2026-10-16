@@ -62,22 +62,22 @@ spec:
         configMap:
           name: kvm-extension-assets
           items:
-          - key: files-0.7.7.txt
-            path: kvm-manager/0.7.7/files.txt
-          - key: package-0.7.7.json
-            path: kvm-manager/0.7.7/plugin/package.json
-          - key: kvm-manager-0.7.7.umd.min.148.js
-            path: kvm-manager/0.7.7/plugin/kvm-manager-0.7.7.umd.min.148.js
-          - key: kvm-manager-0.7.7.umd.min.303.js
-            path: kvm-manager/0.7.7/plugin/kvm-manager-0.7.7.umd.min.303.js
-          - key: kvm-manager-0.7.7.umd.min.37.js
-            path: kvm-manager/0.7.7/plugin/kvm-manager-0.7.7.umd.min.37.js
-          - key: kvm-manager-0.7.7.umd.min.js
-            path: kvm-manager/0.7.7/plugin/kvm-manager-0.7.7.umd.min.js
-          - key: kvm-manager-0.7.7.umd.min.kvm-vm-console.js
-            path: kvm-manager/0.7.7/plugin/kvm-manager-0.7.7.umd.min.kvm-vm-console.js
-          - key: asset-0.7.7-kvm.f932afc0.svg
-            path: kvm-manager/0.7.7/plugin/img/kvm.f932afc0.svg
+          - key: files-0.7.8.txt
+            path: kvm-manager/0.7.8/files.txt
+          - key: package-0.7.8.json
+            path: kvm-manager/0.7.8/plugin/package.json
+          - key: kvm-manager-0.7.8.umd.min.148.js
+            path: kvm-manager/0.7.8/plugin/kvm-manager-0.7.8.umd.min.148.js
+          - key: kvm-manager-0.7.8.umd.min.303.js
+            path: kvm-manager/0.7.8/plugin/kvm-manager-0.7.8.umd.min.303.js
+          - key: kvm-manager-0.7.8.umd.min.37.js
+            path: kvm-manager/0.7.8/plugin/kvm-manager-0.7.8.umd.min.37.js
+          - key: kvm-manager-0.7.8.umd.min.js
+            path: kvm-manager/0.7.8/plugin/kvm-manager-0.7.8.umd.min.js
+          - key: kvm-manager-0.7.8.umd.min.kvm-vm-console.js
+            path: kvm-manager/0.7.8/plugin/kvm-manager-0.7.8.umd.min.kvm-vm-console.js
+          - key: asset-0.7.8-kvm.f932afc0.svg
+            path: kvm-manager/0.7.8/plugin/img/kvm.f932afc0.svg
           - key: catalog-index.yaml
             path: catalog/index.yaml
           - key: catalog-chart-0.1.6.tgz
@@ -136,6 +136,8 @@ spec:
             path: catalog/kvm-manager-0.7.6.tgz
           - key: catalog-chart-0.7.7.tgz
             path: catalog/kvm-manager-0.7.7.tgz
+          - key: catalog-chart-0.7.8.tgz
+            path: catalog/kvm-manager-0.7.8.tgz
       - name: tmp
         emptyDir: {}
       - name: logs
@@ -167,8 +169,8 @@ metadata:
 spec:
   plugin:
     name: kvm-manager
-    version: 0.7.7
-    endpoint: http://kvm-extension-assets.rancher-kvm-registry.svc:8080/kvm-manager/0.7.7
+    version: 0.7.8
+    endpoint: http://kvm-extension-assets.rancher-kvm-registry.svc:8080/kvm-manager/0.7.8
     noCache: true
     noAuth: false
     metadata:
