@@ -65,7 +65,7 @@ Guarde esse valor num gerenciador de segredos e crie `credential-key` no Secret 
 Gere novamente os assets da versão atual e aplique a API, os assets e o plugin:
 
 ```sh
-CHART_REPO_URL=https://<OWNER>.github.io/<REPOSITORY>/charts scripts/package-release.sh
+CHART_REPO_URL=https://<OWNER>.github.io/<REPOSITORY>/assets/kvm-manager scripts/package-release.sh
 kubectl create namespace rancher-kvm-registry
 kubectl -n rancher-kvm-registry create secret generic kvm-api-secrets \
   --from-literal=credential-key='<CHAVE_GERADA_E_GUARDADA_FORA_DO_GIT>'

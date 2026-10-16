@@ -26,8 +26,8 @@ spec:
             path: index.yaml
           - key: plugin-index.yaml
             path: plugin-index.yaml
-          - key: kvm-manager-0.7.8.tgz
-            path: kvm-manager-0.7.8.tgz
+          - key: kvm-manager-0.7.9.tgz
+            path: kvm-manager-0.7.9.tgz
           - key: kvm-manager-0.7.7.tgz
             path: kvm-manager-0.7.7.tgz
       containers:
@@ -50,6 +50,10 @@ spec:
         - name: catalog-overlay
           mountPath: /home/plugin-server/plugin-contents/plugin/kvm-manager/kvm-manager-0.7.8.tgz
           subPath: kvm-manager-0.7.8.tgz
+          readOnly: true
+        - name: catalog-overlay
+          mountPath: /home/plugin-server/plugin-contents/plugin/kvm-manager/kvm-manager-0.7.9.tgz
+          subPath: kvm-manager-0.7.9.tgz
           readOnly: true
         - name: catalog-overlay
           mountPath: /home/plugin-server/plugin-contents/plugin/kvm-manager/kvm-manager-0.7.7.tgz

@@ -3,7 +3,7 @@ kind: ClusterRepo
 metadata:
   name: kvm-extension-catalog
 spec:
-  # Troque OWNER/REPOSITORY pela URL de Pages onde helm repo index publicou index.yaml.
-  url: https://OWNER.github.io/REPOSITORY/charts
+  # O índice fica na raiz do GitHub Pages; os charts usam o caminho assets/kvm-manager.
+  url: https://OWNER.github.io/REPOSITORY
   refreshInterval: 300
   enabled: true
