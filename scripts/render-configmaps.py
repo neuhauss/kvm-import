@@ -28,6 +28,8 @@ api = {
 
 assets_path = ROOT / "deploy/kvm-extension-assets-configmap.yaml"
 assets = yaml.safe_load(assets_path.read_text())
+assets_name = f"kvm-extension-assets-{version.replace('.', '-') }"
+assets["metadata"]["name"] = assets_name
 asset_files = sorted(bundle_dir.rglob("*.svg"))
 asset_keys = {path: f"asset-{version}-{path.name}" for path in asset_files}
 files = [f"plugin/{path.name}" for path in bundle_js]
@@ -39,21 +41,55 @@ for path in bundle_js:
     assets["data"][path.name] = path.read_text()
 for path in asset_files:
     assets["data"][asset_keys[path]] = path.read_text()
-# The assets ConfigMap is limited to 1 MiB. It only needs the currently served
-# plugin bundle; historical Helm charts remain in binaryData for catalog use.
+# The assets ConfigMap is limited to 1 MiB. Keep the current plugin bundle and
+# only the current plus previous charts in the legacy catalog endpoint.
 for key in list(assets["data"]):
     if key.startswith(("files-", "package-", "kvm-manager-", "asset-")):
         if key not in {f"files-{version}.txt", f"package-{version}.json", *(path.name for path in bundle_js), *asset_keys.values()}:
             del assets["data"][key]
 assets["data"]["catalog-index.yaml"] = (ROOT / "deploy/extension-catalog/index.yaml").read_text()
-assets.setdefault("binaryData", {})[f"catalog-chart-{version}.tgz"] = base64.b64encode(chart_path.read_bytes()).decode()
+binary_data = assets.setdefault("binaryData", {})
+for path in bundle_js:
+    # xterm's bundle contains terminal control bytes. Kubernetes rejects those
+    # bytes in ConfigMap.data, but binaryData safely stores the exact bundle.
+    contents = path.read_bytes()
+    text = contents.decode("utf-8")
+    if any(ord(char) < 32 and char not in "\n\r\t" for char in text):
+        assets["data"].pop(path.name, None)
+        binary_data[path.name] = base64.b64encode(contents).decode()
+    else:
+        assets["data"][path.name] = text
+        binary_data.pop(path.name, None)
+
+previous_version = f"{version.rsplit('.', 1)[0]}.{int(version.rsplit('.', 1)[1]) - 1}"
+kept_chart_versions = {version, previous_version}
+for key in list(binary_data):
+    if key.startswith("catalog-chart") and key.endswith(".tgz"):
+        archived_version = key.removeprefix("catalog-chart").removesuffix(".tgz").lstrip("-") or "0.1.5"
+        if archived_version not in kept_chart_versions:
+            del binary_data[key]
+for chart_version in kept_chart_versions:
+    archived_chart = ROOT / "deploy/extension-catalog" / f"kvm-manager-{chart_version}.tgz"
+    if archived_chart.is_file():
+        chart_key = "catalog-chart.tgz" if chart_version == "0.1.5" else f"catalog-chart-{chart_version}.tgz"
+        binary_data[chart_key] = base64.b64encode(archived_chart.read_bytes()).decode()
+
+legacy_index = yaml.safe_load((ROOT / "deploy/extension-catalog/index.yaml").read_text())
+legacy_entries = legacy_index.get("entries", {}).get("kvm-manager", [])
+legacy_entries = [entry for entry in legacy_entries if str(entry.get("version")) in kept_chart_versions]
+for entry in legacy_entries:
+    entry["urls"] = [f"kvm-manager-{entry['version']}.tgz"]
+legacy_index["entries"]["kvm-manager"] = legacy_entries
+assets["data"]["catalog-index.yaml"] = yaml.safe_dump(legacy_index, sort_keys=False, allow_unicode=True, width=1000)
 assets_path.write_text(yaml.safe_dump(assets, sort_keys=False, width=1000))
 
 ui_path = ROOT / "deploy/ui-extension.yaml"
 ui_docs = list(yaml.safe_load_all(ui_path.read_text()))
 for doc in ui_docs:
     if doc.get("kind") == "Deployment" and doc.get("metadata", {}).get("name") == "kvm-extension-assets":
-        items = doc["spec"]["template"]["spec"]["volumes"][0]["configMap"].setdefault("items", [])
+        config_map = doc["spec"]["template"]["spec"]["volumes"][0]["configMap"]
+        config_map["name"] = assets_name
+        items = config_map.setdefault("items", [])
         new_items = [
             (f"files-{version}.txt", f"kvm-manager/{version}/files.txt"),
             (f"package-{version}.json", f"kvm-manager/{version}/plugin/package.json"),
