@@ -32,7 +32,7 @@ spec:
             path: kvm-manager-0.7.7.tgz
       containers:
       - name: catalog
-        image: ghcr.io/your-github-owner/ui-extension-rancher-kvm-extension:0.1.1
+        image: ghcr.io/your-github-owner/ui-extension-rancher-kvm-extension:0.1.2
         imagePullPolicy: IfNotPresent
         ports:
         - name: http
