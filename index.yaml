@@ -1,0 +1,23 @@
+apiVersion: v1
+entries:
+  kvm-manager:
+  - annotations:
+      catalog.cattle.io/certified: rancher
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/os: linux
+      catalog.cattle.io/permits-os: linux, windows
+      catalog.cattle.io/rancher-version: '>= 2.10.0'
+      catalog.cattle.io/scope: management
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/ui-extensions-version: '>= 3.0.0 < 4.0.0'
+    apiVersion: v2
+    appVersion: 0.7.5
+    created: "2026-10-16T19:24:01.123229358Z"
+    description: Import and inventory existing KVM hosts from Rancher
+    digest: d0bcbb43fc64f07c3ac04678a68dcc013fda30f7f7d05f112e2aab543b42f01f
+    name: kvm-manager
+    type: application
+    urls:
+    - assets/kvm-manager/kvm-manager-0.7.5.tgz
+    version: 0.7.5
+generated: "2026-10-16T19:24:01.122943347Z"

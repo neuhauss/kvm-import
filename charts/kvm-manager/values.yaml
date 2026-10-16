@@ -1,0 +1,3 @@
+plugin:
+  # Override with a public HTTPS URL when serving the extension bundle externally.
+  endpoint: ""

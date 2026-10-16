@@ -1,0 +1,19 @@
+apiVersion: catalog.cattle.io/v1
+kind: UIPlugin
+metadata:
+  name: {{ .Chart.Name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    app.kubernetes.io/managed-by: Helm
+spec:
+  plugin:
+    name: {{ .Chart.Name }}
+    version: {{ .Chart.Version | quote }}
+    endpoint: {{ .Values.plugin.endpoint | default (printf "http://kvm-extension-assets.rancher-kvm-registry.svc:8080/kvm-manager/%s" .Chart.Version) | quote }}
+    noCache: false
+    noAuth: false
+    metadata:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/rancher-version: ">=2.15.0"
+      catalog.cattle.io/ui-extensions-version: ">=3.0.0 <4.0.0"

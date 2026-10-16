@@ -1,0 +1,8 @@
+plugin/img/kvm.f932afc0.svg
+plugin/kvm-manager-0.7.5.umd.min.148.js
+plugin/kvm-manager-0.7.5.umd.min.148.js.map
+plugin/kvm-manager-0.7.5.umd.min.37.js
+plugin/kvm-manager-0.7.5.umd.min.37.js.map
+plugin/kvm-manager-0.7.5.umd.min.js
+plugin/kvm-manager-0.7.5.umd.min.js.map
+plugin/package.json
