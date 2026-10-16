@@ -26,17 +26,17 @@ Não coloque senha, tokens, chaves SSH, certificados privados ou `KVM_CREDENTIAL
 
 ## 2. Criar uma release e publicar a imagem no Docker Hub
 
-Crie uma release GitHub com a tag `v0.5.5`. O workflow `Publish KVM API image` compila `service/Dockerfile` e publica no GHCR e Docker Hub. Para o Docker Hub, configure `DOCKERHUB_USERNAME` e `DOCKERHUB_TOKEN` como secrets de Actions:
+Crie uma release GitHub com a tag `v0.5.6`. O workflow `Publish KVM API image` compila `service/Dockerfile` e publica no GHCR e Docker Hub. Para o Docker Hub, configure `DOCKERHUB_USERNAME` e `DOCKERHUB_TOKEN` como secrets de Actions:
 
 ```text
-docker.io/<DOCKERHUB_USERNAME>/rancher-kvm-api:0.5.5
+docker.io/<DOCKERHUB_USERNAME>/rancher-kvm-api:0.5.6
 docker.io/<DOCKERHUB_USERNAME>/rancher-kvm-api:latest
 ```
 
 Também existe publicação no GHCR. Para testar localmente, antes de criar a release:
 
 ```sh
-docker build -t <DOCKERHUB_USERNAME>/rancher-kvm-api:0.5.5 ./service
+docker build -t <DOCKERHUB_USERNAME>/rancher-kvm-api:0.5.6 ./service
 ```
 
 No overlay `deploy/container-image/kustomization.yaml`, altere `newName` para `docker.io/<DOCKERHUB_USERNAME>/rancher-kvm-api`. O `newTag` deve ser a versão sem o prefixo `v`:
@@ -45,7 +45,7 @@ No overlay `deploy/container-image/kustomization.yaml`, altere `newName` para `d
 images:
   - name: python:3.12-slim
     newName: docker.io/seu-usuario/rancher-kvm-api
-    newTag: 0.5.5
+    newTag: 0.5.6
 ```
 
 Se o repositório Docker Hub for privado, crie um `imagePullSecret` no namespace `rancher-kvm-registry` e adicione `imagePullSecrets` ao Pod. Para uma imagem pública, o cluster pode baixá-la sem credenciais.
@@ -72,7 +72,7 @@ kubectl -n rancher-kvm-registry create secret generic kvm-api-secrets \
 kubectl -n rancher-kvm-registry create configmap kvm-known-hosts --from-file=known_hosts=<ARQUIVO_CONFERIDO>
 kubectl -n rancher-kvm-registry create configmap kvm-rancher-ca --from-file=ca.crt=<CA_DO_RANCHER>
 kubectl apply -k deploy/container-image
-kubectl apply -f deploy/kvm-extension-assets-configmap.yaml
+kubectl apply --server-side -f deploy/kvm-extension-assets-configmap.yaml
 kubectl apply -f deploy/ui-extension.yaml
 ```
 

@@ -43,7 +43,7 @@ if len(credential_key) < 32:
     raise RuntimeError("Configure KVM_CREDENTIAL_KEY com pelo menos 32 caracteres aleatórios")
 FERNET_KEY = base64.urlsafe_b64encode(hashlib.sha256(credential_key.encode()).digest())
 cipher = Fernet(FERNET_KEY)
-app = FastAPI(title="Rancher KVM Host API", version="0.5.5")
+app = FastAPI(title="Rancher KVM Host API", version="0.5.6")
 RANCHER_PUBLIC_ORIGIN = os.getenv("RANCHER_PUBLIC_ORIGIN", "https://rancher.example.com").rstrip("/")
 RANCHER_PUBLIC_HOST = urlsplit(RANCHER_PUBLIC_ORIGIN).netloc
 COCKPIT_PORT = 9090

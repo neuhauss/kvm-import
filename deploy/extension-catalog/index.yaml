@@ -6,6 +6,23 @@ entries:
     description: Rancher UI extension for importing and inventorying existing KVM
       hosts
     type: application
+    version: 0.5.6
+    appVersion: 0.5.6
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-16T16:42:51.508364Z'
+    digest: c7ac4d735b5178b0d3d6aa01d99178934259bb948bc32885ec47d9432d226425
+    urls:
+    - https://neuhauss.github.io/kvm-import/charts/kvm-manager-0.5.6.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
     version: 0.5.5
     appVersion: 0.5.5
     annotations:
@@ -17,7 +34,7 @@ entries:
     created: '2026-10-16T15:47:38.904211Z'
     digest: 9c951e944d7bd112e474cbc632f1d9060d6816d9b48fbb1cee67ad6b281c506f
     urls:
-    - https://OWNER.github.io/REPOSITORY/charts/kvm-manager-0.5.5.tgz
+    - https://neuhauss.github.io/kvm-import/charts/kvm-manager-0.5.5.tgz
   - annotations:
       catalog.cattle.io/display-name: KVM
       catalog.cattle.io/ui-component: plugins
@@ -32,7 +49,7 @@ entries:
     name: kvm-manager
     type: application
     urls:
-    - https://OWNER.github.io/REPOSITORY/charts/kvm-manager-0.5.4.tgz
+    - https://neuhauss.github.io/kvm-import/charts/kvm-manager-0.5.4.tgz
     version: 0.5.4
   - annotations:
       catalog.cattle.io/display-name: KVM
@@ -48,7 +65,7 @@ entries:
     name: kvm-manager
     type: application
     urls:
-    - https://OWNER.github.io/REPOSITORY/charts/kvm-manager-0.5.3.tgz
+    - https://neuhauss.github.io/kvm-import/charts/kvm-manager-0.5.3.tgz
     version: 0.5.3
   - annotations:
       catalog.cattle.io/display-name: KVM
@@ -64,7 +81,7 @@ entries:
     name: kvm-manager
     type: application
     urls:
-    - https://OWNER.github.io/REPOSITORY/charts/kvm-manager-0.5.2.tgz
+    - https://neuhauss.github.io/kvm-import/charts/kvm-manager-0.5.2.tgz
     version: 0.5.2
   - annotations:
       catalog.cattle.io/display-name: KVM
@@ -80,7 +97,7 @@ entries:
     name: kvm-manager
     type: application
     urls:
-    - https://OWNER.github.io/REPOSITORY/charts/kvm-manager-0.5.1.tgz
+    - https://neuhauss.github.io/kvm-import/charts/kvm-manager-0.5.1.tgz
     version: 0.5.1
   - annotations:
       catalog.cattle.io/display-name: KVM
@@ -96,7 +113,7 @@ entries:
     name: kvm-manager
     type: application
     urls:
-    - https://OWNER.github.io/REPOSITORY/charts/kvm-manager-0.5.0.tgz
+    - https://neuhauss.github.io/kvm-import/charts/kvm-manager-0.5.0.tgz
     version: 0.5.0
   - annotations:
       catalog.cattle.io/display-name: KVM
@@ -111,7 +128,7 @@ entries:
     name: kvm-manager
     type: application
     urls:
-    - https://OWNER.github.io/REPOSITORY/charts/kvm-manager-0.4.1.tgz
+    - https://neuhauss.github.io/kvm-import/charts/kvm-manager-0.4.1.tgz
     version: 0.4.1
   - annotations:
       catalog.cattle.io/display-name: KVM
@@ -127,7 +144,7 @@ entries:
     name: kvm-manager
     type: application
     urls:
-    - https://OWNER.github.io/REPOSITORY/charts/kvm-manager-0.4.0.tgz
+    - https://neuhauss.github.io/kvm-import/charts/kvm-manager-0.4.0.tgz
     version: 0.4.0
   - annotations:
       catalog.cattle.io/display-name: KVM
@@ -144,7 +161,7 @@ entries:
     name: kvm-manager
     type: application
     urls:
-    - https://OWNER.github.io/REPOSITORY/charts/kvm-manager-0.3.0.tgz
+    - https://neuhauss.github.io/kvm-import/charts/kvm-manager-0.3.0.tgz
     version: 0.3.0
   - annotations:
       catalog.cattle.io/display-name: KVM
@@ -161,7 +178,7 @@ entries:
     name: kvm-manager
     type: application
     urls:
-    - https://OWNER.github.io/REPOSITORY/charts/kvm-manager-0.2.1.tgz
+    - https://neuhauss.github.io/kvm-import/charts/kvm-manager-0.2.1.tgz
     version: 0.2.1
   - annotations:
       catalog.cattle.io/display-name: KVM
@@ -178,7 +195,7 @@ entries:
     name: kvm-manager
     type: application
     urls:
-    - https://OWNER.github.io/REPOSITORY/charts/kvm-manager-0.2.0.tgz
+    - https://neuhauss.github.io/kvm-import/charts/kvm-manager-0.2.0.tgz
     version: 0.2.0
   - annotations: &id001
       catalog.cattle.io/display-name: KVM
@@ -195,7 +212,7 @@ entries:
     name: kvm-manager
     type: application
     urls:
-    - https://OWNER.github.io/REPOSITORY/charts/kvm-manager-0.1.7.tgz
+    - https://neuhauss.github.io/kvm-import/charts/kvm-manager-0.1.7.tgz
     version: 0.1.7
   - annotations: *id001
     apiVersion: v2
@@ -207,7 +224,7 @@ entries:
     name: kvm-manager
     type: application
     urls:
-    - https://OWNER.github.io/REPOSITORY/charts/kvm-manager-0.1.6.tgz
+    - https://neuhauss.github.io/kvm-import/charts/kvm-manager-0.1.6.tgz
     version: 0.1.6
   - annotations:
       catalog.cattle.io/display-name: KVM
@@ -224,6 +241,6 @@ entries:
     name: kvm-manager
     type: application
     urls:
-    - https://OWNER.github.io/REPOSITORY/charts/kvm-manager-0.1.5.tgz
+    - https://neuhauss.github.io/kvm-import/charts/kvm-manager-0.1.5.tgz
     version: 0.1.5
 generated: '2026-10-16T15:35:35+00:00'
