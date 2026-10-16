@@ -73,5 +73,6 @@ for doc in ui_docs:
     if doc.get("kind") == "UIPlugin" and doc.get("metadata", {}).get("name") == "kvm-manager":
         doc["spec"]["plugin"]["version"] = version
         doc["spec"]["plugin"]["endpoint"] = f"http://kvm-extension-assets.rancher-kvm-registry.svc:8080/kvm-manager/{version}"
+        doc["spec"]["plugin"]["noCache"] = True
 ui_path.write_text(yaml.safe_dump_all(ui_docs, sort_keys=False, width=1000))
 print(f"ConfigMaps e UIPlugin atualizados para kvm-manager {version}.")

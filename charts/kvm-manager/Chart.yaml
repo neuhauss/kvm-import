@@ -2,8 +2,8 @@ apiVersion: v2
 name: kvm-manager
 description: Rancher UI extension for importing and inventorying existing KVM hosts
 type: application
-version: 0.7.6
-appVersion: "0.7.6"
+version: 0.7.7
+appVersion: "0.7.7"
 annotations:
   catalog.cattle.io/display-name: KVM
   catalog.cattle.io/ui-component: plugins
