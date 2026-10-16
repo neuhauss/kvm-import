@@ -26,13 +26,13 @@ spec:
             path: index.yaml
           - key: plugin-index.yaml
             path: plugin-index.yaml
+          - key: kvm-manager-0.7.10.tgz
+            path: kvm-manager-0.7.10.tgz
           - key: kvm-manager-0.7.9.tgz
             path: kvm-manager-0.7.9.tgz
-          - key: kvm-manager-0.7.7.tgz
-            path: kvm-manager-0.7.7.tgz
       containers:
       - name: catalog
-        image: ghcr.io/your-github-owner/ui-extension-rancher-kvm-extension:0.1.2
+        image: ghcr.io/your-github-owner/ui-extension-rancher-kvm-extension:0.1.3
         imagePullPolicy: IfNotPresent
         ports:
         - name: http
@@ -52,12 +52,16 @@ spec:
           subPath: kvm-manager-0.7.8.tgz
           readOnly: true
         - name: catalog-overlay
-          mountPath: /home/plugin-server/plugin-contents/plugin/kvm-manager/kvm-manager-0.7.9.tgz
-          subPath: kvm-manager-0.7.9.tgz
-          readOnly: true
-        - name: catalog-overlay
           mountPath: /home/plugin-server/plugin-contents/plugin/kvm-manager/kvm-manager-0.7.7.tgz
           subPath: kvm-manager-0.7.7.tgz
+          readOnly: true
+        - name: catalog-overlay
+          mountPath: /home/plugin-server/plugin-contents/plugin/kvm-manager/kvm-manager-0.7.10.tgz
+          subPath: kvm-manager-0.7.10.tgz
+          readOnly: true
+        - name: catalog-overlay
+          mountPath: /home/plugin-server/plugin-contents/plugin/kvm-manager/kvm-manager-0.7.9.tgz
+          subPath: kvm-manager-0.7.9.tgz
           readOnly: true
         resources:
           requests:
