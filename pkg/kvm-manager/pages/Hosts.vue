@@ -31,7 +31,7 @@
         </thead>
         <tbody>
           <tr v-for="host in hosts" :key="host.id">
-            <td><form class="cockpit-launch" :action="cockpitUrl(host)" method="post" target="_blank"><button class="cockpit-link" type="submit" :title="t('hosts.cockpitHelp')"><strong>{{ host.hostname || host.name }}</strong></button></form><small>{{ host.name }}</small></td>
+            <td><strong>{{ host.hostname || host.name }}</strong><small>{{ host.name }}</small></td>
             <td>{{ host.address }}:{{ host.port }}</td>
             <td><span class="state" :class="host.status">{{ statusLabel(host.status) }}</span><small v-if="host.last_error">{{ host.last_error }}</small></td>
             <td>{{ host.cpu_count ? `${host.cpu_count} vCPU` : '—' }}</td>
@@ -114,18 +114,22 @@ export default defineComponent({
       const response = await fetch(`${apiBase}${path}`, {
         ...options,
         headers: { 'Content-Type': 'application/json', ...options.headers },
-        credentials: 'same-origin',
+        credentials: 'include',
+        cache: 'no-store',
       });
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
-        throw new Error(body.detail || `Falha na API (${response.status})`);
+        throw new Error(body.detail || `API request failed (${response.status})`);
       }
       return response.status === 204 ? null : response.json();
     },
     async load() {
       this.loading = true; this.error = '';
       try { this.hosts = await this.request('/hosts'); }
-      catch (e) { this.error = `${this.t('hosts.cannotLoad')}: ${(e as Error).message}. ${this.t('hosts.verifyService')}`; }
+      catch (e) {
+        this.hosts = [];
+        this.error = `${this.t('hosts.cannotLoad')}: ${(e as Error).message}. ${this.t('hosts.verifyService')}`;
+      }
       finally { this.loading = false; }
     },
     openAdd() {

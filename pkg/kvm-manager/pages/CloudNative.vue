@@ -125,8 +125,8 @@ export default defineComponent({
     t(key: string, args?: Record<string, unknown>): string { const translate = (this as any).$store?.getters?.['i18n/t']; return translate ? translate(`kvmManager.${key}`, args) : key; },
     showMoreServices() { this.serviceLimit += 25; },
     async request(path: string, options: RequestInit = {}) {
-      const response = await fetch(`${apiBase}${path}`, { ...options, headers: { 'Content-Type': 'application/json', ...options.headers }, credentials: 'same-origin' });
-      if (!response.ok) { const body = await response.json().catch(() => ({})); throw new Error(body.detail || `Falha na API (${response.status})`); }
+      const response = await fetch(`${apiBase}${path}`, { ...options, headers: { 'Content-Type': 'application/json', ...options.headers }, credentials: 'include', cache: 'no-store' });
+      if (!response.ok) { const body = await response.json().catch(() => ({})); throw new Error(body.detail || `API request failed (${response.status})`); }
       return response.status === 204 ? null : response.json();
     },
     async load() {

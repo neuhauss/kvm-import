@@ -1,198 +1,198 @@
 kvmManager:
   hosts:
-    title: Hosts KVM
-    description: Importe e acompanhe hosts SUSE Linux com KVM já existentes.
-    audit: Auditoria
-    add: Adicionar host
-    loading: Carregando hosts...
-    emptyTitle: Nenhum host cadastrado
-    emptyDescription: Adicione um host KVM existente para consultar seu estado e seus recursos.
+    title: KVM Hosts
+    description: Import and monitor existing SUSE Linux hosts with KVM.
+    audit: Audit
+    add: Add host
+    loading: Loading hosts...
+    emptyTitle: No hosts registered
+    emptyDescription: Add an existing KVM host to inspect its status and resources.
     hostname: Hostname
-    address: Endereço
-    state: Estado
+    address: Address
+    state: State
     cpu: CPU
-    memory: Memória
-    lastCheck: Última consulta
-    manage: Administração
+    memory: Memory
+    lastCheck: Last check
+    manage: Manage
     cockpit: Cockpit
-    cockpitHelp: Abrir o Cockpit neste host. No primeiro acesso, a conta SSH precisa de sudo.
-    cloudNative: Interface cloud native
-    administer: Administrar
-    refresh: Atualizar
-    refreshing: Consultando...
-    edit: Editar
-    remove: Remover
+    cockpitHelp: Open Cockpit on this host. SSH account needs sudo on first access.
+    cloudNative: Cloud Native interface
+    administer: Administer
+    refresh: Refresh
+    refreshing: Checking...
+    edit: Edit
+    remove: Remove
     ready: Ready
-    unreachable: Inacessível
-    unknown: Desconhecido
-    addTitle: Adicionar host KVM
-    editTitle: Editar host
-    hostDescription: Informe um host existente. A extensão não instala nem altera pacotes no host.
-    displayName: Nome de exibição
-    ipDns: IP ou DNS
-    sshPort: Porta SSH
-    sshUser: Usuário SSH
-    password: Senha do host / Cockpit
-    keepPassword: Deixe em branco para manter a atual
-    passwordHelp: Usada para a sessão do Cockpit e como fallback de SSH. É armazenada criptografada.
-    sshKey: Chave SSH privada (opcional)
-    sshKeyHelp: A chave é usada para SSH; a senha acima continua sendo usada pelo Cockpit. A chave fica criptografada e nunca é exibida depois de salva.
-    keyPassphrase: Frase secreta da chave
-    removeSavedKey: Remover a chave SSH salva e usar somente senha no SSH
-    acceptHostKey: Aceitar automaticamente a chave SSH
-    trustKeyHelp: A chave recebida será fixada neste cadastro. Use ao importar pela primeira vez ou após uma troca intencional da chave do host.
-    cancel: Cancelar
-    validating: Validando...
-    save: Salvar e consultar
-    import: Importar host
-    cannotLoad: Não foi possível carregar os hosts
-    verifyService: Verifique se o serviço KVM está instalado e acessível.
-    removeConfirm: Remover o cadastro de {name}? Isso não altera o host KVM.
-    removeError: Não foi possível remover {name}
-    refreshError: Falha ao consultar {name}
-    noAudit: Nenhuma ação registrada ainda.
-    auditTitle: Auditoria
-    auditDescription: Ações administrativas registradas pela extensão, sem senhas nem chaves privadas.
-    date: Data
-    rancherUser: Usuário Rancher
-    action: Ação
-    target: Alvo
-    result: Resultado
-    noHosts: Nenhum host cadastrado
+    unreachable: Unreachable
+    unknown: Unknown
+    addTitle: Add KVM host
+    editTitle: Edit host
+    hostDescription: Enter an existing host. The extension does not install or change packages on the host.
+    displayName: Display name
+    ipDns: IP address or DNS name
+    sshPort: SSH port
+    sshUser: SSH username
+    password: Host / Cockpit password
+    keepPassword: Leave blank to keep the current password
+    passwordHelp: Used for Cockpit and as an SSH fallback. It is stored encrypted.
+    sshKey: Private SSH key (optional)
+    sshKeyHelp: The key is used for SSH; the password above is still used for Cockpit. The key is encrypted and is never shown after saving.
+    keyPassphrase: SSH key passphrase
+    removeSavedKey: Remove the saved SSH key and use password-only SSH
+    acceptHostKey: Automatically trust the SSH host key
+    trustKeyHelp: The received key is pinned to this host entry. Use when importing for the first time or after an intentional host key change.
+    cancel: Cancel
+    validating: Validating...
+    save: Save and check
+    import: Import host
+    cannotLoad: Could not load hosts
+    verifyService: Check that the KVM service is installed and reachable.
+    removeConfirm: Remove registration for {name}? This does not change the KVM host.
+    removeError: Could not remove {name}
+    refreshError: Could not check {name}
+    noAudit: No actions have been recorded yet.
+    auditTitle: Audit log
+    auditDescription: Administrative actions recorded by the extension, without passwords or private keys.
+    date: Date
+    rancherUser: Rancher user
+    action: Action
+    target: Target
+    result: Result
+    noHosts: No registered hosts
   cloudNative:
-    title: Administração de virtualização
-    subtitle: Visão operacional e ferramentas para este host KVM.
-    openCockpit: Abrir Cockpit
-    updateData: Atualizar dados
-    updating: Atualizando...
-    connected: Conectado
-    vms: Máquinas virtuais
-    runningStopped: "{running} em execução · {stopped} paradas"
-    hostCpu: CPU do host
-    cores: núcleos
-    memory: Memória
-    inUse: em uso
-    overview: Visão geral
-    storage: Armazenamento
-    network: Rede
-    services: Serviços
+    title: Virtualization administration
+    subtitle: Operational overview and tools for this KVM host.
+    openCockpit: Open Cockpit
+    updateData: Refresh data
+    updating: Refreshing...
+    connected: Connected
+    vms: Virtual machines
+    runningStopped: "{running} running · {stopped} stopped"
+    hostCpu: Host CPU
+    cores: cores
+    memory: Memory
+    inUse: in use
+    overview: Overview
+    storage: Storage
+    network: Network
+    services: Services
     logs: Logs
-    systemSummary: Resumo do sistema
-    uptime: Ativo há
-    system: Sistema
-    hostIdentity: Identificação e versão do host
-    resources: Recursos
-    currentUsage: Uso atual do sistema
-    availableMemory: Memória disponível
-    devices: Dispositivos
+    systemSummary: System summary
+    uptime: Uptime
+    system: System
+    hostIdentity: Host identification and version
+    resources: Resources
+    currentUsage: Current system usage
+    availableMemory: Available memory
+    devices: Devices
     libvirt: Libvirt
-    fullInventory: Ver inventário completo
-    filterVms: Filtrar máquinas virtuais
-    vmLifecycle: Ciclo de vida, detalhes de discos e redes e início automático.
-    adminAreas: Áreas de administração
-    storageDescription: Pools libvirt, dispositivos e sistemas de arquivos do host.
-    noVm: Nenhuma VM encontrada.
-    storagePools: Pools libvirt
-    noPool: Nenhum pool libvirt foi encontrado.
-    capacity: Capacidade
-    allocated: Alocado
-    available: Disponível
-    devicesTitle: Dispositivos
-    filesystem: Sistema de arquivos
-    mount: Montagem
-    mountedFilesystems: Sistemas de arquivos montados
-    used: Usado
-    usage: Uso
-    networkReadOnly: Interfaces, redes libvirt e rotas. Esta área está em modo de consulta para proteger o acesso ao host.
-    virtualNetworks: Redes virtuais libvirt
-    noNetwork: Nenhuma rede virtual libvirt foi encontrada.
-    persistent: Persistente
-    temporary: Temporária
-    autostart: Início automático
-    noAutostart: Sem início automático
-    interfaces: Interfaces de rede
+    fullInventory: View full inventory
+    filterVms: Filter virtual machines
+    vmLifecycle: Lifecycle, disk and network details, and autostart.
+    adminAreas: Administration areas
+    storageDescription: Libvirt pools, host devices, and filesystems.
+    noVm: No virtual machines found.
+    storagePools: Libvirt storage pools
+    noPool: No libvirt storage pools found.
+    capacity: Capacity
+    allocated: Allocated
+    available: Available
+    devicesTitle: Devices
+    filesystem: Filesystem
+    mount: Mount point
+    mountedFilesystems: Mounted filesystems
+    used: Used
+    usage: Usage
+    networkReadOnly: Interfaces, libvirt networks, and routes. This area is read-only to protect host access.
+    virtualNetworks: Libvirt virtual networks
+    noNetwork: No libvirt virtual networks found.
+    persistent: Persistent
+    temporary: Temporary
+    autostart: Autostart enabled
+    noAutostart: Autostart disabled
+    interfaces: Network interfaces
     interface: Interface
-    state: Estado
-    mac: MAC
-    addresses: Endereços
-    routes: Rotas
-    destination: Destino
+    state: State
+    mac: MAC address
+    addresses: Addresses
+    routes: Routes
+    destination: Destination
     gateway: Gateway
-    protocol: Protocolo
-    systemServices: Serviços do sistema
-    failedServices: "{count} com falha · ações administrativas entram na auditoria."
-    searchService: Buscar serviço
-    allStates: Todos os estados
-    active: Ativos
-    failed: Com falha
-    inactive: Inativos
-    service: Serviço
-    substate: Subestado
-    description: Descrição
-    start: Iniciar
-    restart: Reiniciar
-    stop: Parar
-    noServiceMatch: Nenhum serviço corresponde ao filtro.
-    showingServices: "Exibindo {shown} de {total} serviços"
-    showMore: Mostrar mais
-    serviceWarning: Ações em serviços de rede ou SSH podem interromper a conexão com o host.
-    systemLogs: Logs do sistema
-    lastJournal: "Últimas {count} entradas do journal."
-    filterLogs: Filtrar logs
-    noLogMatch: Nenhum log corresponde ao filtro.
-    systemInfo: Identificação e versão do host
-    os: Sistema operacional
+    protocol: Protocol
+    systemServices: System services
+    failedServices: "{count} failed · administrative actions are audited."
+    searchService: Search services
+    allStates: All states
+    active: Active
+    failed: Failed
+    inactive: Inactive
+    service: Service
+    substate: Substate
+    description: Description
+    start: Start
+    restart: Restart
+    stop: Stop
+    noServiceMatch: No services match this filter.
+    showingServices: "Showing {shown} of {total} services"
+    showMore: Show more
+    serviceWarning: Actions on network or SSH services can interrupt access to the host.
+    systemLogs: System logs
+    lastJournal: "Latest {count} journal entries."
+    filterLogs: Filter logs
+    noLogMatch: No logs match this filter.
+    systemInfo: Host identification and version
+    os: Operating system
     kernel: Kernel
-    architecture: Arquitetura
-    devicesCount: Dispositivos
-    disk: Discos
-    noDisk: Nenhum disco reportado.
-    noInterface: Nenhuma interface reportada.
-    noDevice: Nenhum dispositivo retornado pelo host.
-    filterState: Filtrar serviços por estado
-    type: Tipo
-    size: Tamanho
-    model: Modelo
-    device: Dispositivo
-    vmDetails: Detalhes da máquina virtual
-    close: Fechar detalhes
-    loadingVmDetails: Carregando detalhes da VM...
-    hostRemoved: O host não está mais importado no Rancher.
-    confirmAutostart: "{action} o início automático de {name}?"
-    stateLabel: Estado
-    maxMemory: Memória máxima
-    running: Em execução
-    paused: Pausada
-    startVm: Iniciar
-    pauseVm: Pausar
-    resumeVm: Retomar
-    shutdownVm: Desligar
-    rebootVm: Reiniciar
-    autostartOn: Ativo
-    autostartOff: Inativo
-    queryHost: Consultando o host e o libvirt...
-    hostRequired: Host não informado. Volte à lista e escolha Interface cloud native em um host.
-    loadError: Alguns dados não puderam ser consultados
-    actionFailed: Ação falhou
-    confirmAction: "{action} a máquina virtual {name}?"
-    confirmService: "{action} o serviço {name}? Isso pode afetar o host."
+    architecture: Architecture
+    devicesCount: Devices
+    disk: Disks
+    noDisk: No disks reported.
+    noInterface: No interfaces reported.
+    noDevice: No devices returned by the host.
+    filterState: Filter services by state
+    type: Type
+    size: Size
+    model: Model
+    device: Device
+    vmDetails: Virtual machine details
+    close: Close details
+    loadingVmDetails: Loading virtual machine details...
+    hostRemoved: This host is no longer imported in Rancher.
+    confirmAutostart: "{action} autostart for {name}?"
+    stateLabel: State
+    maxMemory: Maximum memory
+    running: Running
+    paused: Paused
+    startVm: Start
+    pauseVm: Pause
+    resumeVm: Resume
+    shutdownVm: Shut down
+    rebootVm: Restart
+    autostartOn: Enabled
+    autostartOff: Disabled
+    queryHost: Querying host and libvirt...
+    hostRequired: Host not specified. Return to the list and choose Cloud Native interface from a host.
+    loadError: Some data could not be retrieved
+    actionFailed: Action failed
+    confirmAction: "{action} virtual machine {name}?"
+    confirmService: "{action} service {name}? This can affect the host."
   common:
-    yes: Sim
-    no: Não
-    unknown: Desconhecido
-    optional: Opcional
+    yes: Yes
+    no: No
+    unknown: Unknown
+    optional: Optional
   vmTable:
-    vm: Máquina
-    state: Estado
-    memory: Memória
-    autostart: Início automático
-    actions: Ações
-    enabled: Ativo
-    disabled: Inativo
-    details: Detalhes
-    resume: Retomar
-    pause: Pausar
-    start: Iniciar
-    shutdown: Desligar
-    restart: Reiniciar
-    empty: Nenhuma VM encontrada.
+    vm: Virtual machine
+    state: State
+    memory: Memory
+    autostart: Autostart
+    actions: Actions
+    enabled: Enabled
+    disabled: Disabled
+    details: Details
+    resume: Resume
+    pause: Pause
+    start: Start
+    shutdown: Shut down
+    restart: Restart
+    empty: No virtual machines found.

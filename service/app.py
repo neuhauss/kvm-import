@@ -40,13 +40,30 @@ credential_key = os.environ.get("KVM_CREDENTIAL_KEY", "")
 RANCHER_API_URL = os.getenv("RANCHER_API_URL", "https://rancher.example.com").rstrip("/")
 RANCHER_CA_FILE = os.getenv("RANCHER_CA_FILE", "/etc/rancher-ca/ca.crt")
 if len(credential_key) < 32:
-    raise RuntimeError("Configure KVM_CREDENTIAL_KEY com pelo menos 32 caracteres aleatórios")
+    raise RuntimeError("Configure KVM_CREDENTIAL_KEY with at least 32 random characters")
 FERNET_KEY = base64.urlsafe_b64encode(hashlib.sha256(credential_key.encode()).digest())
 cipher = Fernet(FERNET_KEY)
-app = FastAPI(title="Rancher KVM Host API", version="0.5.6")
+app = FastAPI(title="Rancher KVM Host API", version="0.5.7")
 RANCHER_PUBLIC_ORIGIN = os.getenv("RANCHER_PUBLIC_ORIGIN", "https://rancher.example.com").rstrip("/")
 RANCHER_PUBLIC_HOST = urlsplit(RANCHER_PUBLIC_ORIGIN).netloc
 COCKPIT_PORT = 9090
+
+
+@app.middleware("http")
+async def disable_api_caching(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith("/kvm-api/"):
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+    return response
+
+
+@app.on_event("startup")
+def initialize_database() -> None:
+    # Create the schema as soon as the pod starts so a ready API always has a
+    # usable persistent database, even before the first authenticated request.
+    with connect_db():
+        pass
 
 
 class HostInput(BaseModel):
@@ -139,9 +156,9 @@ def require_auth(
         if session:
             session_cookie = session
     if not token and not session_cookie:
-        raise HTTPException(401, "Sessão Rancher obrigatória")
+        raise HTTPException(401, "A Rancher session is required")
     if token and len(token) > 8192:
-        raise HTTPException(401, "Sessão Rancher inválida")
+        raise HTTPException(401, "The Rancher session is invalid")
     try:
         identity = rancher_get("/v3/token", token=token or None, session_cookie=session_cookie)
         user_id = identity.get("userId")
@@ -163,10 +180,10 @@ def require_auth(
     except HTTPException:
         raise
     except (urllib.error.URLError, TimeoutError, ValueError, KeyError):
-        raise HTTPException(401, "Sessão Rancher inválida ou expirada") from None
+        raise HTTPException(401, "The Rancher session is invalid or expired") from None
     allowed_roles = {role.strip() for role in os.getenv("KVM_ALLOWED_GLOBAL_ROLES", "admin").split(",") if role.strip()}
     if not roles.intersection(allowed_roles):
-        raise HTTPException(403, "Sua Global Role do Rancher não está autorizada a administrar hosts KVM")
+        raise HTTPException(403, "Your Rancher global role is not authorized to manage KVM hosts")
     return str(user_id or user.get("id") or "unknown")
 
 
@@ -187,7 +204,7 @@ def public_host(row: sqlite3.Row) -> dict[str, Any]:
 
 class PinnedHostKeyPolicy(paramiko.MissingHostKeyPolicy):
     def missing_host_key(self, client: paramiko.SSHClient, hostname: str, key: paramiko.PKey) -> None:
-        raise paramiko.SSHException("A chave SSH recebida é diferente da chave fixada para este host")
+        raise paramiko.SSHException("The received SSH host key does not match the key pinned for this host")
 
 
 def _load_private_key(host: dict[str, Any]) -> paramiko.PKey | None:
@@ -203,8 +220,8 @@ def _load_private_key(host: dict[str, Any]) -> paramiko.PKey | None:
             return key_class.from_private_key(io.StringIO(private_key), password=host.get("key_passphrase") or None)
         except (paramiko.SSHException, ValueError, TypeError) as exc:
             failures.append(str(exc))
-    message = failures[-1] if failures else "formato de chave SSH não suportado"
-    raise RuntimeError(f"Não foi possível ler a chave SSH privada: {message}")
+    message = failures[-1] if failures else "unsupported SSH private key format"
+    raise RuntimeError(f"Could not read the SSH private key: {message}")
 
 
 def connect_ssh(client: paramiko.SSHClient, host: dict[str, Any]) -> None:
@@ -233,12 +250,12 @@ def ssh_client_for_host(host: dict[str, Any]) -> paramiko.SSHClient:
     """Open SSH only to the imported endpoint and require its pinned host key."""
     pinned = host.get("ssh_host_key")
     if not pinned:
-        raise RuntimeError("O host não tem uma chave SSH fixada; atualize o cadastro antes de abrir o Cockpit")
+        raise RuntimeError("This host has no pinned SSH key; refresh its registration before opening Cockpit")
     try:
         key_type, key_data = pinned.split(" ", 1)
         key = paramiko.PKey.from_type_string(key_type, base64.b64decode(key_data.encode()))
     except (ValueError, TypeError) as exc:
-        raise RuntimeError("A chave SSH fixada para este host está inválida") from exc
+        raise RuntimeError("The pinned SSH host key is invalid") from exc
     client = paramiko.SSHClient()
     host_label = host["address"] if host["port"] == 22 else f'[{host["address"]}]:{host["port"]}'
     client.get_host_keys().add(host_label, key_type, key)
@@ -274,7 +291,7 @@ if previous_host_id and previous_host_id != host_id:
     existing_text = path.read_text() if path.exists() else ''
     old_root = re.search(r'(?im)^\s*UrlRoot\s*=\s*(.*?)\s*$', existing_text)
     if not old_root or old_root.group(1) != previous_root:
-        raise SystemExit('Cockpit já está preparado para outro cadastro KVM; não alterei a configuração')
+        raise SystemExit('Cockpit is already configured for another KVM registration; no changes were made')
 text = path.read_text() if path.exists() else ''
 section = re.search(r'(?ims)^\[WebService\]\s*$(.*?)(?=^\[|\Z)', text)
 if section:
@@ -286,13 +303,13 @@ if section:
             body = body[:current.start(1)] + root + body[current.end(1):]
             current = re.search(r'(?im)^\s*UrlRoot\s*=\s*(.*?)\s*$', body)
         else:
-            raise SystemExit('Cockpit já possui UrlRoot configurado; não alterei a configuração existente')
+            raise SystemExit('Cockpit already has UrlRoot configured; the existing configuration was not changed')
     lines = []
     if not current:
         lines.append('UrlRoot = ' + root)
     protocol = re.search(r'(?im)^\s*ProtocolHeader\s*=\s*(.*?)\s*$', body)
     if protocol and protocol.group(1) != 'X-Forwarded-Proto':
-        raise SystemExit('Cockpit já usa outro ProtocolHeader; não alterei a configuração existente')
+        raise SystemExit('Cockpit already uses a different ProtocolHeader; the existing configuration was not changed')
     if not protocol:
         lines.append('ProtocolHeader = X-Forwarded-Proto')
     origins = re.search(r'(?im)^\s*Origins\s*=\s*(.*?)\s*$', body)
@@ -335,8 +352,8 @@ os.chmod(marker, 0o600)
         error = stderr.read().decode("utf-8", "replace").strip()
         status = stdout.channel.recv_exit_status()
         if status:
-            detail = error or output or "permissão sudo necessária"
-            raise RuntimeError(f"Não foi possível preparar o Cockpit neste host: {detail}")
+            detail = error or output or "sudo permission is required"
+            raise RuntimeError(f"Could not prepare Cockpit on this host: {detail}")
     finally:
         client.close()
 
@@ -379,7 +396,7 @@ marker.unlink(missing_ok=True)
         output = stdout.read().decode("utf-8", "replace").strip()
         error = stderr.read().decode("utf-8", "replace").strip()
         if stdout.channel.recv_exit_status():
-            raise RuntimeError(error or output or "Não foi possível restaurar a configuração original do Cockpit")
+            raise RuntimeError(error or output or "Could not restore the original Cockpit configuration")
     finally:
         client.close()
 
@@ -434,7 +451,7 @@ def cockpit_host_record(host_id: str) -> dict[str, Any]:
         host["password"] = cipher.decrypt(host["password"].encode()).decode()
         decrypt_host_credentials(host)
     except InvalidToken as exc:
-        raise HTTPException(500, "Não foi possível descriptografar credenciais salvas") from exc
+        raise HTTPException(500, "Could not decrypt the saved credentials") from exc
     return host
 
 
@@ -458,7 +475,7 @@ def cockpit_upstream_headers(request: Request, host: dict[str, Any]) -> dict[str
 @app.post("/kvm-api/hosts/{host_id}/cockpit", dependencies=[Depends(require_auth)])
 def open_cockpit(host_id: str, request: Request) -> RedirectResponse:
     if request.headers.get("origin") != RANCHER_PUBLIC_ORIGIN:
-        raise HTTPException(403, "A abertura do Cockpit precisa ser iniciada pela interface do Rancher")
+        raise HTTPException(403, "Cockpit must be opened from the Rancher interface")
     host = cockpit_host_record(host_id)
     if not host.get("cockpit_proxy_enabled"):
         try:
@@ -502,16 +519,16 @@ async def _proxy_cockpit_http(host_id: str, path: str, request: Request) -> Stre
     try:
         require_auth(request.headers.get("authorization"), request.headers.get("cookie"))
         if request.method not in ("GET", "HEAD") and request.headers.get("origin") != RANCHER_PUBLIC_ORIGIN:
-            raise HTTPException(403, "Origem inválida para a operação Cockpit")
+            raise HTTPException(403, "Invalid origin for the Cockpit operation")
         host = cockpit_host_record(host_id)
         suffix = f"/{path}" if path else "/"
         if any(part in (".", "..") for part in suffix.split("/")) or "\\" in suffix:
-            raise HTTPException(400, "Caminho Cockpit inválido")
+            raise HTTPException(400, "Invalid Cockpit path")
         tunnel = await asyncio.to_thread(SshCockpitTunnel, host)
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(502, f"Não foi possível abrir o túnel seguro para o Cockpit: {exc}") from exc
+        raise HTTPException(502, f"Could not open the secure tunnel to Cockpit: {exc}") from exc
 
     # Cockpit reads credentials on its /login endpoint. A first visit to the
     # root would otherwise return its interactive login screen, so authenticate
@@ -536,7 +553,7 @@ async def _proxy_cockpit_http(host_id: str, path: str, request: Request) -> Stre
     except Exception as exc:
         await client.aclose()
         await asyncio.to_thread(tunnel.close)
-        raise HTTPException(502, f"Falha ao encaminhar a conexão para o Cockpit: {exc}") from exc
+        raise HTTPException(502, f"Could not forward the Cockpit connection: {exc}") from exc
 
     headers, cookies = _proxy_response_headers(upstream, host_id)
 
@@ -658,7 +675,7 @@ def probe(
             key_type, key_data = pinned_host_key.split(" ", 1)
             key = paramiko.PKey.from_type_string(key_type, base64.b64decode(key_data.encode()))
         except (ValueError, TypeError) as exc:
-            raise RuntimeError("A chave SSH fixada para este host está inválida") from exc
+            raise RuntimeError("The pinned SSH host key is invalid") from exc
         client.get_host_keys().add(host_label, key_type, key)
         client.set_missing_host_key_policy(PinnedHostKeyPolicy())
     elif accept_new_host_key:
@@ -666,7 +683,7 @@ def probe(
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     else:
         if not Path(KNOWN_HOSTS).is_file():
-            raise RuntimeError(f"Arquivo known_hosts não encontrado: {KNOWN_HOSTS}")
+            raise RuntimeError(f"known_hosts file not found: {KNOWN_HOSTS}")
         client.load_host_keys(KNOWN_HOSTS)
         client.set_missing_host_key_policy(paramiko.RejectPolicy())
     try:
@@ -692,16 +709,16 @@ def probe(
         lines = [line.strip() for line in stdout.read().decode("utf-8", "replace").splitlines() if line.strip()]
         error = stderr.read().decode("utf-8", "replace").strip()
         if len(lines) < 4:
-            raise RuntimeError(error or "Resposta incompleta ao consultar o host")
+            raise RuntimeError(error or "Incomplete response while querying the host")
         hostname = lines[0]
         try:
             cpu_count = int(lines[1])
             memory_total_bytes = int(lines[2])
         except ValueError as exc:
-            raise RuntimeError("Resposta inválida ao consultar CPU ou memória do host") from exc
+            raise RuntimeError("Invalid response while reading host CPU or memory information") from exc
         libvirt_ready = lines[3] == "libvirt-ready"
         if not libvirt_ready:
-            raise RuntimeError("SSH funcionou, mas o serviço libvirt não respondeu")
+            raise RuntimeError("SSH connected, but the libvirt service did not respond")
         return {
             "hostname": hostname, "cpu_count": cpu_count,
             "memory_total_bytes": memory_total_bytes, "status": "ready",
@@ -714,7 +731,7 @@ def probe(
 def read_host(db: sqlite3.Connection, host_id: str) -> sqlite3.Row:
     row = db.execute("SELECT * FROM hosts WHERE id=?", (host_id,)).fetchone()
     if row is None:
-        raise HTTPException(404, "Host não encontrado")
+        raise HTTPException(404, "Host not found")
     return row
 
 
@@ -732,9 +749,9 @@ def list_hosts() -> list[dict[str, Any]]:
 @app.post("/kvm-api/hosts", status_code=201, dependencies=[Depends(require_auth)])
 def create_host(payload: HostInput, actor: str = Depends(require_auth)) -> dict[str, Any]:
     if not payload.password:
-        raise HTTPException(422, "Senha obrigatória para importar o host")
+        raise HTTPException(422, "A password is required to import the host")
     if not re.fullmatch(r"[A-Za-z0-9_.:-]+", payload.address):
-        raise HTTPException(422, "Informe um IPv4, IPv6 ou nome DNS válido")
+        raise HTTPException(422, "Enter a valid IPv4 address, IPv6 address, or DNS name")
     host_id = str(uuid.uuid4())
     host = payload.model_dump()
     try:
@@ -742,7 +759,7 @@ def create_host(payload: HostInput, actor: str = Depends(require_auth)) -> dict[
         host["key_passphrase"] = payload.ssh_key_passphrase
         facts = probe(host, accept_new_host_key=payload.accept_new_host_key)
     except Exception as exc:
-        raise HTTPException(422, f"Não foi possível validar SSH/libvirt: {exc}") from exc
+        raise HTTPException(422, f"Could not validate SSH/libvirt: {exc}") from exc
     with connect_db() as db:
         db.execute(
             "INSERT INTO hosts (id,name,address,port,username,password,hostname,status,cpu_count,memory_total_bytes,last_checked_at,last_error,ssh_host_key,ssh_private_key_enc,ssh_key_passphrase_enc) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -773,7 +790,7 @@ def update_host(host_id: str, payload: HostInput, actor: str = Depends(require_a
                 if key_passphrase is None and current["ssh_key_passphrase_enc"]:
                     key_passphrase = cipher.decrypt(current["ssh_key_passphrase_enc"].encode()).decode()
         except InvalidToken as exc:
-            raise HTTPException(500, "Não foi possível descriptografar credenciais salvas") from exc
+            raise HTTPException(500, "Could not decrypt the saved credentials") from exc
         host = payload.model_dump() | {"password": password, "private_key": private_key, "key_passphrase": key_passphrase}
         same_endpoint = payload.address == current["address"] and payload.port == current["port"]
         pinned_host_key = current["ssh_host_key"] if same_endpoint and not payload.accept_new_host_key else None
@@ -784,11 +801,11 @@ def update_host(host_id: str, payload: HostInput, actor: str = Depends(require_a
                 decrypt_host_credentials(old_host)
                 restore_cockpit_proxy(old_host)
             except Exception as exc:
-                raise HTTPException(502, f"Não foi possível restaurar a configuração Cockpit do endpoint anterior: {exc}") from exc
+                raise HTTPException(502, f"Could not restore the previous Cockpit endpoint configuration: {exc}") from exc
         try:
             facts = probe(host, pinned_host_key=pinned_host_key, accept_new_host_key=payload.accept_new_host_key)
         except Exception as exc:
-            raise HTTPException(422, f"Não foi possível validar SSH/libvirt: {exc}") from exc
+            raise HTTPException(422, f"Could not validate SSH/libvirt: {exc}") from exc
         db.execute(
             "UPDATE hosts SET name=?,address=?,port=?,username=?,password=?,hostname=?,status=?,cpu_count=?,memory_total_bytes=?,last_checked_at=?,last_error=NULL,ssh_host_key=?,cockpit_proxy_enabled=?,ssh_private_key_enc=?,ssh_key_passphrase_enc=? WHERE id=?",
             (payload.name, payload.address, payload.port, payload.username,
@@ -873,7 +890,7 @@ def run(args):
         raise SystemExit(result.stderr.strip() or result.stdout.strip() or 'Comando libvirt falhou')
     return result.stdout
 names = run(['virsh','-c','qemu:///system','list','--all','--name']).splitlines()
-if name not in [item.strip() for item in names]: raise SystemExit('VM não encontrada')
+if name not in [item.strip() for item in names]: raise SystemExit('Virtual machine not found')
 info = {}
 for line in run(['virsh','-c','qemu:///system','dominfo',name]).splitlines():
     if ':' in line:
@@ -1000,11 +1017,11 @@ print(json.dumps({'system':{'hostname':platform.node(),'os':release.get('PRETTY_
 
 SERVICE_ACTION_SCRIPT = r'''import re, subprocess, sys
 action, name = sys.argv[1], sys.argv[2]
-if action not in ('start','stop','restart') or not re.fullmatch(r'[A-Za-z0-9_.@:-]+',name): raise SystemExit('Ação ou serviço inválido')
+if action not in ('start','stop','restart') or not re.fullmatch(r'[A-Za-z0-9_.@:-]+',name): raise SystemExit('Invalid action or service')
 listed=subprocess.run(['systemctl','list-unit-files','--type=service','--no-legend','--no-pager',name],capture_output=True,text=True,timeout=15)
-if listed.returncode or not any(line.split() and line.split()[0] == name for line in listed.stdout.splitlines()): raise SystemExit('Serviço não encontrado')
+if listed.returncode or not any(line.split() and line.split()[0] == name for line in listed.stdout.splitlines()): raise SystemExit('Service not found')
 result=subprocess.run(['systemctl',action,name],capture_output=True,text=True,timeout=30)
-if result.returncode: raise SystemExit(result.stderr.strip() or result.stdout.strip() or 'Falha do systemd')
+if result.returncode: raise SystemExit(result.stderr.strip() or result.stdout.strip() or 'The systemd operation failed')
 '''
 
 
@@ -1015,7 +1032,7 @@ def list_vms(host_id: str) -> list[dict[str, Any]]:
         output = run_sudo_python(host, VM_LIST_SCRIPT, timeout=45)
         return json.loads(output or "[]")
     except Exception as exc:
-        raise HTTPException(502, f"Não foi possível consultar as VMs: {exc}") from exc
+        raise HTTPException(502, f"Could not query virtual machines: {exc}") from exc
 
 
 @app.get("/kvm-api/hosts/{host_id}/vms/detail", dependencies=[Depends(require_auth)])
@@ -1025,7 +1042,7 @@ def get_vm_details(host_id: str, vm_name: str) -> dict[str, Any]:
         output = run_sudo_python(host, VM_DETAIL_SCRIPT, [vm_name], timeout=45)
         return json.loads(output or "{}")
     except Exception as exc:
-        raise HTTPException(502, f"Não foi possível consultar os detalhes da VM: {exc}") from exc
+        raise HTTPException(502, f"Could not query virtual machine details: {exc}") from exc
 
 
 @app.get("/kvm-api/hosts/{host_id}/cloud-native", dependencies=[Depends(require_auth)])
@@ -1035,19 +1052,19 @@ def get_host_cloud_native(host_id: str) -> dict[str, Any]:
         output = run_sudo_python(host, HOST_ADMIN_SCRIPT, timeout=90)
         return json.loads(output or "{}")
     except Exception as exc:
-        raise HTTPException(502, f"Não foi possível carregar a administração do host: {exc}") from exc
+        raise HTTPException(502, f"Could not load host administration data: {exc}") from exc
 
 
 @app.post("/kvm-api/hosts/{host_id}/services/actions", dependencies=[Depends(require_auth)])
 def control_service(host_id: str, payload: ServiceAction, service_name: str, actor: str = Depends(require_auth)) -> dict[str, bool]:
     if not re.fullmatch(r"[A-Za-z0-9_.@:-]+", service_name):
-        raise HTTPException(422, "Nome de serviço inválido")
+        raise HTTPException(422, "Invalid service name")
     host = cockpit_host_record(host_id)
     try:
         run_sudo_python(host, SERVICE_ACTION_SCRIPT, [payload.action, service_name], timeout=45)
     except Exception as exc:
         record_audit(actor, f"service.{payload.action}", f"{host_id}/{service_name}", "failure", str(exc))
-        raise HTTPException(502, f"Falha ao executar ação no serviço: {exc}") from exc
+        raise HTTPException(502, f"Could not perform the service action: {exc}") from exc
     record_audit(actor, f"service.{payload.action}", f"{host_id}/{service_name}")
     return {"success": True}
 
@@ -1065,7 +1082,7 @@ def run_sudo_python(host: dict[str, Any], script: str, args: list[str] | None = 
         output = stdout.read().decode("utf-8", "replace").strip()
         error = stderr.read().decode("utf-8", "replace").strip()
         if stdout.channel.recv_exit_status():
-            raise RuntimeError(error or output or "Falha ao executar comando remoto com sudo")
+            raise RuntimeError(error or output or "Could not run the remote command with sudo")
         return output
     finally:
         client.close()
@@ -1078,19 +1095,19 @@ def control_vm(host_id: str, payload: VMAction, vm_name: str, actor: str = Depen
     action_script = r'''import base64,subprocess,sys
 name=base64.b64decode(sys.argv[1]).decode()
 action=sys.argv[2]
-if action not in ('start','shutdown','reboot','pause','resume'): raise SystemExit('Ação não permitida')
+if action not in ('start','shutdown','reboot','pause','resume'): raise SystemExit('Action not allowed')
 listing=subprocess.run(['virsh','-c','qemu:///system','list','--all','--name'],capture_output=True,text=True,timeout=20)
-if listing.returncode: raise SystemExit(listing.stderr.strip() or listing.stdout.strip() or 'Falha ao consultar libvirt')
-if name not in listing.stdout.splitlines(): raise SystemExit('VM não encontrada')
+if listing.returncode: raise SystemExit(listing.stderr.strip() or listing.stdout.strip() or 'Could not query libvirt')
+if name not in listing.stdout.splitlines(): raise SystemExit('Virtual machine not found')
 command={'pause':'suspend','resume':'resume'}.get(action,action)
 result=subprocess.run(['virsh','-c','qemu:///system',command,name],capture_output=True,text=True,timeout=30)
-if result.returncode: raise SystemExit(result.stderr.strip() or result.stdout.strip() or 'Ação libvirt falhou')
+if result.returncode: raise SystemExit(result.stderr.strip() or result.stdout.strip() or 'The libvirt action failed')
 '''
     try:
         run_sudo_python(host, action_script, [encoded_name, payload.action], timeout=45)
     except Exception as exc:
         record_audit(actor, f"vm.{payload.action}", f"{host_id}/{vm_name}", "failure", str(exc))
-        raise HTTPException(502, f"Falha ao executar ação libvirt: {exc}") from exc
+        raise HTTPException(502, f"Could not perform the libvirt action: {exc}") from exc
     record_audit(actor, f"vm.{payload.action}", f"{host_id}/{vm_name}")
     return {"success": True}
 
@@ -1103,19 +1120,19 @@ def set_vm_autostart(host_id: str, payload: VMAutostart, vm_name: str, actor: st
 name=base64.b64decode(sys.argv[1]).decode()
 enabled=sys.argv[2]=='true'
 listing=subprocess.run(['virsh','-c','qemu:///system','list','--all','--name'],capture_output=True,text=True,timeout=20)
-if listing.returncode: raise SystemExit(listing.stderr.strip() or listing.stdout.strip() or 'Falha ao consultar libvirt')
-if name not in listing.stdout.splitlines(): raise SystemExit('VM não encontrada')
+if listing.returncode: raise SystemExit(listing.stderr.strip() or listing.stdout.strip() or 'Could not query libvirt')
+if name not in listing.stdout.splitlines(): raise SystemExit('Virtual machine not found')
 args=['virsh','-c','qemu:///system','autostart']
 if not enabled: args.append('--disable')
 args.append(name)
 result=subprocess.run(args,capture_output=True,text=True,timeout=30)
-if result.returncode: raise SystemExit(result.stderr.strip() or result.stdout.strip() or 'Falha ao atualizar início automático')
+if result.returncode: raise SystemExit(result.stderr.strip() or result.stdout.strip() or 'Could not update autostart')
 '''
     try:
         run_sudo_python(host, action_script, [encoded_name, str(payload.enabled).lower()], timeout=45)
     except Exception as exc:
         record_audit(actor, "vm.autostart", f"{host_id}/{vm_name}", "failure", str(exc))
-        raise HTTPException(502, f"Falha ao alterar início automático: {exc}") from exc
+        raise HTTPException(502, f"Could not change autostart: {exc}") from exc
     record_audit(actor, "vm.autostart", f"{host_id}/{vm_name}", detail=f"enabled={payload.enabled}")
     return {"success": True}
 

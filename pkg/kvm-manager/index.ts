@@ -29,7 +29,8 @@ export default function(plugin: IPlugin): void {
     name: 'kvm-c-cluster-cloud-native',
     path: 'kvm/c/:cluster/cloud-native',
     component: CloudNative,
-    params: { product: 'kvm', cluster: '_' },
-    meta: { product: 'kvm', cluster: '_' },
+    // Keep this route available for the per-host menu without registering a
+    // second page in the KVM product side navigation.
+    params: { cluster: '_' },
   });
 }
