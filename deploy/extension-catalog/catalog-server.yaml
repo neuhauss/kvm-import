@@ -18,51 +18,57 @@ spec:
         app.kubernetes.io/part-of: rancher-kvm
     spec:
       volumes:
-        - name: catalog-overlay
-          configMap:
-            name: ui-extension-rancher-kvm-catalog-overlay
-            items:
-              - key: index.yaml
-                path: index.yaml
-              - key: plugin-index.yaml
-                path: plugin-index.yaml
-              - key: kvm-manager-0.7.7.tgz
-                path: kvm-manager-0.7.7.tgz
+      - name: catalog-overlay
+        configMap:
+          name: ui-extension-rancher-kvm-catalog-overlay
+          items:
+          - key: index.yaml
+            path: index.yaml
+          - key: plugin-index.yaml
+            path: plugin-index.yaml
+          - key: kvm-manager-0.7.8.tgz
+            path: kvm-manager-0.7.8.tgz
+          - key: kvm-manager-0.7.7.tgz
+            path: kvm-manager-0.7.7.tgz
       containers:
-        - name: catalog
-          image: ghcr.io/your-github-owner/ui-extension-rancher-kvm-extension:0.1.1
-          imagePullPolicy: IfNotPresent
-          ports:
-            - name: http
-              containerPort: 8080
-              protocol: TCP
-          volumeMounts:
-            - name: catalog-overlay
-              mountPath: /home/plugin-server/plugin-contents/index.yaml
-              subPath: index.yaml
-              readOnly: true
-            - name: catalog-overlay
-              mountPath: /home/plugin-server/plugin-contents/plugin/index.yaml
-              subPath: plugin-index.yaml
-              readOnly: true
-            - name: catalog-overlay
-              mountPath: /home/plugin-server/plugin-contents/plugin/kvm-manager/kvm-manager-0.7.7.tgz
-              subPath: kvm-manager-0.7.7.tgz
-              readOnly: true
-          resources:
-            requests:
-              cpu: 10m
-              memory: 32Mi
-            limits:
-              cpu: 200m
-              memory: 128Mi
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop:
-                - ALL
-            runAsNonRoot: true
-            runAsUser: 1000
+      - name: catalog
+        image: ghcr.io/your-github-owner/ui-extension-rancher-kvm-extension:0.1.1
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        volumeMounts:
+        - name: catalog-overlay
+          mountPath: /home/plugin-server/plugin-contents/index.yaml
+          subPath: index.yaml
+          readOnly: true
+        - name: catalog-overlay
+          mountPath: /home/plugin-server/plugin-contents/plugin/index.yaml
+          subPath: plugin-index.yaml
+          readOnly: true
+        - name: catalog-overlay
+          mountPath: /home/plugin-server/plugin-contents/plugin/kvm-manager/kvm-manager-0.7.8.tgz
+          subPath: kvm-manager-0.7.8.tgz
+          readOnly: true
+        - name: catalog-overlay
+          mountPath: /home/plugin-server/plugin-contents/plugin/kvm-manager/kvm-manager-0.7.7.tgz
+          subPath: kvm-manager-0.7.7.tgz
+          readOnly: true
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 200m
+            memory: 128Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          runAsNonRoot: true
+          runAsUser: 1000
 ---
 apiVersion: v1
 kind: Service
@@ -77,7 +83,7 @@ spec:
   selector:
     app.kubernetes.io/name: ui-extension-rancher-kvm-extension
   ports:
-    - name: http
-      port: 8080
-      targetPort: http
-      protocol: TCP
+  - name: http
+    port: 8080
+    targetPort: http
+    protocol: TCP
