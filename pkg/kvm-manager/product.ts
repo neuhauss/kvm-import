@@ -15,6 +15,7 @@ export function init($plugin: IPlugin, store: any): void {
     component: Hosts,
   }]);
 
+  // Keep this page reachable from the per-host administration menu only.
   $plugin.addRoute('default', {
     name: 'kvm-c-cluster-cloud-native',
     path: 'kvm/c/:cluster/cloud-native',
