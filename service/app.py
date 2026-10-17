@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import ipaddress
 import os
 import re
 import sqlite3
@@ -20,7 +21,8 @@ import threading
 import urllib.error
 import urllib.request
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import urlsplit
@@ -43,10 +45,14 @@ if len(credential_key) < 32:
     raise RuntimeError("Configure KVM_CREDENTIAL_KEY with at least 32 random characters")
 FERNET_KEY = base64.urlsafe_b64encode(hashlib.sha256(credential_key.encode()).digest())
 cipher = Fernet(FERNET_KEY)
-app = FastAPI(title="Rancher KVM Host API", version="0.5.7")
+app = FastAPI(title="Rancher KVM Host API", version="0.7.19")
 RANCHER_PUBLIC_ORIGIN = os.getenv("RANCHER_PUBLIC_ORIGIN", "https://rancher.example.com").rstrip("/")
 RANCHER_PUBLIC_HOST = urlsplit(RANCHER_PUBLIC_ORIGIN).netloc
 COCKPIT_PORT = 9090
+try:
+    AUDIT_RETENTION_DAYS = max(1, int(os.getenv("KVM_AUDIT_RETENTION_DAYS", "90")))
+except ValueError:
+    AUDIT_RETENTION_DAYS = 90
 
 
 @app.middleware("http")
@@ -64,6 +70,12 @@ def initialize_database() -> None:
     # usable persistent database, even before the first authenticated request.
     with connect_db():
         pass
+    with connect_db() as db:
+        db.execute("CREATE INDEX IF NOT EXISTS idx_audit_events_occurred_at ON audit_events(occurred_at DESC)")
+        db.execute(
+            "DELETE FROM audit_events WHERE occurred_at < ?",
+            ((datetime.now(timezone.utc) - timedelta(days=AUDIT_RETENTION_DAYS)).isoformat(),),
+        )
 
 
 class HostInput(BaseModel):
@@ -95,9 +107,25 @@ class NamedAdminAction(BaseModel):
     action: Literal["start", "stop", "enable", "disable"]
 
 
+class StoragePoolConfig(BaseModel):
+    action: Literal["create", "edit", "delete"]
+    name: str = Field(min_length=1, max_length=128)
+    target: str | None = Field(default=None, max_length=512)
+
+
+class NetworkConnectionConfig(BaseModel):
+    uuid: str = Field(min_length=16, max_length=64)
+    method: Literal["auto", "manual"]
+    addresses: list[str] = Field(default_factory=list, max_length=16)
+    gateway: str | None = Field(default=None, max_length=64)
+    dns: list[str] = Field(default_factory=list, max_length=8)
+
+
 class RepositoryAction(BaseModel):
     alias: str = Field(min_length=1, max_length=128)
-    action: Literal["enable", "disable", "refresh"]
+    action: Literal["enable", "disable", "refresh", "add", "remove"]
+    name: str | None = Field(default=None, max_length=256)
+    uri: str | None = Field(default=None, max_length=2048)
 
 
 class SecurityModeAction(BaseModel):
@@ -115,8 +143,17 @@ class NetworkConnectionAction(BaseModel):
 
 class AccountAction(BaseModel):
     username: str = Field(min_length=1, max_length=32)
-    action: Literal["lock", "unlock", "password"]
+    action: Literal["lock", "unlock", "password", "create", "edit", "delete"]
     password: str | None = Field(default=None, min_length=8, max_length=1024)
+    shell: str | None = Field(default=None, max_length=256)
+    home: str | None = Field(default=None, max_length=512)
+    groups: list[str] = Field(default_factory=list, max_length=64)
+
+
+class SubscriptionAction(BaseModel):
+    action: Literal["register", "deregister"]
+    email: str | None = Field(default=None, max_length=320)
+    regcode: str | None = Field(default=None, max_length=256)
 
 
 def now() -> str:
@@ -173,11 +210,27 @@ def rancher_get(path: str, token: str | None = None, session_cookie: str | None 
         return json.loads(response.read())
 
 
-def require_auth(
-    authorization: str | None = Header(default=None),
-    cookie: str | None = Header(default=None),
-) -> str:
-    """Validate Rancher identity and the configured set of allowed global roles."""
+@dataclass(frozen=True)
+class AuthorizationContext:
+    user_id: str
+    roles: frozenset[str]
+    access_level: str
+
+
+ROLE_CONFIG = {
+    "viewer": {role.strip() for role in os.getenv("KVM_VIEWER_GLOBAL_ROLES", "").split(",") if role.strip()},
+    "vm_operator": {role.strip() for role in os.getenv("KVM_VM_OPERATOR_GLOBAL_ROLES", "").split(",") if role.strip()},
+    # Keep the original setting as the host-admin tier for existing installs.
+    "host_admin": {role.strip() for role in os.getenv("KVM_ALLOWED_GLOBAL_ROLES", "admin").split(",") if role.strip()},
+}
+
+
+ROLE_RANK = {"viewer": 1, "vm_operator": 2, "host_admin": 3}
+PERMISSION_RANK = {"viewer": 1, "vm_operator": 2, "host_admin": 3}
+
+
+def authenticate_request(authorization: str | None = None, cookie: str | None = None) -> AuthorizationContext:
+    """Resolve the Rancher identity and its configured KVM access tier."""
     token = authorization[7:].strip() if authorization and authorization.startswith("Bearer ") else ""
     session_cookie = None
     if not token and cookie:
@@ -210,10 +263,28 @@ def require_auth(
         raise
     except (urllib.error.URLError, TimeoutError, ValueError, KeyError):
         raise HTTPException(401, "The Rancher session is invalid or expired") from None
-    allowed_roles = {role.strip() for role in os.getenv("KVM_ALLOWED_GLOBAL_ROLES", "admin").split(",") if role.strip()}
-    if not roles.intersection(allowed_roles):
-        raise HTTPException(403, "Your Rancher global role is not authorized to manage KVM hosts")
-    return str(user_id or user.get("id") or "unknown")
+    access_level = ""
+    for level, configured_roles in ROLE_CONFIG.items():
+        if roles.intersection(configured_roles) and ROLE_RANK[level] > ROLE_RANK.get(access_level, 0):
+            access_level = level
+    if not access_level:
+        raise HTTPException(403, "Your Rancher global role is not authorized to access KVM hosts")
+    return AuthorizationContext(str(user_id or user.get("id") or "unknown"), frozenset(roles), access_level)
+
+
+def require_permission(permission: str):
+    required_rank = PERMISSION_RANK[permission]
+
+    def dependency(
+        authorization: str | None = Header(default=None),
+        cookie: str | None = Header(default=None),
+    ) -> AuthorizationContext:
+        context = authenticate_request(authorization, cookie)
+        if ROLE_RANK[context.access_level] < required_rank:
+            raise HTTPException(403, f"The {permission.replace('_', ' ')} role is required for this KVM operation")
+        return context
+
+    return dependency
 
 
 def record_audit(actor: str, action: str, target: str, outcome: str = "success", detail: str | None = None) -> None:
@@ -544,8 +615,8 @@ def cockpit_upstream_headers(request: Request, host: dict[str, Any]) -> dict[str
     return headers
 
 
-@app.post("/kvm-api/hosts/{host_id}/cockpit", dependencies=[Depends(require_auth)])
-def open_cockpit(host_id: str, request: Request) -> RedirectResponse:
+@app.post("/kvm-api/hosts/{host_id}/cockpit")
+def open_cockpit(host_id: str, request: Request, access: AuthorizationContext = Depends(require_permission("host_admin"))) -> RedirectResponse:
     if request.headers.get("origin") != RANCHER_PUBLIC_ORIGIN:
         raise HTTPException(403, "Cockpit must be opened from the Rancher interface")
     host = cockpit_host_record(host_id)
@@ -589,7 +660,7 @@ def _proxy_response_headers(upstream: httpx.Response, host_id: str) -> tuple[dic
 
 async def _proxy_cockpit_http(host_id: str, path: str, request: Request) -> StreamingResponse:
     try:
-        require_auth(request.headers.get("authorization"), request.headers.get("cookie"))
+        require_permission("host_admin")(request.headers.get("authorization"), request.headers.get("cookie"))
         if request.method not in ("GET", "HEAD") and request.headers.get("origin") != RANCHER_PUBLIC_ORIGIN:
             raise HTTPException(403, "Invalid origin for the Cockpit operation")
         host = cockpit_host_record(host_id)
@@ -657,7 +728,7 @@ async def cockpit_path(host_id: str, path: str, request: Request) -> StreamingRe
 
 async def _proxy_cockpit_websocket(host_id: str, path: str, websocket: WebSocket) -> None:
     try:
-        require_auth(websocket.headers.get("authorization"), websocket.headers.get("cookie"))
+        require_permission("host_admin")(websocket.headers.get("authorization"), websocket.headers.get("cookie"))
         if websocket.headers.get("origin") != RANCHER_PUBLIC_ORIGIN:
             await websocket.close(code=4403)
             return
@@ -743,7 +814,7 @@ async def vm_console_websocket(host_id: str, websocket: WebSocket) -> None:
         return
     try:
         actor = await asyncio.to_thread(
-            require_auth, websocket.headers.get("authorization"), websocket.headers.get("cookie")
+            require_permission("vm_operator")(websocket.headers.get("authorization"), websocket.headers.get("cookie"))
         )
     except HTTPException as exc:
         await websocket.close(code=4403 if exc.status_code == 403 else 4401)
@@ -812,7 +883,7 @@ async def vm_console_websocket(host_id: str, websocket: WebSocket) -> None:
         if client is not None:
             client.close()
         try:
-            await asyncio.to_thread(record_audit, actor, "vm.console", f"{host_id}/{vm_name}", outcome, detail)
+            await asyncio.to_thread(record_audit, actor.user_id, "vm.console", f"{host_id}/{vm_name}", outcome, detail)
         except Exception:
             pass
         try:
@@ -898,14 +969,25 @@ def healthz() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@app.get("/kvm-api/hosts", dependencies=[Depends(require_auth)])
+@app.get("/kvm-api/hosts", dependencies=[Depends(require_permission("viewer"))])
 def list_hosts() -> list[dict[str, Any]]:
     with connect_db() as db:
         return [public_host(row) for row in db.execute("SELECT * FROM hosts ORDER BY name")]
 
 
-@app.post("/kvm-api/hosts", status_code=201, dependencies=[Depends(require_auth)])
-def create_host(payload: HostInput, actor: str = Depends(require_auth)) -> dict[str, Any]:
+@app.get("/kvm-api/permissions")
+def get_permissions(access: AuthorizationContext = Depends(require_permission("viewer"))) -> dict[str, bool | str]:
+    rank = ROLE_RANK[access.access_level]
+    return {
+        "accessLevel": access.access_level,
+        "canView": True,
+        "canOperateVms": rank >= PERMISSION_RANK["vm_operator"],
+        "canAdministerHost": rank >= PERMISSION_RANK["host_admin"],
+    }
+
+
+@app.post("/kvm-api/hosts", status_code=201)
+def create_host(payload: HostInput, access: AuthorizationContext = Depends(require_permission("host_admin"))) -> dict[str, Any]:
     if not payload.password:
         raise HTTPException(422, "A password is required to import the host")
     if not re.fullmatch(r"[A-Za-z0-9_.:-]+", payload.address):
@@ -928,12 +1010,12 @@ def create_host(payload: HostInput, actor: str = Depends(require_auth)) -> dict[
              cipher.encrypt(payload.ssh_key_passphrase.encode()).decode() if payload.ssh_key_passphrase else None),
         )
         created = public_host(read_host(db, host_id))
-    record_audit(actor, "host.import", host_id, detail=f"{payload.name} ({payload.address}:{payload.port})")
+    record_audit(access.user_id, "host.import", host_id, detail=f"{payload.name} ({payload.address}:{payload.port})")
     return created
 
 
-@app.put("/kvm-api/hosts/{host_id}", dependencies=[Depends(require_auth)])
-def update_host(host_id: str, payload: HostInput, actor: str = Depends(require_auth)) -> dict[str, Any]:
+@app.put("/kvm-api/hosts/{host_id}")
+def update_host(host_id: str, payload: HostInput, access: AuthorizationContext = Depends(require_permission("host_admin"))) -> dict[str, Any]:
     with connect_db() as db:
         current = read_host(db, host_id)
         try:
@@ -974,12 +1056,12 @@ def update_host(host_id: str, payload: HostInput, actor: str = Depends(require_a
              cipher.encrypt(key_passphrase.encode()).decode() if key_passphrase else None, host_id),
         )
         updated = public_host(read_host(db, host_id))
-    record_audit(actor, "host.update", host_id, detail=f"{payload.name} ({payload.address}:{payload.port})")
+    record_audit(access.user_id, "host.update", host_id, detail=f"{payload.name} ({payload.address}:{payload.port})")
     return updated
 
 
-@app.post("/kvm-api/hosts/{host_id}/refresh", dependencies=[Depends(require_auth)])
-def refresh_host(host_id: str, actor: str = Depends(require_auth)) -> dict[str, Any]:
+@app.post("/kvm-api/hosts/{host_id}/refresh")
+def refresh_host(host_id: str, access: AuthorizationContext = Depends(require_permission("vm_operator"))) -> dict[str, Any]:
     with connect_db() as db:
         row = read_host(db, host_id)
         host = dict(row)
@@ -996,12 +1078,12 @@ def refresh_host(host_id: str, actor: str = Depends(require_auth)) -> dict[str, 
              facts.get("ssh_host_key"), host_id),
         )
         refreshed = public_host(read_host(db, host_id))
-    record_audit(actor, "host.refresh", host_id, "success" if refreshed["status"] == "ready" else "failure", refreshed.get("last_error"))
+    record_audit(access.user_id, "host.refresh", host_id, "success" if refreshed["status"] == "ready" else "failure", refreshed.get("last_error"))
     return refreshed
 
 
-@app.delete("/kvm-api/hosts/{host_id}", status_code=204, dependencies=[Depends(require_auth)])
-def delete_host(host_id: str, actor: str = Depends(require_auth)) -> Response:
+@app.delete("/kvm-api/hosts/{host_id}", status_code=204)
+def delete_host(host_id: str, access: AuthorizationContext = Depends(require_permission("host_admin"))) -> Response:
     with connect_db() as db:
         current = dict(read_host(db, host_id))
     if current["cockpit_proxy_enabled"]:
@@ -1017,7 +1099,7 @@ def delete_host(host_id: str, actor: str = Depends(require_auth)) -> Response:
     with connect_db() as db:
         read_host(db, host_id)
         db.execute("DELETE FROM hosts WHERE id=?", (host_id,))
-    record_audit(actor, "host.remove", host_id, detail=f"{current['name']} ({current['address']}:{current['port']})")
+    record_audit(access.user_id, "host.remove", host_id, detail=f"{current['name']} ({current['address']}:{current['port']})")
     return Response(status_code=204)
 
 
@@ -1202,7 +1284,10 @@ try:
         for line in run(['virsh','-c','qemu:///system','pool-info',pool_name]).splitlines():
             if ':' in line:
                 key,value=line.split(':',1); pool_info[key.strip().lower()]=value.strip()
-        storage_pools.append({'name':pool_name,'state':pool_info.get('state','unknown'),'autostart':pool_info.get('autostart','no').lower(),'capacity':pool_info.get('capacity','—'),
+        pool_xml=subprocess.run(['virsh','-c','qemu:///system','pool-dumpxml',pool_name],capture_output=True,text=True,timeout=20)
+        pool_root=ET.fromstring(pool_xml.stdout) if pool_xml.returncode==0 else ET.Element('pool')
+        pool_target=pool_root.findtext('./target/path') or ''
+        storage_pools.append({'name':pool_name,'type':pool_root.get('type','unknown'),'target':pool_target,'state':pool_info.get('state','unknown'),'autostart':pool_info.get('autostart','no').lower(),'capacity':pool_info.get('capacity','—'),
             'allocation':pool_info.get('allocation','—'),'available':pool_info.get('available','—')})
 except Exception as error: errors.append('storage pools: '+str(error))
 libvirt_networks=[]
@@ -1261,7 +1346,14 @@ try:
         if result.returncode: raise RuntimeError(result.stderr.strip())
         for line in result.stdout.splitlines():
             parts=line.split(':',3)
-            if len(parts)==4: network_connections.append({'name':parts[0],'uuid':parts[1],'type':parts[2],'device':parts[3],'active':parts[1] in active_uuids})
+            if len(parts)==4:
+                detail=subprocess.run(['nmcli','-g','ipv4.method,ipv4.addresses,ipv4.gateway,ipv4.dns','connection','show',parts[1]],capture_output=True,text=True,timeout=15)
+                values=detail.stdout.splitlines() if detail.returncode==0 else []
+                network_connections.append({'name':parts[0],'uuid':parts[1],'type':parts[2],'device':parts[3],'active':parts[1] in active_uuids,
+                    'ipv4_method':values[0] if len(values)>0 else 'auto',
+                    'ipv4_addresses':[value for value in values[1].split(',') if value] if len(values)>1 else [],
+                    'ipv4_gateway':values[2] if len(values)>2 else '',
+                    'ipv4_dns':[value for value in values[3].split(',') if value] if len(values)>3 else []})
 except Exception as error: errors.append('network connections: '+str(error))
 release={}
 try:
@@ -1297,7 +1389,7 @@ if result.returncode: raise SystemExit(result.stderr.strip() or result.stdout.st
 '''
 
 
-@app.get("/kvm-api/hosts/{host_id}/vms", dependencies=[Depends(require_auth)])
+@app.get("/kvm-api/hosts/{host_id}/vms", dependencies=[Depends(require_permission("viewer"))])
 def list_vms(host_id: str) -> list[dict[str, Any]]:
     host = cockpit_host_record(host_id)
     try:
@@ -1307,7 +1399,7 @@ def list_vms(host_id: str) -> list[dict[str, Any]]:
         raise HTTPException(502, f"Could not query virtual machines: {exc}") from exc
 
 
-@app.get("/kvm-api/hosts/{host_id}/services", dependencies=[Depends(require_auth)])
+@app.get("/kvm-api/hosts/{host_id}/services", dependencies=[Depends(require_permission("viewer"))])
 def list_services(host_id: str) -> list[dict[str, Any]]:
     host = cockpit_host_record(host_id)
     try:
@@ -1317,7 +1409,7 @@ def list_services(host_id: str) -> list[dict[str, Any]]:
         raise HTTPException(502, f"Could not query system services: {exc}") from exc
 
 
-@app.get("/kvm-api/hosts/{host_id}/vms/detail", dependencies=[Depends(require_auth)])
+@app.get("/kvm-api/hosts/{host_id}/vms/detail", dependencies=[Depends(require_permission("viewer"))])
 def get_vm_details(host_id: str, vm_name: str) -> dict[str, Any]:
     host = cockpit_host_record(host_id)
     try:
@@ -1327,7 +1419,24 @@ def get_vm_details(host_id: str, vm_name: str) -> dict[str, Any]:
         raise HTTPException(502, f"Could not query virtual machine details: {exc}") from exc
 
 
-@app.get("/kvm-api/hosts/{host_id}/cloud-native", dependencies=[Depends(require_auth)])
+@app.get("/kvm-api/hosts/{host_id}/metrics", dependencies=[Depends(require_permission("viewer"))])
+def get_host_metrics(host_id: str) -> dict[str, Any]:
+    """Read lightweight host metrics without rebuilding the full administration inventory."""
+    host = cockpit_host_record(host_id)
+    script = r'''import json,os
+memory={}
+for line in open('/proc/meminfo'):
+    key,value=line.split(':',1); memory[key]=int(value.strip().split()[0])
+print(json.dumps({'cpu_count':os.cpu_count() or 0,'memory_total_kib':memory.get('MemTotal',0),
+    'memory_available_kib':memory.get('MemAvailable',0),'load_average':list(os.getloadavg())}))
+'''
+    try:
+        return json.loads(run_sudo_python(host, script, timeout=15) or "{}")
+    except Exception as exc:
+        raise HTTPException(502, f"Could not refresh host metrics: {exc}") from exc
+
+
+@app.get("/kvm-api/hosts/{host_id}/cloud-native", dependencies=[Depends(require_permission("viewer"))])
 def get_host_cloud_native(host_id: str) -> dict[str, Any]:
     host = cockpit_host_record(host_id)
     try:
@@ -1337,12 +1446,19 @@ def get_host_cloud_native(host_id: str) -> dict[str, Any]:
         raise HTTPException(502, f"Could not load host administration data: {exc}") from exc
 
 
-@app.post("/kvm-api/hosts/{host_id}/repositories/actions", dependencies=[Depends(require_auth)])
-def control_repository(host_id: str, payload: RepositoryAction, actor: str = Depends(require_auth)) -> dict[str, bool]:
+@app.post("/kvm-api/hosts/{host_id}/repositories/actions")
+def control_repository(host_id: str, payload: RepositoryAction, access: AuthorizationContext = Depends(require_permission("host_admin"))) -> dict[str, bool]:
     if payload.alias != "*" and not re.fullmatch(r"[A-Za-z0-9_.:-]+", payload.alias):
         raise HTTPException(422, "Invalid repository alias")
     host = cockpit_host_record(host_id)
-    if payload.action == "refresh":
+    if payload.action == "add":
+        parsed_uri = urlsplit(payload.uri or "")
+        if not payload.name or not payload.uri or parsed_uri.scheme not in ("http", "https", "ftp", "file") or (parsed_uri.scheme in ("http", "https", "ftp") and not parsed_uri.hostname):
+            raise HTTPException(422, "Enter a repository name and a valid HTTP, HTTPS, FTP, or file URL")
+        args = ["zypper", "--non-interactive", "addrepo", "--name", payload.name, payload.uri, payload.alias]
+    elif payload.action == "remove":
+        args = ["zypper", "--non-interactive", "removerepo", payload.alias]
+    elif payload.action == "refresh":
         args = ["zypper", "--non-interactive", "refresh"] + ([] if payload.alias == "*" else [payload.alias])
     else:
         args = ["zypper", "--non-interactive", "modifyrepo", "--" + payload.action, payload.alias]
@@ -1350,14 +1466,47 @@ def control_repository(host_id: str, payload: RepositoryAction, actor: str = Dep
     try:
         run_sudo_python(host, script, args, timeout=150)
     except Exception as exc:
-        record_audit(actor, f"repository.{payload.action}", f"{host_id}/{payload.alias}", "failure", str(exc)[:500])
+        record_audit(access.user_id, f"repository.{payload.action}", f"{host_id}/{payload.alias}", "failure", str(exc)[:500])
         raise HTTPException(502, f"Could not perform the repository action: {exc}") from exc
-    record_audit(actor, f"repository.{payload.action}", f"{host_id}/{payload.alias}")
+    record_audit(access.user_id, f"repository.{payload.action}", f"{host_id}/{payload.alias}")
     return {"success": True}
 
 
-@app.post("/kvm-api/hosts/{host_id}/security/selinux", dependencies=[Depends(require_auth)])
-def set_selinux_mode(host_id: str, payload: SecurityModeAction, actor: str = Depends(require_auth)) -> dict[str, bool]:
+@app.post("/kvm-api/hosts/{host_id}/subscriptions/actions")
+def control_subscription(host_id: str, payload: SubscriptionAction, access: AuthorizationContext = Depends(require_permission("host_admin"))) -> dict[str, bool]:
+    host = cockpit_host_record(host_id)
+    if payload.action == "register":
+        if not payload.email or not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", payload.email) or not payload.regcode or len(payload.regcode.strip()) < 4:
+            raise HTTPException(422, "Enter a valid account email and registration code")
+        args = ["register"]
+    else:
+        args = ["deregister"]
+    script = r'''import json,shutil,subprocess,sys
+if not shutil.which('SUSEConnect'): raise SystemExit('SUSEConnect is not installed on this host')
+action=sys.argv[1]
+if action=='register':
+    print('KVM_STDIN_READY',flush=True)
+    data=json.loads(sys.stdin.readline())
+    args=['SUSEConnect','--regcode',data['regcode'],'--email',data['email']]
+else: args=['SUSEConnect','-d']
+result=subprocess.run(args,capture_output=True,text=True,timeout=180)
+if result.returncode: raise SystemExit(result.stderr.strip() or result.stdout.strip() or 'SUSEConnect action failed')
+print(result.stdout.strip())
+'''
+    # The registration code is sent only for this request and is not written to
+    # the host database or the audit log.
+    try:
+        subscription_input = json.dumps({"regcode": payload.regcode.strip(), "email": payload.email.strip()}) + "\n" if payload.action == "register" else None
+        run_sudo_python(host, script, args, timeout=210, stdin_data=subscription_input)
+    except Exception as exc:
+        record_audit(access.user_id, f"subscription.{payload.action}", host_id, "failure", "SUSEConnect operation failed")
+        raise HTTPException(502, f"Could not {payload.action} the SUSE subscription. Check host connectivity and the SUSEConnect response on the host.") from exc
+    record_audit(access.user_id, f"subscription.{payload.action}", host_id)
+    return {"success": True}
+
+
+@app.post("/kvm-api/hosts/{host_id}/security/selinux")
+def set_selinux_mode(host_id: str, payload: SecurityModeAction, access: AuthorizationContext = Depends(require_permission("host_admin"))) -> dict[str, bool]:
     host = cockpit_host_record(host_id)
     script = r'''import shutil,subprocess,sys
 if not shutil.which('setenforce'): raise SystemExit('SELinux is not available on this host')
@@ -1367,14 +1516,14 @@ if r.returncode: raise SystemExit(r.stderr.strip() or r.stdout.strip() or 'Could
     try:
         run_sudo_python(host, script, [payload.mode], timeout=30)
     except Exception as exc:
-        record_audit(actor, "selinux.mode", host_id, "failure", str(exc)[:500])
+        record_audit(access.user_id, "selinux.mode", host_id, "failure", str(exc)[:500])
         raise HTTPException(502, f"Could not change SELinux mode: {exc}") from exc
-    record_audit(actor, "selinux.mode", host_id, detail=payload.mode)
+    record_audit(access.user_id, "selinux.mode", host_id, detail=payload.mode)
     return {"success": True}
 
 
-@app.post("/kvm-api/hosts/{host_id}/libvirt/{resource}/actions", dependencies=[Depends(require_auth)])
-def control_libvirt_resource(host_id: str, resource: Literal["storage-pools", "networks"], payload: NamedAdminAction, actor: str = Depends(require_auth)) -> dict[str, bool]:
+@app.post("/kvm-api/hosts/{host_id}/libvirt/{resource}/actions")
+def control_libvirt_resource(host_id: str, resource: Literal["storage-pools", "networks"], payload: NamedAdminAction, access: AuthorizationContext = Depends(require_permission("host_admin"))) -> dict[str, bool]:
     if not re.fullmatch(r"[A-Za-z0-9_.+-]+", payload.name):
         raise HTTPException(422, "Invalid libvirt resource name")
     host = cockpit_host_record(host_id)
@@ -1397,14 +1546,69 @@ if r.returncode: raise SystemExit(r.stderr.strip() or r.stdout.strip() or 'Libvi
     try:
         run_sudo_python(host, script, [resource, payload.action, payload.name], timeout=60)
     except Exception as exc:
-        record_audit(actor, f"libvirt.{resource}.{payload.action}", f"{host_id}/{payload.name}", "failure", str(exc)[:500])
+        record_audit(access.user_id, f"libvirt.{resource}.{payload.action}", f"{host_id}/{payload.name}", "failure", str(exc)[:500])
         raise HTTPException(502, f"Could not perform the libvirt action: {exc}") from exc
-    record_audit(actor, f"libvirt.{resource}.{payload.action}", f"{host_id}/{payload.name}")
+    record_audit(access.user_id, f"libvirt.{resource}.{payload.action}", f"{host_id}/{payload.name}")
     return {"success": True}
 
 
-@app.post("/kvm-api/hosts/{host_id}/terminal/command", dependencies=[Depends(require_auth)])
-def run_terminal_command(host_id: str, payload: TerminalCommand, actor: str = Depends(require_auth)) -> dict[str, Any]:
+@app.post("/kvm-api/hosts/{host_id}/storage-pools/config")
+def configure_storage_pool(host_id: str, payload: StoragePoolConfig, access: AuthorizationContext = Depends(require_permission("host_admin"))) -> dict[str, bool]:
+    if not re.fullmatch(r"[A-Za-z0-9_.+-]+", payload.name):
+        raise HTTPException(422, "Invalid storage pool name")
+    if payload.action in ("create", "edit") and (not payload.target or not payload.target.startswith("/") or "\x00" in payload.target):
+        raise HTTPException(422, "Enter an absolute directory path for the storage pool")
+    host = cockpit_host_record(host_id)
+    script = r'''import os,subprocess,sys,tempfile,xml.etree.ElementTree as ET
+action,name,target=sys.argv[1:]
+base=['virsh','-c','qemu:///system']
+listing=subprocess.run(base+['pool-list','--all','--name'],capture_output=True,text=True,timeout=20)
+if listing.returncode: raise SystemExit(listing.stderr.strip() or 'Could not list storage pools')
+exists=name in listing.stdout.splitlines()
+if action=='create':
+    if exists: raise SystemExit('A storage pool with this name already exists')
+    os.makedirs(target,exist_ok=True)
+    cmd=base+['pool-define-as',name,'dir','--target',target]
+elif action=='edit':
+    if not exists: raise SystemExit('Storage pool not found')
+    info=subprocess.run(base+['pool-info',name],capture_output=True,text=True,timeout=20)
+    if info.returncode: raise SystemExit(info.stderr.strip() or 'Could not inspect storage pool')
+    state=next((line.split(':',1)[1].strip().lower() for line in info.stdout.splitlines() if line.lower().startswith('state:')),'')
+    if state=='running': raise SystemExit('Stop the storage pool before changing its target directory')
+    dump=subprocess.run(base+['pool-dumpxml',name],capture_output=True,text=True,timeout=20)
+    if dump.returncode: raise SystemExit(dump.stderr.strip() or 'Could not read storage pool definition')
+    root=ET.fromstring(dump.stdout)
+    if root.get('type')!='dir': raise SystemExit('Only directory storage pools can be edited')
+    path=root.find('./target/path')
+    if path is None: raise SystemExit('Storage pool has no target directory')
+    os.makedirs(target,exist_ok=True)
+    path.text=target
+    with tempfile.NamedTemporaryFile(mode='w',encoding='utf-8',suffix='.xml') as definition:
+        definition.write(ET.tostring(root,encoding='unicode')); definition.flush()
+        cmd=base+['pool-define',definition.name]
+else:
+    if not exists: raise SystemExit('Storage pool not found')
+    info=subprocess.run(base+['pool-info',name],capture_output=True,text=True,timeout=20)
+    if info.returncode: raise SystemExit(info.stderr.strip() or 'Could not inspect storage pool')
+    state=next((line.split(':',1)[1].strip().lower() for line in info.stdout.splitlines() if line.lower().startswith('state:')),'')
+    if state=='running':
+        stop=subprocess.run(base+['pool-destroy',name],capture_output=True,text=True,timeout=30)
+        if stop.returncode: raise SystemExit(stop.stderr.strip() or 'Could not stop storage pool')
+    cmd=base+['pool-undefine',name]
+result=subprocess.run(cmd,capture_output=True,text=True,timeout=45)
+if result.returncode: raise SystemExit(result.stderr.strip() or result.stdout.strip() or 'Storage pool change failed')
+'''
+    try:
+        run_sudo_python(host, script, [payload.action, payload.name, payload.target or ""], timeout=90)
+    except Exception as exc:
+        record_audit(access.user_id, f"storage-pool.{payload.action}", f"{host_id}/{payload.name}", "failure", str(exc)[:500])
+        raise HTTPException(502, f"Could not {payload.action} the storage pool: {exc}") from exc
+    record_audit(access.user_id, f"storage-pool.{payload.action}", f"{host_id}/{payload.name}")
+    return {"success": True}
+
+
+@app.post("/kvm-api/hosts/{host_id}/terminal/command")
+def run_terminal_command(host_id: str, payload: TerminalCommand, access: AuthorizationContext = Depends(require_permission("host_admin"))) -> dict[str, Any]:
     host = cockpit_host_record(host_id)
     client = ssh_client_for_host(host)
     try:
@@ -1413,16 +1617,16 @@ def run_terminal_command(host_id: str, payload: TerminalCommand, actor: str = De
         error = stderr.read().decode("utf-8", "replace")
         status = stdout.channel.recv_exit_status()
     except Exception as exc:
-        record_audit(actor, "terminal.command", host_id, "failure", str(exc)[:500])
+        record_audit(access.user_id, "terminal.command", host_id, "failure", str(exc)[:500])
         raise HTTPException(502, f"Terminal command failed: {exc}") from exc
     finally:
         client.close()
-    record_audit(actor, "terminal.command", host_id, detail="Command executed as the imported SSH user")
+    record_audit(access.user_id, "terminal.command", host_id, detail="Command executed as the imported SSH user")
     return {"stdout": output[-32000:], "stderr": error[-32000:], "return_code": status}
 
 
-@app.post("/kvm-api/hosts/{host_id}/network-connections/actions", dependencies=[Depends(require_auth)])
-def control_network_connection(host_id: str, payload: NetworkConnectionAction, actor: str = Depends(require_auth)) -> dict[str, bool]:
+@app.post("/kvm-api/hosts/{host_id}/network-connections/actions")
+def control_network_connection(host_id: str, payload: NetworkConnectionAction, access: AuthorizationContext = Depends(require_permission("host_admin"))) -> dict[str, bool]:
     if not re.fullmatch(r"[A-Fa-f0-9-]{16,64}", payload.uuid):
         raise HTTPException(422, "Invalid NetworkManager connection ID")
     host = cockpit_host_record(host_id)
@@ -1437,30 +1641,101 @@ if r.returncode: raise SystemExit(r.stderr.strip() or r.stdout.strip() or 'Netwo
     try:
         run_sudo_python(host, script, [payload.action, payload.uuid], timeout=75)
     except Exception as exc:
-        record_audit(actor, f"network-connection.{payload.action}", f"{host_id}/{payload.uuid}", "failure", str(exc)[:500])
+        record_audit(access.user_id, f"network-connection.{payload.action}", f"{host_id}/{payload.uuid}", "failure", str(exc)[:500])
         raise HTTPException(502, f"Could not change the network connection: {exc}") from exc
-    record_audit(actor, f"network-connection.{payload.action}", f"{host_id}/{payload.uuid}")
+    record_audit(access.user_id, f"network-connection.{payload.action}", f"{host_id}/{payload.uuid}")
     return {"success": True}
 
 
-@app.post("/kvm-api/hosts/{host_id}/accounts/actions", dependencies=[Depends(require_auth)])
-def control_account(host_id: str, payload: AccountAction, actor: str = Depends(require_auth)) -> dict[str, bool]:
+@app.post("/kvm-api/hosts/{host_id}/network-connections/config")
+def configure_network_connection(host_id: str, payload: NetworkConnectionConfig, access: AuthorizationContext = Depends(require_permission("host_admin"))) -> dict[str, bool]:
+    if not re.fullmatch(r"[A-Fa-f0-9-]{16,64}", payload.uuid):
+        raise HTTPException(422, "Invalid NetworkManager connection ID")
+    try:
+        addresses = [str(ipaddress.ip_interface(value)) for value in payload.addresses]
+        gateway = str(ipaddress.ip_address(payload.gateway)) if payload.gateway else ""
+        dns = [str(ipaddress.ip_address(value)) for value in payload.dns]
+    except ValueError as exc:
+        raise HTTPException(422, f"Invalid network address: {exc}") from exc
+    if payload.method == "manual" and not addresses:
+        raise HTTPException(422, "At least one IP address is required for manual IPv4 configuration")
+    host = cockpit_host_record(host_id)
+    script = r'''import shutil,subprocess,sys
+uuid,method,addresses,gateway,dns=sys.argv[1:]
+if not shutil.which('nmcli'): raise SystemExit('NetworkManager is not installed')
+listing=subprocess.run(['nmcli','-t','-f','UUID','connection','show'],capture_output=True,text=True,timeout=20)
+if listing.returncode or uuid not in listing.stdout.splitlines(): raise SystemExit('Network connection not found')
+active=subprocess.run(['nmcli','-t','-f','UUID','connection','show','--active'],capture_output=True,text=True,timeout=20)
+was_active=uuid in active.stdout.splitlines()
+args=['nmcli','connection','modify',uuid,'ipv4.method',method,'ipv4.addresses',addresses,'ipv4.gateway',gateway,'ipv4.dns',dns]
+result=subprocess.run(args,capture_output=True,text=True,timeout=30)
+if result.returncode: raise SystemExit(result.stderr.strip() or result.stdout.strip() or 'Network configuration failed')
+if was_active:
+    result=subprocess.run(['nmcli','connection','up',uuid],capture_output=True,text=True,timeout=60)
+    if result.returncode: raise SystemExit(result.stderr.strip() or result.stdout.strip() or 'Network configuration saved, but the active connection could not be reapplied')
+'''
+    try:
+        run_sudo_python(host, script, [payload.uuid, payload.method, ",".join(addresses), gateway, ",".join(dns)], timeout=45)
+    except Exception as exc:
+        record_audit(access.user_id, "network-connection.configure", f"{host_id}/{payload.uuid}", "failure", str(exc)[:500])
+        raise HTTPException(502, f"Could not update the network connection: {exc}") from exc
+    record_audit(access.user_id, "network-connection.configure", f"{host_id}/{payload.uuid}")
+    return {"success": True}
+
+
+@app.post("/kvm-api/hosts/{host_id}/accounts/actions")
+def control_account(host_id: str, payload: AccountAction, access: AuthorizationContext = Depends(require_permission("host_admin"))) -> dict[str, bool]:
     if not re.fullmatch(r"[a-z_][a-z0-9_-]{0,31}", payload.username):
         raise HTTPException(422, "Invalid account name")
     host = cockpit_host_record(host_id)
-    if payload.username == host["username"] and payload.action == "lock":
-        raise HTTPException(422, "The SSH account used by this extension cannot be locked here")
-    if payload.username == "root" and payload.action == "lock":
-        raise HTTPException(422, "The root account cannot be locked here")
+    if payload.username == host["username"] and payload.action in ("lock", "delete"):
+        raise HTTPException(422, "The SSH account used by this extension cannot be locked or deleted here")
+    if payload.username == "root" and payload.action in ("lock", "delete"):
+        raise HTTPException(422, "The root account cannot be locked or deleted here")
     if payload.action == "password" and (not payload.password or any(char in payload.password for char in ("\n", "\r", ":"))):
         raise HTTPException(422, "Enter a new password with at least 8 characters; colons and line breaks are not allowed")
+    if payload.action == "create" and (not payload.password or any(char in payload.password for char in ("\n", "\r", ":"))):
+        raise HTTPException(422, "Enter a new password with at least 8 characters; colons and line breaks are not allowed")
+    if payload.action in ("create", "edit") and payload.shell and (not payload.shell.startswith("/") or "\x00" in payload.shell):
+        raise HTTPException(422, "Shell must be an absolute path")
+    if payload.action in ("create", "edit") and payload.home and (not payload.home.startswith("/") or "\x00" in payload.home):
+        raise HTTPException(422, "Home directory must be an absolute path")
+    if payload.action == "edit" and not (payload.shell or payload.home or payload.groups):
+        raise HTTPException(422, "Specify a shell, home directory, or supplementary groups to update")
+    if any(not re.fullmatch(r"[a-z_][a-z0-9_-]{0,31}", group) for group in payload.groups):
+        raise HTTPException(422, "Invalid group name")
     script = r'''import pwd,subprocess,sys
-username,action=sys.argv[1:]
+username,action,shell,home,groups=sys.argv[1:]
 try: account=pwd.getpwnam(username)
-except KeyError: raise SystemExit('Account not found')
-if account.pw_uid==0 and action=='lock': raise SystemExit('The root account cannot be locked here')
+except KeyError: account=None
+if action=='create':
+    if account: raise SystemExit('Account already exists')
+    args=['useradd','--create-home']
+    if shell: args += ['--shell',shell]
+    if home: args += ['--home-dir',home]
+    if groups: args += ['--groups',groups]
+    args.append(username)
+    result=subprocess.run(args,capture_output=True,text=True)
+    if result.returncode: raise SystemExit(result.stderr.strip() or result.stdout.strip() or 'Account creation failed')
+    print('KVM_STDIN_READY',flush=True)
+    password=sys.stdin.readline().rstrip('\n')
+    result=subprocess.run(['chpasswd'],input=f'{username}:{password}\n',text=True,capture_output=True)
+    if result.returncode: raise SystemExit(result.stderr.strip() or 'Could not set account password')
+    sys.exit(0)
+if not account: raise SystemExit('Account not found')
+if action=='delete':
+    result=subprocess.run(['userdel',username],capture_output=True,text=True)
+    if result.returncode: raise SystemExit(result.stderr.strip() or result.stdout.strip() or 'Account deletion failed')
+    sys.exit(0)
+if action=='lock' and account.pw_uid==0: raise SystemExit('The root account cannot be locked here')
 if action=='lock': args=['usermod','--lock',username]
 elif action=='unlock': args=['usermod','--unlock',username]
+elif action=='edit':
+    args=['usermod']
+    if shell: args += ['--shell',shell]
+    if home: args += ['--home',home]
+    if groups: args += ['--groups',groups]
+    args.append(username)
 elif action=='password':
     print('KVM_STDIN_READY',flush=True)
     password=sys.stdin.readline().rstrip('\n')
@@ -1473,26 +1748,28 @@ result=subprocess.run(args,capture_output=True,text=True)
 if result.returncode: raise SystemExit(result.stderr.strip() or result.stdout.strip() or 'Account action failed')
 '''
     extra_input = (payload.password or "") + "\n" if payload.action == "password" else None
+    if payload.action == "create":
+        extra_input = (payload.password or "") + "\n"
     try:
-        run_sudo_python(host, script, [payload.username, payload.action], timeout=30, stdin_data=extra_input)
+        run_sudo_python(host, script, [payload.username, payload.action, payload.shell or "", payload.home or "", ",".join(payload.groups)], timeout=45, stdin_data=extra_input)
     except Exception as exc:
-        record_audit(actor, f"account.{payload.action}", f"{host_id}/{payload.username}", "failure", str(exc)[:500])
+        record_audit(access.user_id, f"account.{payload.action}", f"{host_id}/{payload.username}", "failure", str(exc)[:500])
         raise HTTPException(502, f"Could not update the account: {exc}") from exc
-    record_audit(actor, f"account.{payload.action}", f"{host_id}/{payload.username}")
+    record_audit(access.user_id, f"account.{payload.action}", f"{host_id}/{payload.username}")
     return {"success": True}
 
 
-@app.post("/kvm-api/hosts/{host_id}/services/actions", dependencies=[Depends(require_auth)])
-def control_service(host_id: str, payload: ServiceAction, service_name: str, actor: str = Depends(require_auth)) -> dict[str, bool]:
+@app.post("/kvm-api/hosts/{host_id}/services/actions")
+def control_service(host_id: str, payload: ServiceAction, service_name: str, access: AuthorizationContext = Depends(require_permission("host_admin"))) -> dict[str, bool]:
     if not re.fullmatch(r"[A-Za-z0-9_.@:-]+", service_name):
         raise HTTPException(422, "Invalid service name")
     host = cockpit_host_record(host_id)
     try:
         run_sudo_python(host, SERVICE_ACTION_SCRIPT, [payload.action, service_name], timeout=45)
     except Exception as exc:
-        record_audit(actor, f"service.{payload.action}", f"{host_id}/{service_name}", "failure", str(exc))
+        record_audit(access.user_id, f"service.{payload.action}", f"{host_id}/{service_name}", "failure", str(exc))
         raise HTTPException(502, f"Could not perform the service action: {exc}") from exc
-    record_audit(actor, f"service.{payload.action}", f"{host_id}/{service_name}")
+    record_audit(access.user_id, f"service.{payload.action}", f"{host_id}/{service_name}")
     return {"success": True}
 
 
@@ -1525,8 +1802,8 @@ def run_sudo_python(host: dict[str, Any], script: str, args: list[str] | None = 
         client.close()
 
 
-@app.post("/kvm-api/hosts/{host_id}/vms/actions", dependencies=[Depends(require_auth)])
-def control_vm(host_id: str, payload: VMAction, vm_name: str, actor: str = Depends(require_auth)) -> dict[str, bool]:
+@app.post("/kvm-api/hosts/{host_id}/vms/actions")
+def control_vm(host_id: str, payload: VMAction, vm_name: str, access: AuthorizationContext = Depends(require_permission("vm_operator"))) -> dict[str, bool]:
     host = cockpit_host_record(host_id)
     encoded_name = base64.b64encode(vm_name.encode()).decode()
     action_script = r'''import base64,subprocess,sys
@@ -1543,14 +1820,14 @@ if result.returncode: raise SystemExit(result.stderr.strip() or result.stdout.st
     try:
         run_sudo_python(host, action_script, [encoded_name, payload.action], timeout=45)
     except Exception as exc:
-        record_audit(actor, f"vm.{payload.action}", f"{host_id}/{vm_name}", "failure", str(exc))
+        record_audit(access.user_id, f"vm.{payload.action}", f"{host_id}/{vm_name}", "failure", str(exc))
         raise HTTPException(502, f"Could not perform the libvirt action: {exc}") from exc
-    record_audit(actor, f"vm.{payload.action}", f"{host_id}/{vm_name}")
+    record_audit(access.user_id, f"vm.{payload.action}", f"{host_id}/{vm_name}")
     return {"success": True}
 
 
-@app.post("/kvm-api/hosts/{host_id}/vms/autostart", dependencies=[Depends(require_auth)])
-def set_vm_autostart(host_id: str, payload: VMAutostart, vm_name: str, actor: str = Depends(require_auth)) -> dict[str, bool]:
+@app.post("/kvm-api/hosts/{host_id}/vms/autostart")
+def set_vm_autostart(host_id: str, payload: VMAutostart, vm_name: str, access: AuthorizationContext = Depends(require_permission("vm_operator"))) -> dict[str, bool]:
     host = cockpit_host_record(host_id)
     encoded_name = base64.b64encode(vm_name.encode()).decode()
     action_script = r'''import base64,subprocess,sys
@@ -1568,14 +1845,14 @@ if result.returncode: raise SystemExit(result.stderr.strip() or result.stdout.st
     try:
         run_sudo_python(host, action_script, [encoded_name, str(payload.enabled).lower()], timeout=45)
     except Exception as exc:
-        record_audit(actor, "vm.autostart", f"{host_id}/{vm_name}", "failure", str(exc))
+        record_audit(access.user_id, "vm.autostart", f"{host_id}/{vm_name}", "failure", str(exc))
         raise HTTPException(502, f"Could not change autostart: {exc}") from exc
-    record_audit(actor, "vm.autostart", f"{host_id}/{vm_name}", detail=f"enabled={payload.enabled}")
+    record_audit(access.user_id, "vm.autostart", f"{host_id}/{vm_name}", detail=f"enabled={payload.enabled}")
     return {"success": True}
 
 
-@app.get("/kvm-api/audit", dependencies=[Depends(require_auth)])
-def list_audit(limit: int = 100) -> list[dict[str, Any]]:
+@app.get("/kvm-api/audit")
+def list_audit(limit: int = 100, access: AuthorizationContext = Depends(require_permission("host_admin"))) -> list[dict[str, Any]]:
     limit = min(max(limit, 1), 500)
     with connect_db() as db:
         rows = db.execute("SELECT occurred_at,actor,action,target,outcome,detail FROM audit_events ORDER BY occurred_at DESC LIMIT ?", (limit,))

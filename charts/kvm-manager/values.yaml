@@ -5,8 +5,13 @@ rancher:
   apiUrl: ""
   # Optional PEM CA bundle for a Rancher instance using a private CA.
   caBundle: ""
+  # Rancher Global Role IDs. Empty roles inherit access only through higher tiers.
+  viewerGlobalRoles: []
+  vmOperatorGlobalRoles: []
+  # Kept for backwards compatibility; these users receive full host administration.
   allowedGlobalRoles:
     - admin
+  auditRetentionDays: 90
 
 backend:
   namespace: rancher-kvm-registry

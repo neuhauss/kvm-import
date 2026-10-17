@@ -26,7 +26,10 @@ Set these values in the Rancher chart installation form when they differ from th
 | `rancher.publicOrigin` | HTTPS Rancher address used by browsers and the API. Replace the example value. |
 | `rancher.apiUrl` | Optional API address reachable from the backend pod. Defaults to `rancher.publicOrigin`. |
 | `rancher.caBundle` | Optional PEM CA bundle if Rancher uses a private CA. Leave empty for publicly trusted certificates. |
-| `rancher.allowedGlobalRoles` | Rancher Global Roles allowed to administer imported hosts. Defaults to `admin`. |
+| `rancher.viewerGlobalRoles` | Rancher Global Role IDs allowed to view hosts and inventories. Empty by default. |
+| `rancher.vmOperatorGlobalRoles` | Rancher Global Role IDs allowed to view and operate VMs, including VM consoles and host refresh. Empty by default. |
+| `rancher.allowedGlobalRoles` | Rancher Global Role IDs allowed to administer hosts. Defaults to `admin`; existing installations can keep this setting. Host administrators inherit all lower permissions. |
+| `rancher.auditRetentionDays` | Number of days to retain audit events. Defaults to `90`; events are pruned when the API starts. |
 | `backend.namespace` | Namespace for the API and asset server. Defaults to `rancher-kvm-registry`. |
 | `backend.storage.size` | Persistent volume size for the API database. Defaults to `1Gi`. |
 | `backend.storage.storageClassName` | Optional StorageClass. Empty uses the cluster default. |
@@ -41,6 +44,26 @@ For a Rancher installation using a private CA, paste the CA certificate chain in
 After installation, open **KVM**, select **Add host**, and enter the host address and SSH credentials for an existing Linux KVM/libvirt server. This extension imports and administers an existing host; it does not install KVM or modify host packages. Verify the SSH host fingerprint or explicitly enable first-use key acceptance in the form.
 
 The SSH account needs the permissions required by the requested actions. Allow outbound SSH from the API pod to the host, and allow the browser to reach Rancher over HTTPS.
+
+## Rancher role mapping
+
+Create custom Rancher **Global Roles** and assign them to users with Rancher Global Role Bindings. Configure the corresponding role IDs in the chart values. The access tiers are cumulative:
+
+- Viewer: view host and VM inventories.
+- VM Operator: viewer access plus VM lifecycle actions, VM consoles, and host refresh.
+- Host Admin: all previous access plus host import, edit, removal, Cockpit, terminal, and host configuration changes.
+
+The API enforces these permissions for HTTP and WebSocket requests; hiding controls in the UI does not replace backend authorization. This release applies permissions globally to the KVM extension. Host-by-host or namespace/project scoping is not implemented.
+
+Example chart values (replace the entries with the IDs of Global Roles created in your Rancher instance):
+
+```yaml
+rancher:
+  viewerGlobalRoles: [kvm-viewer]
+  vmOperatorGlobalRoles: [kvm-vm-operator]
+  allowedGlobalRoles: [admin, kvm-host-admin]
+  auditRetentionDays: 90
+```
 
 ## Update or remove
 

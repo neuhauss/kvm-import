@@ -53,6 +53,12 @@ spec:
               value: {{ trimSuffix "/" .Values.rancher.publicOrigin | quote }}
             - name: KVM_ALLOWED_GLOBAL_ROLES
               value: {{ join "," .Values.rancher.allowedGlobalRoles | quote }}
+            - name: KVM_VIEWER_GLOBAL_ROLES
+              value: {{ join "," .Values.rancher.viewerGlobalRoles | quote }}
+            - name: KVM_VM_OPERATOR_GLOBAL_ROLES
+              value: {{ join "," .Values.rancher.vmOperatorGlobalRoles | quote }}
+            - name: KVM_AUDIT_RETENTION_DAYS
+              value: {{ .Values.rancher.auditRetentionDays | default 90 | quote }}
           ports:
             - name: http
               containerPort: 8080

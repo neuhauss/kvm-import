@@ -85,7 +85,7 @@
         <h1>{{ t('hosts.title') }}</h1>
         <p class="text-muted">{{ t('hosts.description') }}</p>
       </div>
-      <div class="header-actions"><button class="btn role-secondary" @click="toggleAudit">{{ showingAudit ? t('hosts.title') : t('hosts.audit') }}</button><button class="btn role-primary" @click="openAdd">{{ t('hosts.add') }}</button></div>
+      <div class="header-actions"><button v-if="permissions.canAdministerHost" class="btn role-secondary" @click="toggleAudit">{{ showingAudit ? t('hosts.title') : t('hosts.audit') }}</button><button v-if="permissions.canAdministerHost" class="btn role-primary" @click="openAdd">{{ t('hosts.add') }}</button></div>
     </div>
 
     <div v-if="error" class="banner error">{{ error }}</div>
@@ -102,7 +102,7 @@
     <div v-else-if="hosts.length === 0" class="empty-state">
       <h2>{{ t('hosts.emptyTitle') }}</h2>
       <p>{{ t('hosts.emptyDescription') }}</p>
-      <button class="btn role-primary" @click="openAdd">{{ t('hosts.add') }}</button>
+      <button v-if="permissions.canAdministerHost" class="btn role-primary" @click="openAdd">{{ t('hosts.add') }}</button>
     </div>
     <div v-else class="table-wrap">
       <table class="table">
@@ -124,9 +124,9 @@
                   <button class="host-menu-item" role="menuitem" @click="openCloudNative(host)">{{ t('hosts.uiMenu') }}</button>
                 </div>
               </div>
-              <button class="btn role-link btn-sm" :disabled="refreshing === host.id" @click="refresh(host)">{{ refreshing === host.id ? t('hosts.refreshing') : t('hosts.refresh') }}</button>
-              <button class="btn role-link btn-sm" @click="edit(host)">{{ t('hosts.edit') }}</button>
-              <button class="btn role-link btn-sm danger-text" @click="remove(host)">{{ t('hosts.remove') }}</button>
+              <button v-if="permissions.canOperateVms" class="btn role-link btn-sm" :disabled="refreshing === host.id" @click="refresh(host)">{{ refreshing === host.id ? t('hosts.refreshing') : t('hosts.refresh') }}</button>
+              <button v-if="permissions.canAdministerHost" class="btn role-link btn-sm" @click="edit(host)">{{ t('hosts.edit') }}</button>
+              <button v-if="permissions.canAdministerHost" class="btn role-link btn-sm danger-text" @click="remove(host)">{{ t('hosts.remove') }}</button>
             </td>
           </tr>
         </tbody>
@@ -146,6 +146,7 @@ type Host = {
   last_checked_at?: string; last_error?: string;
 };
 type AuditEvent = { occurred_at: string; actor: string; action: string; target: string; outcome: string; detail?: string };
+type Permissions = { canOperateVms: boolean; canAdministerHost: boolean };
 
 const apiBase = (process.env.VUE_APP_KVM_API || '/kvm-api').replace(/\/$/, '');
 
@@ -153,7 +154,7 @@ export default defineComponent({
   name: 'KvmHosts',
   data() {
     return {
-      hosts: [] as Host[], loading: false, refreshing: '' as string, dialog: false, editing: '' as string,
+      hosts: [] as Host[], permissions: { canOperateVms: false, canAdministerHost: false } as Permissions, loading: false, refreshing: '' as string, dialog: false, editing: '' as string,
       saving: false, error: '', formError: '', openMenu: '' as string, hostMenuStyle: {} as Record<string, string>,
       form: { name: '', address: '', port: 22, username: '', password: '', ssh_private_key: '', ssh_key_passphrase: '', remove_ssh_key: false, accept_new_host_key: false },
       showingAudit: false, auditEvents: [] as AuditEvent[], auditLoading: false, auditError: '',
@@ -189,7 +190,10 @@ export default defineComponent({
     },
     async load() {
       this.loading = true; this.error = '';
-      try { this.hosts = await this.request('/hosts'); }
+      try {
+        const [hosts, permissions] = await Promise.all([this.request('/hosts'), this.request('/permissions')]);
+        this.hosts = hosts; this.permissions = permissions;
+      }
       catch (e) {
         this.hosts = [];
         this.error = `${this.t('hosts.cannotLoad')}: ${(e as Error).message}. ${this.t('hosts.verifyService')}`;

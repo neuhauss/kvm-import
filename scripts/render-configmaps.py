@@ -39,6 +39,9 @@ files.append("plugin/package.json")
 files.extend(f"plugin/{path.relative_to(bundle_dir).as_posix()}" for path in asset_files)
 assets["data"][f"files-{version}.txt"] = "\n".join(files) + "\n"
 assets["data"][f"package-{version}.json"] = (bundle_dir / "package.json").read_text()
+# Rancher's UIPlugin cache fetches package.json from the endpoint root, while
+# the Dashboard's extension file proxy serves the bundle under /plugin/.
+assets["data"][f"package-root-{version}.json"] = (bundle_dir / "package.json").read_text()
 for path in bundle_js:
     assets["data"][path.name] = path.read_text()
 for path in asset_files:
@@ -47,7 +50,7 @@ for path in asset_files:
 # only the current plus previous charts in the legacy catalog endpoint.
 for key in list(assets["data"]):
     if key.startswith(("files-", "package-", "kvm-manager-", "asset-")):
-        if key not in {f"files-{version}.txt", f"package-{version}.json", *(path.name for path in bundle_js), *asset_keys.values()}:
+        if key not in {f"files-{version}.txt", f"package-{version}.json", f"package-root-{version}.json", *(path.name for path in bundle_js), *asset_keys.values()}:
             del assets["data"][key]
 assets["data"]["catalog-index.yaml"] = (ROOT / "deploy/extension-catalog/index.yaml").read_text()
 binary_data = assets.setdefault("binaryData", {})
@@ -100,6 +103,7 @@ for doc in ui_docs:
         items = config_map.setdefault("items", [])
         new_items = [
             (f"files-{version}.txt", f"kvm-manager/{version}/files.txt"),
+            (f"package-root-{version}.json", f"kvm-manager/{version}/package.json"),
             (f"package-{version}.json", f"kvm-manager/{version}/plugin/package.json"),
         ]
         new_items.extend(

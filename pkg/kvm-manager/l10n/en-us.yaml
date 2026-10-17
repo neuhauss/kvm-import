@@ -67,7 +67,7 @@ kvmManager:
     openCockpit: Open Cockpit
     updateData: Refresh data
     updating: Refreshing...
-    lastUpdatedAt: "Last full refresh: {time}"
+    lastUpdatedAt: "Host metrics updated: {time} · auto-refresh every 30 seconds"
     updateFailedAt: "Refresh failed. Showing data from {time}."
     filterVmState: Filter virtual machines by state
     allVmStates: All VM states
@@ -90,6 +90,52 @@ kvmManager:
     selinux: SELinux
     subscriptions: Subscriptions
     terminal: Terminal
+    edit: Edit
+    delete: Delete
+    cancel: Cancel
+    saveChanges: Save changes
+    addPool: Add storage pool
+    editPool: Edit storage pool target
+    poolName: Pool name
+    poolPath: Target directory
+    confirmPoolCreate: Create storage pool {name} at {path}?
+    confirmPoolEdit: Change the target directory for storage pool {name} to {path}? The pool must be stopped. Existing files will not be moved.
+    confirmPoolDelete: Remove storage pool {name}? This stops the pool if active and removes its configuration, but keeps files in its directory. VMs using the pool may be affected.
+    networkEditable: Edit IPv4 settings for NetworkManager connections, and control libvirt networks.
+    searchNetworkItems: Search interfaces, connections, routes
+    allNetworkItems: All network states
+    activeInterfaces: "{count} active"
+    activeConnections: "{count} active"
+    activeVirtualNetworks: "{count} active"
+    interfaceDetails: Link state, assigned addresses, MAC address, and MTU.
+    networkConnectionDetails: NetworkManager profiles and their current IPv4 configuration.
+    libvirtNetworkDetails: Virtual networks provided by libvirt.
+    routeDetails: Default gateway and routes known to the host.
+    defaultGateway: Default gateway
+    noDefaultGateway: No default gateway was reported by the host.
+    noNetworkMatch: No network items match this search and state filter.
+    dnsServers: DNS servers
+    ipv4Configuration: IPv4 configuration
+    persistence: Configuration
+    editNetwork: Edit network connection
+    ipMethod: IPv4 method
+    manual: Manual
+    confirmNetworkEdit: Save IPv4 settings for {name}? Applying them may disconnect host management.
+    addAccount: Add account
+    editAccount: Edit account
+    confirmAccountCreate: Create local account {username} on the host?
+    confirmAccountEdit: Update local account {username}?
+    confirmAccountDelete: Delete local account {username}? The account home directory is kept.
+    addRepository: Add repository
+    confirmRepositoryAdd: Add repository {alias} to the host?
+    confirmRepositoryRemove: Remove repository {alias} from the host?
+    registerSubscription: Register subscription
+    deregisterSubscription: Deregister system
+    registrationEmail: SUSE account email
+    registrationCode: Registration code
+    registrationCodeHelp: The code is sent to SUSEConnect for this operation and is not stored by the extension.
+    confirmSubscriptionRegister: Register this host with SUSE Customer Center using the entered code?
+    confirmSubscriptionDeregister: Deregister this host from SUSE Customer Center? SUSEConnect credentials on the host will be removed.
     group_system: System
     group_tools: Tools
     accountsDescription: Local users and their login shells, groups, and home directories.
@@ -104,7 +150,7 @@ kvmManager:
     unlock: Unlock
     setPassword: Set password
     newPassword: New password
-    accountsWarning: Account changes affect host login access. The SSH account used by this extension cannot be locked here.
+    accountsWarning: Account changes affect host login access. The SSH account used by this extension and root cannot be locked or deleted here.
     confirmAccountAction: "{action} account {username}? This changes host login access."
     repositoriesDescription: Software sources registered with Zypper.
     repository: Repository
@@ -117,7 +163,7 @@ kvmManager:
     disable: Disable
     refreshRepositories: Refresh repositories
     noRepositories: No software repositories were returned by the host.
-    repositoryWarning: Enabling, disabling, or refreshing repositories changes the host software configuration.
+    repositoryWarning: Adding, removing, enabling, disabling, or refreshing repositories changes the host software configuration.
     confirmRepositoryRefresh: Refresh repository metadata now? This may use the host network and take several minutes.
     confirmRepositoryChange: "{action} repository {alias}? This changes the host software configuration."
     selinuxDescription: SELinux status and enforcement mode on this host.
@@ -128,13 +174,13 @@ kvmManager:
     setEnforcing: Set enforcing
     setPermissive: Set permissive
     confirmSecurityMode: "Change SELinux to {mode}? This changes the host security policy."
-    subscriptionsDescription: SUSE Customer Center registration state reported by SUSEConnect.
+    subscriptionsDescription: View and manage this host's SUSE Customer Center registration through SUSEConnect.
     client: Client
     notInstalled: Not installed
     registrationStatus: Registration status
     noSubscriptionData: No registration status was returned by the host.
     refreshStatus: Refresh status
-    subscriptionWarning: Registration and deregistration are not exposed here; manage registration codes through your approved SUSE process.
+    subscriptionWarning: Registration codes are sent only to SUSEConnect for the requested operation and are not stored by the extension. Deregistration removes this host's SUSEConnect registration.
     terminalDescription: Commands run on the host as SSH user {user}. Use only commands you are authorized to run.
     command: Command
     commandPlaceholder: "uname -a"
@@ -177,7 +223,7 @@ kvmManager:
     filterVms: Filter virtual machines
     vmLifecycle: Lifecycle, disk and network details, and autostart.
     adminAreas: Administration areas
-    storageDescription: Libvirt storage pools, host block devices, and mounted filesystems.
+    storageDescription: Create and remove libvirt directory pools, and review host block devices and mounted filesystems.
     noVm: No virtual machines found.
     storagePools: Libvirt storage pools
     noPool: No libvirt storage pools found.
@@ -265,6 +311,29 @@ kvmManager:
     actionFailed: Action failed
     confirmAction: "{action} virtual machine {name}?"
     confirmService: "{action} service {name}? This can affect the host."
+    host: Host
+    details: Details
+    hostHealthy: Host health looks good
+    attentionRequired: Attention required
+    failedServicesShort: "{count} failed services"
+    fullFilesystems: "{count} filesystems at 90% or more"
+    noCapacityWarnings: No capacity warnings
+    searchStorage: Search pools, devices, and mount points
+    storagePoolHelp: Libvirt pools describe where virtual machine storage is kept.
+    storageDevicesHelp: Physical and virtual block devices detected on the host.
+    filesystemUsageHelp: Mounted filesystems and their current capacity usage.
+    noStorageMatch: No storage items match this search.
+    searchAccounts: Search accounts, groups, and home directories
+    noAccountMatch: No accounts match this search.
+    searchRepositories: Search repositories, aliases, and URLs
+    noRepositoryMatch: No repositories match this search.
+    storagePool: Storage pool
+    uuid: UUID
+    load: Load state
+    uid: UID
+    gid: GID
+    autorefresh: Automatic refresh
+    mtu: MTU
   common:
     yes: Yes
     no: No

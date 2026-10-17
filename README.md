@@ -6,7 +6,7 @@ The extension provides host inventory and health details, VM inventory and seria
 
 ## Requirements
 
-- Rancher 2.10 or later with UI Extensions enabled (the published chart currently targets Rancher 2.15+).
+- Rancher 2.15 or later with Rancher UI Extensions 3.x enabled.
 - Existing Linux hosts with KVM/libvirt and SSH access.
 - A Kubernetes cluster with a default StorageClass, or a StorageClass selected for the API data PVC.
 - A public API image from GHCR or Docker Hub, plus access to the Rancher HTTPS endpoint from the API pod.
@@ -24,12 +24,12 @@ Then find **KVM Manager** in **Apps > Charts** and install it. The chart install
 
 ## Security notes
 
-- The API authenticates requests through Rancher and restricts access by Global Role. The default allowed role is `admin`.
+- The API authenticates each request through Rancher Global Role Bindings. Configure viewer, VM operator, and host administrator Global Role IDs in the Helm values; `admin` remains the default host administrator role.
 - SSH passwords, private keys, and key passphrases are encrypted in SQLite using `KVM_CREDENTIAL_KEY`.
 - Keep the encryption key and the API data volume together in secure backups. Losing the key makes saved credentials unrecoverable.
 - Verify SSH host fingerprints before trusting them. The UI can pin a host key during import when the operator explicitly enables that option.
 - Cockpit access is proxied through an SSH tunnel. Rancher session cookies are not forwarded to the KVM host.
-- The audit log records administrative actions without passwords or private keys.
+- The audit log records administrative actions without passwords or private keys. Events are indexed and retained for 90 days by default; configure retention with `rancher.auditRetentionDays`.
 
 ## Build and release
 
