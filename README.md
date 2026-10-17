@@ -33,7 +33,7 @@ Then find **KVM Manager** in **Apps > Charts** and install it. The chart install
 
 ## Build and release
 
-Development requirements: Node.js 24+, Yarn, Python 3, PyYAML, and Helm.
+Development requirements: Node.js 24+, Yarn, Python 3, and PyYAML.
 
 ```sh
 yarn install --frozen-lockfile
@@ -45,6 +45,8 @@ To prepare a local release bundle and manifests:
 ```sh
 CHART_REPO_URL=https://OWNER.github.io/REPOSITORY scripts/package-release.sh
 ```
+
+For the short local preview workflow, see [LOCAL-DEPLOYMENT.md](docs/LOCAL-DEPLOYMENT.md). It packages, applies, waits, and verifies the extension in one command without publishing artifacts.
 
 Publishing a GitHub Release tagged `kvm-manager-<version>` builds the API image on GHCR and publishes the extension chart to GitHub Pages. Make the GHCR package public for community installs. Docker Hub publishing is an optional secondary target and requires the repository secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`.
 

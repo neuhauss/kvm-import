@@ -71,6 +71,18 @@ kvmManager:
     exportCsv: Export CSV
     detail: Details
   cloudNative:
+    storagePoolType: Directory storage pool
+    storagePoolFormHelp: This libvirt pool uses a directory on the host. The extension creates the directory when needed; existing files are not moved.
+    poolNameHelp: Use letters, numbers, dots, underscores, plus signs, or hyphens.
+    poolPathHelp: Enter an absolute path on the KVM host. Ensure the host has enough free space and suitable permissions.
+    accountSettings: Account settings
+    accountFormHelp: Create a local host account or update its login settings. Changes affect access to the operating system.
+    accountNameHelp: Use a lowercase Linux username. The name cannot be changed after account creation.
+    shellHelp: Enter an absolute path to an installed login shell, for example /bin/bash. Leave blank to keep the current shell when editing.
+    homeHelp: Enter an absolute directory path. Leave blank to use the system default when creating or keep the current home when editing.
+    groupsEditHelp: Comma-separated supplementary groups. Saving replaces the account's supplementary group list.
+    passwordPolicyHelp: Use at least 8 characters. Colons and line breaks are not allowed.
+    accountFormWarning: Do not remove the SSH user's access to required host administration groups. Group changes replace the supplementary group list.
     title: Virtualization administration
     subtitle: Operational overview and tools for this KVM host.
     openCockpit: Open Cockpit
@@ -139,12 +151,18 @@ kvmManager:
     confirmRepositoryAdd: Add repository {alias} to the host?
     confirmRepositoryRemove: Remove repository {alias} from the host?
     registerSubscription: Register subscription
+    changeSubscription: Change subscription
     deregisterSubscription: Deregister system
     registrationEmail: SUSE account email
     registrationCode: Registration code
     registrationCodeHelp: The code is sent to SUSEConnect for this operation and is not stored by the extension.
     confirmSubscriptionRegister: Register this host with SUSE Customer Center using the entered code?
+    confirmSubscriptionChange: Replace the current subscription? This deregisters the current system, then registers it with the new code. If the new code is rejected, register the host again with a valid code.
     confirmSubscriptionDeregister: Deregister this host from SUSE Customer Center? SUSEConnect credentials on the host will be removed.
+    registerSubscriptionHelp: Enter the SUSE account email and a registration code for this SLES host.
+    changeSubscriptionHelp: The current registration is removed before the new code is applied. Make sure the new code is valid and has an available system slot.
+    registered: Registered
+    notRegistered: Not registered
     group_system: System
     group_tools: Tools
     accountsDescription: Local users and their login shells, groups, and home directories.
@@ -190,6 +208,24 @@ kvmManager:
     noSubscriptionData: No registration status was returned by the host.
     refreshStatus: Refresh status
     subscriptionWarning: Registration codes are sent only to SUSEConnect for the requested operation and are not stored by the extension. Deregistration removes this host's SUSEConnect registration.
+    extensionsTitle: Modules and extensions
+    extensionsDescription: Activate or deactivate add-ons available for this host, including High Availability when offered by its subscription.
+    haAddon: High Availability (SLE HA)
+    haAddonActive: The SLE HA product is registered and its repositories are enabled on this host.
+    haAddonAvailable: This host can activate SLE HA with its current subscription.
+    haAddonNotOffered: SUSEConnect did not list the SLE HA add-on for this host and subscription.
+    loadingExtensions: Loading available add-ons...
+    noExtensions: SUSEConnect did not return any available add-ons for this host.
+    extensionName: Add-on
+    productId: Product identifier
+    extensionActive: Active
+    extensionAvailable: Available
+    activateExtension: Activate
+    deactivateExtension: Deactivate
+    extensionCodeRequired: This add-on requires a registration code.
+    coreExtensionProtected: Required system module
+    confirmExtensionAction: "{action} {name}? SUSEConnect changes registration and repositories; it does not install or remove packages."
+    extensionChangesWarning: Add-on changes may require a separate registration code. SUSEConnect enables or disables repositories but does not install or remove packages. Deactivated add-on packages may stop receiving updates.
     terminalDescription: Commands run on the host as SSH user {user}. Use only commands you are authorized to run.
     command: Command
     commandPlaceholder: "uname -a"
@@ -197,7 +233,13 @@ kvmManager:
     runningCommand: Running...
     terminalWarning: Commands run as the imported SSH user. This terminal is audited, but command text is not stored.
     vmConsole: Virtual machine terminal
+    serialConsole: serial console
     consoleWarning: The VM must be running and configured with a serial console and a login prompt (for example, serial-getty on ttyS0). Terminal input is not stored.
+    serialConsoleMissing: No serial console is configured in this VM. Add a serial console in its libvirt definition and enable a guest login prompt such as serial-getty@ttyS0.
+    consoleStarting: Connecting to the VM serial console...
+    consoleClosed: Terminal connection closed
+    collapseTerminal: Collapse
+    expandTerminal: Expand
     reconnectConsole: Reconnect
     console_connecting: Connecting
     console_connected: Connected
@@ -353,6 +395,66 @@ kvmManager:
     gid: GID
     autorefresh: Automatic refresh
     mtu: MTU
+  clusters:
+    title: Clusters
+    subtitle: Check SLE HA readiness on registered KVM hosts and prepare cluster administration.
+    refresh: Refresh HA status
+    refreshing: Refreshing...
+    loading: Checking HA status on registered hosts...
+    loadError: Could not load HA readiness
+    registeredHosts: Registered hosts
+    haEnabledHosts: Hosts with SLE HA
+    haEnabledHostsHelp: Add-on is registered on the host
+    activeClusters: Detected clusters
+    activeClustersHelp: Pacemaker responds to crm_mon
+    readiness: READ-ONLY HOST CHECKS
+    hostsTitle: SLE HA readiness
+    hostsDescription: The extension checks SUSEConnect, the SLE HA add-on, Pacemaker and Corosync services, and whether Pacemaker reports a cluster. It does not change host configuration.
+    manageHosts: Manage hosts
+    noHosts: No KVM hosts registered
+    noHostsHelp: Import existing SUSE Linux KVM hosts before planning a cluster.
+    addHost: Add a host
+    host: Host
+    hostState: SSH state
+    haAddon: SLE HA add-on
+    haEnabled: Enabled
+    haAvailable: Available
+    haUnavailable: Not available
+    haUnknown: Check failed
+    clusterStack: Cluster services
+    clusterState: Cluster status
+    resources: Host resources
+    checkedAt: Last host check
+    manageSubscription: Manage add-ons
+    pacemaker: Pacemaker
+    corosync: Corosync
+    hawk: Hawk
+    active: active
+    inactive: inactive
+    notInstalled: not installed
+    clusterDetected: Cluster detected
+    clusterNotInitialized: Not initialized
+    haStackMissing: HA tools not installed
+    haStackStopped: HA services inactive
+    notApplicable: Not ready
+    readOnlyNote: HA detection is read-only. An active SLE HA add-on does not by itself mean the host is ready to join a cluster; network, time synchronization, quorum, and fencing still need validation.
+    hawkTitle: Cluster administration workspace
+    hawkDescription: The next stages follow SUSE Hawk concepts and SLE HA workflows. Sections stay inactive until a cluster API and its safety checks are implemented.
+    planned: Planned
+    availableAfterCluster: After cluster setup
+    hawkRoadmapSafety: No cluster actions are available yet. Future changes will use SUSE-supported SLE HA tools such as crmsh, Pacemaker, Corosync, Hawk, and supported fencing and quorum components.
+    area_overview: Overview
+    area_overview_description: Cluster health, quorum, designated coordinator, and recent activity.
+    area_nodes: Nodes
+    area_nodes_description: Membership, node state, standby, maintenance, and node-level operations.
+    area_resources: Resources
+    area_resources_description: Resource agents, primitives, groups, clones, and their current placement.
+    area_constraints: Constraints
+    area_constraints_description: Location, ordering, and colocation rules with readable summaries.
+    area_activity: Activity and events
+    area_activity_description: Pacemaker actions, failures, history, and filtered cluster logs.
+    area_fencing: Fencing and quorum
+    area_fencing_description: STONITH devices, watchdog/SBD, QDevice, and quorum configuration.
   common:
     yes: Yes
     no: No

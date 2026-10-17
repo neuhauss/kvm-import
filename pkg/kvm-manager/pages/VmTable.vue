@@ -13,6 +13,7 @@
           <td class="row-actions">
             <button class="btn role-link btn-sm" @click="$emit('details', vm)">{{ t('details') }}</button>
             <template v-if="canOperate">
+              <button class="btn role-secondary btn-sm" :disabled="!isRunning(vm)" :title="!isRunning(vm) ? t('consoleRequiresRunning') : t('console')" @click="$emit('console', vm)">{{ t('console') }}</button>
               <button v-if="isRunning(vm) || isPaused(vm)" class="btn role-secondary btn-sm" :disabled="busy === vm.name" @click="$emit('action', vm, isPaused(vm) ? 'resume' : 'pause')">{{ isPaused(vm) ? t('resume') : t('pause') }}</button>
               <button v-if="!isRunning(vm) && !isPaused(vm)" class="btn role-primary btn-sm" :disabled="busy === vm.name" @click="$emit('action', vm, 'start')">{{ t('start') }}</button>
               <button v-else class="btn role-secondary btn-sm" :disabled="busy === vm.name" @click="$emit('action', vm, 'shutdown')">{{ t('shutdown') }}</button>

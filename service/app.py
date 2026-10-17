@@ -47,7 +47,7 @@ if len(credential_key) < 32:
     raise RuntimeError("Configure KVM_CREDENTIAL_KEY with at least 32 random characters")
 FERNET_KEY = base64.urlsafe_b64encode(hashlib.sha256(credential_key.encode()).digest())
 cipher = Fernet(FERNET_KEY)
-app = FastAPI(title="Rancher KVM Host API", version="0.7.22")
+app = FastAPI(title="Rancher KVM Host API", version="0.7.30")
 RANCHER_PUBLIC_ORIGIN = os.getenv("RANCHER_PUBLIC_ORIGIN", "https://rancher.example.com").rstrip("/")
 RANCHER_PUBLIC_HOST = urlsplit(RANCHER_PUBLIC_ORIGIN).netloc
 COCKPIT_PORT = 9090
@@ -161,9 +161,10 @@ class AccountAction(BaseModel):
 
 
 class SubscriptionAction(BaseModel):
-    action: Literal["register", "deregister"]
+    action: Literal["register", "replace", "deregister", "activate_extension", "deactivate_extension"]
     email: str | None = Field(default=None, max_length=320)
     regcode: str | None = Field(default=None, max_length=256)
+    product: str | None = Field(default=None, max_length=256)
 
 
 def now() -> str:
@@ -571,6 +572,9 @@ if name not in [item.strip() for item in listing.stdout.splitlines()]:
 state = subprocess.run(base + ['domstate', name], capture_output=True, text=True, timeout=15)
 if state.returncode or state.stdout.strip().lower() != 'running':
     raise SystemExit('The virtual machine must be running to open its serial console')
+serial = subprocess.run(base + ['ttyconsole', name], capture_output=True, text=True, timeout=15)
+if serial.returncode or not serial.stdout.strip():
+    raise SystemExit('This virtual machine has no serial console configured. Add a serial console to its libvirt definition and enable a login prompt in the guest (for example, serial-getty@ttyS0).')
 os.execvp('virsh', base + ['console', name])
 '''
 
@@ -985,6 +989,78 @@ def list_hosts() -> list[dict[str, Any]]:
         return [public_host(row) for row in db.execute("SELECT * FROM hosts ORDER BY name")]
 
 
+HA_READINESS_SCRIPT = r'''import json,re,shutil,subprocess
+from datetime import datetime,timezone
+def run(args, timeout=15):
+    try:
+        result=subprocess.run(args,capture_output=True,text=True,timeout=timeout)
+        return result.returncode,(result.stdout or result.stderr).strip()
+    except Exception as error:
+        return 127,str(error)
+extensions=[]
+extension_error=''
+if shutil.which('SUSEConnect'):
+    code,text=run(['SUSEConnect','--list-extensions'],30)
+    if code:
+        extension_error=text
+    else:
+        label=''
+        for line in text.splitlines():
+            item=line.strip()
+            match=re.search(r'SUSEConnect\s+(-d\s+)?-p\s+(\S+)(.*)$',item)
+            if match:
+                product=match.group(2)
+                if product.startswith('sle-ha/'):
+                    extensions.append({'product':product,'active':bool(match.group(1)),'name':label.strip()})
+                label=''
+            elif item.upper().startswith(('AVAILABLE EXTENSIONS','REMARKS','MORE INFORMATION')):
+                label=''
+            elif item and not item.startswith(('Activate with:','Deactivate with:','(')):
+                label=item
+ha=next((item for item in extensions if item['active']),None)
+available=next(iter(extensions),None)
+services={}
+for name in ('pacemaker','corosync','hawk'):
+    code,text=run(['systemctl','is-active',name],8)
+    services[name]=text.splitlines()[0] if text else ('missing' if code==4 else 'unknown')
+commands={name:shutil.which(name) is not None for name in ('crm','crm_mon','corosync-cfgtool','stonith_admin')}
+cluster_status=''
+cluster_detected=False
+if commands['crm_mon'] and services['pacemaker']=='active':
+    code,cluster_status=run(['crm_mon','-1','-r'],15)
+    cluster_detected=code==0
+print(json.dumps({'suseconnect_available':bool(shutil.which('SUSEConnect')),'ha_available':available is not None,
+    'ha_active':ha is not None,'ha_product':(ha or available or {}).get('product',''),
+    'ha_product_name':(ha or available or {}).get('name',''),'extension_error':extension_error,
+    'commands':commands,'services':services,'cluster_detected':cluster_detected,
+    'checked_at':datetime.now(timezone.utc).isoformat(),
+    'cluster_summary':'\n'.join(cluster_status.splitlines()[:8]) if cluster_status else ''}))
+'''
+
+
+@app.get("/kvm-api/clusters/readiness", dependencies=[Depends(require_permission("viewer"))])
+def get_cluster_readiness() -> list[dict[str, Any]]:
+    """Read SUSE HA registration and cluster-stack status from imported hosts."""
+    with connect_db() as db:
+        rows=[dict(row) for row in db.execute('SELECT * FROM hosts ORDER BY name COLLATE NOCASE')]
+
+    def inspect(row: dict[str, Any]) -> dict[str, Any]:
+        item=public_host(row)
+        try:
+            row['password']=cipher.decrypt(row['password'].encode()).decode()
+            decrypt_host_credentials(row)
+            output=run_sudo_python(row,HA_READINESS_SCRIPT,timeout=55)
+            item['ha']=json.loads(output or '{}')
+        except Exception as error:
+            item['ha']={'suseconnect_available':False,'ha_available':False,'ha_active':False,
+                'ha_product':'','commands':{},'services':{},'cluster_detected':False,
+                'cluster_summary':'','inspection_error':str(error)[:400]}
+        return item
+
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        return list(executor.map(inspect,rows))
+
+
 @app.get("/kvm-api/permissions")
 def get_permissions(access: AuthorizationContext = Depends(require_permission("viewer"))) -> dict[str, bool | str]:
     rank = ROLE_RANK[access.access_level]
@@ -1218,7 +1294,7 @@ for line in result.stdout.splitlines():
 print(json.dumps(services))
 '''
 
-VM_DETAIL_SCRIPT = r'''import json, subprocess, sys
+VM_DETAIL_SCRIPT = r'''import json, subprocess, sys, xml.etree.ElementTree as ET
 name = sys.argv[1]
 def run(args):
     result = subprocess.run(args, capture_output=True, text=True, timeout=20)
@@ -1227,6 +1303,12 @@ def run(args):
     return result.stdout
 names = run(['virsh','-c','qemu:///system','list','--all','--name']).splitlines()
 if name not in [item.strip() for item in names]: raise SystemExit('Virtual machine not found')
+domain = ET.fromstring(run(['virsh','-c','qemu:///system','dumpxml',name]))
+devices = domain.find('./devices')
+serial_console = bool(devices is not None and (devices.find('./serial') is not None or any(
+    console.find('./target') is not None and console.find('./target').get('type') == 'serial'
+    for console in devices.findall('./console')
+)))
 info = {}
 for line in run(['virsh','-c','qemu:///system','dominfo',name]).splitlines():
     if ':' in line:
@@ -1266,7 +1348,7 @@ result = {'name':name, 'uuid':info.get('uuid',''), 'state':info.get('state') or 
     'vcpus':int(info.get('cpu(s)','0') or '0'), 'current_vcpus':int(vcpu.get('current_live',vcpu.get('current_config','0')) or '0'),
     'max_vcpus':int(vcpu.get('maximum_live',vcpu.get('maximum_config','0')) or '0'), 'memory_kib':int(info.get('max memory','0').split()[0] or '0'),
     'used_memory_kib':int(info.get('used memory','0').split()[0] or '0'), 'persistent':info.get('persistent','unknown'),
-    'autostart':info.get('autostart','unknown'), 'disks':disks, 'interfaces':interfaces}
+    'autostart':info.get('autostart','unknown'), 'serial_console':serial_console, 'disks':disks, 'interfaces':interfaces}
 print(json.dumps(result))
 '''
 
@@ -1616,7 +1698,19 @@ def control_repository(host_id: str, payload: RepositoryAction, access: Authoriz
 @app.post("/kvm-api/hosts/{host_id}/subscriptions/actions")
 def control_subscription(host_id: str, payload: SubscriptionAction, access: AuthorizationContext = Depends(require_permission("host_admin"))) -> dict[str, bool]:
     host = cockpit_host_record(host_id)
-    if payload.action == "register":
+    if payload.action in ("activate_extension", "deactivate_extension"):
+        if not payload.product or not re.fullmatch(r"[A-Za-z0-9_.+-]+/[A-Za-z0-9_.+-]+/[A-Za-z0-9_.+-]+", payload.product):
+            raise HTTPException(422, "Choose a valid product identifier returned by SUSEConnect")
+        args = [payload.action, payload.product]
+        extension_input = json.dumps({"regcode": (payload.regcode or "").strip()}) + "\n"
+        try:
+            run_sudo_python(host, SUBSCRIPTION_EXTENSION_SCRIPT, args, timeout=240, stdin_data=extension_input)
+        except Exception as exc:
+            record_audit(access.user_id, f"subscription.{payload.action}", f"{host_id}/{payload.product}", "failure", "SUSEConnect add-on operation failed")
+            raise HTTPException(502, f"Could not {payload.action.replace('_', ' ')}: {exc}") from exc
+        record_audit(access.user_id, f"subscription.{payload.action}", f"{host_id}/{payload.product}")
+        return {"success": True}
+    if payload.action in ("register", "replace"):
         if not payload.email or not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", payload.email) or not payload.regcode or len(payload.regcode.strip()) < 4:
             raise HTTPException(422, "Enter a valid account email and registration code")
         args = ["register"]
@@ -1625,13 +1719,19 @@ def control_subscription(host_id: str, payload: SubscriptionAction, access: Auth
     script = r'''import json,shutil,subprocess,sys
 if not shutil.which('SUSEConnect'): raise SystemExit('SUSEConnect is not installed on this host')
 action=sys.argv[1]
-if action=='register':
+if action in ('register','replace'):
     print('KVM_STDIN_READY',flush=True)
     data=json.loads(sys.stdin.readline())
+    if action=='replace':
+        old=subprocess.run(['SUSEConnect','--de-register'],capture_output=True,text=True,timeout=120)
+        if old.returncode: raise SystemExit(old.stderr.strip() or old.stdout.strip() or 'Could not deregister the current subscription; it was not replaced')
     args=['SUSEConnect','--regcode',data['regcode'],'--email',data['email']]
 else: args=['SUSEConnect','-d']
 result=subprocess.run(args,capture_output=True,text=True,timeout=180)
-if result.returncode: raise SystemExit(result.stderr.strip() or result.stdout.strip() or 'SUSEConnect action failed')
+if result.returncode:
+    detail=result.stderr.strip() or result.stdout.strip() or 'SUSEConnect action failed'
+    if action=='replace': detail='The previous registration was removed, but the new registration failed. Submit the new code again to retry. ' + detail
+    raise SystemExit(detail)
 print(result.stdout.strip())
 '''
     # The registration code is sent only for this request and is not written to
@@ -1644,6 +1744,56 @@ print(result.stdout.strip())
         raise HTTPException(502, f"Could not {payload.action} the SUSE subscription. Check host connectivity and the SUSEConnect response on the host.") from exc
     record_audit(access.user_id, f"subscription.{payload.action}", host_id)
     return {"success": True}
+
+
+SUBSCRIPTION_EXTENSION_SCRIPT = r'''import json,re,shutil,subprocess,sys
+if not shutil.which('SUSEConnect'): raise SystemExit('SUSEConnect is not installed on this host')
+action=sys.argv[1]
+product=sys.argv[2] if len(sys.argv)>2 else ''
+listed=subprocess.run(['SUSEConnect','--list-extensions'],capture_output=True,text=True,timeout=60)
+if listed.returncode: raise SystemExit(listed.stderr.strip() or listed.stdout.strip() or 'Could not list available SUSE extensions')
+items=[]; label=''
+for line in listed.stdout.splitlines():
+ text=line.strip()
+ if not text: continue
+ match=re.search(r'SUSEConnect\s+(-d\s+)?-p\s+(\S+)(.*)$',text)
+ if match:
+  identifier=match.group(2)
+  if not re.fullmatch(r'[A-Za-z0-9_.+-]+/[A-Za-z0-9_.+-]+/[A-Za-z0-9_.+-]+',identifier): continue
+  active=bool(match.group(1))
+  name=re.sub(r'\s*\(Activated\)\s*','',label).strip()
+  if not name or name.startswith(('AVAILABLE EXTENSIONS','REMARKS','MORE INFORMATION')): name=identifier.split('/')[0].replace('-',' ').title()
+  items.append({'product':identifier,'name':name,'active':active,'requires_regcode':not active and bool(re.search(r'\-r\s+(?:ADDITIONAL|<)',match.group(3),re.I)),'protected':identifier.startswith(('sle-module-basesystem/','sle-module-server-applications/'))})
+  label=''
+ elif text.upper().startswith(('AVAILABLE EXTENSIONS','REMARKS','MORE INFORMATION')): label=''
+ elif not text.startswith(('Activate with:','Deactivate with:','(')): label=text
+if action=='list':
+ print(json.dumps(items)); raise SystemExit
+item=next((entry for entry in items if entry['product']==product),None)
+if item is None: raise SystemExit('The selected product is not available for this host')
+if action=='deactivate_extension' and item['protected']: raise SystemExit('This core SUSE module is protected from deactivation')
+if action=='activate_extension' and item['active']: raise SystemExit('This extension is already active')
+if action=='deactivate_extension' and not item['active']: raise SystemExit('This extension is not active')
+print('KVM_STDIN_READY',flush=True)
+data=json.loads(sys.stdin.readline() or '{}')
+if action=='activate_extension':
+ args=['SUSEConnect','-p',product]
+ if data.get('regcode'): args.extend(['-r',data['regcode']])
+ elif item['requires_regcode']: raise SystemExit('This extension requires its SUSE registration code')
+else: args=['SUSEConnect','-d','-p',product]
+result=subprocess.run(args,capture_output=True,text=True,timeout=210)
+if result.returncode: raise SystemExit(result.stderr.strip() or result.stdout.strip() or 'SUSEConnect add-on operation failed')
+print(result.stdout.strip())
+'''
+
+
+@app.get("/kvm-api/hosts/{host_id}/subscriptions/extensions", dependencies=[Depends(require_permission("viewer"))])
+def list_subscription_extensions(host_id: str) -> list[dict[str, Any]]:
+    try:
+        output = run_sudo_python(cockpit_host_record(host_id), SUBSCRIPTION_EXTENSION_SCRIPT, ["list", ""], timeout=75)
+        return json.loads(output or "[]")
+    except Exception as exc:
+        raise HTTPException(502, f"Could not list available SUSE extensions: {exc}") from exc
 
 
 @app.post("/kvm-api/hosts/{host_id}/security/selinux")

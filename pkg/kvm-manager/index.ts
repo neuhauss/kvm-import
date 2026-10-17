@@ -1,6 +1,7 @@
 import { importTypes } from '@rancher/auto-import';
 import { IPlugin } from '@shell/core/types';
 import Hosts from './pages/Hosts.vue';
+import Clusters from './pages/Clusters.vue';
 import CloudNative from './pages/CloudNative.vue';
 import './assets/kvm.css';
 
@@ -21,13 +22,17 @@ export default function(plugin: IPlugin): void {
     name: 'hosts',
     label: 'Hosts',
     component: Hosts,
+  }, {
+    name: 'clusters',
+    label: 'Clusters',
+    component: Clusters,
   }]);
 
   // Keep the Cloud Native page routable for the per-host administration menu,
   // without exposing it as a second item in the KVM side navigation.
   plugin.addRoute('default', {
     name: 'kvm-c-cluster-cloud-native',
-    path: 'kvm/c/:cluster/cloud-native',
+    path: '/kvm/c/:cluster/cloud-native',
     component: CloudNative,
     // Keep this route available for the per-host menu without registering a
     // second page in the KVM product side navigation.

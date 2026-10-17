@@ -50,7 +50,14 @@
       <section v-else-if="activeTab === 'storage'" class="section-panel">
         <div class="section-heading"><div><span class="eyebrow">HOST + LIBVIRT</span><h2>{{ t('cloudNative.storage') }}</h2><p class="muted">{{ t('cloudNative.storageDescription') }}</p></div><div class="section-tools"><input v-model="storageFilter" class="search-input" :placeholder="t('cloudNative.searchStorage')" :aria-label="t('cloudNative.searchStorage')" /><button v-if="permissions.canAdministerHost" class="btn role-primary" @click="showPoolForm = !showPoolForm">{{ t(showPoolForm ? 'cloudNative.cancel' : 'cloudNative.addPool') }}</button></div></div>
         <div class="storage-summary"><article><span>{{ t('cloudNative.storagePools') }}</span><strong>{{ inventory.storage_pools.length }}</strong></article><article><span>{{ t('cloudNative.devicesTitle') }}</span><strong>{{ inventory.storage.devices.length }}</strong></article><article><span>{{ t('cloudNative.mountedFilesystems') }}</span><strong>{{ inventory.storage.filesystems.length }}</strong><small v-if="criticalFilesystemCount">{{ t('cloudNative.fullFilesystems', { count: criticalFilesystemCount }) }}</small><small v-else>{{ t('cloudNative.noCapacityWarnings') }}</small></article></div>
-        <form v-if="showPoolForm" class="admin-form" @submit.prevent="savePool"><h3>{{ t(poolForm.action === 'edit' ? 'cloudNative.editPool' : 'cloudNative.addPool') }}</h3><label>{{ t('cloudNative.poolName') }}<input v-model="poolForm.name" class="search-input" required maxlength="128" pattern="[A-Za-z0-9_.+-]+" :readonly="poolForm.action === 'edit'" /></label><label>{{ t('cloudNative.poolPath') }}<input v-model="poolForm.target" class="search-input" required placeholder="/var/lib/libvirt/images" /></label><div class="row-actions"><button type="button" class="btn role-secondary" @click="showPoolForm = false">{{ t('cloudNative.cancel') }}</button><button class="btn role-primary" :disabled="busy === 'storage-pool'">{{ t('cloudNative.saveChanges') }}</button></div></form>
+        <form v-if="showPoolForm" class="admin-form guided-admin-form" @submit.prevent="savePool">
+          <header class="form-intro"><span class="eyebrow">{{ t('cloudNative.storagePoolType') }}</span><h3>{{ t(poolForm.action === 'edit' ? 'cloudNative.editPool' : 'cloudNative.addPool') }}</h3><p>{{ t('cloudNative.storagePoolFormHelp') }}</p></header>
+          <div class="admin-field-grid">
+            <label class="field-wide">{{ t('cloudNative.poolName') }}<input v-model.trim="poolForm.name" class="search-input" required maxlength="128" pattern="[A-Za-z0-9_.+-]+" :readonly="poolForm.action === 'edit'" autocomplete="off" /><small>{{ t('cloudNative.poolNameHelp') }}</small></label>
+            <label class="field-wide">{{ t('cloudNative.poolPath') }}<input v-model.trim="poolForm.target" class="search-input" required placeholder="/var/lib/libvirt/images" autocomplete="off" /><small>{{ t('cloudNative.poolPathHelp') }}</small></label>
+          </div>
+          <div class="row-actions"><button type="button" class="btn role-secondary" @click="showPoolForm = false">{{ t('cloudNative.cancel') }}</button><button class="btn role-primary" :disabled="busy === 'storage-pool'">{{ t('cloudNative.saveChanges') }}</button></div>
+        </form>
         <div class="subsection"><div class="subsection-heading"><div><h3>{{ t('cloudNative.storagePools') }}</h3><p>{{ t('cloudNative.storagePoolHelp') }}</p></div><span class="count-badge">{{ filteredStoragePools.length }}</span></div><div v-if="!filteredStoragePools.length" class="empty-state">{{ t(storageFilter ? 'cloudNative.noStorageMatch' : 'cloudNative.noPool') }}</div><div v-else class="pool-grid"><article v-for="pool in filteredStoragePools" :key="pool.name" class="pool-card"><div><strong>{{ pool.name }}</strong><span class="state" :class="pool.state.toLowerCase()">{{ pool.state }}</span></div><dl><dt>{{ t('cloudNative.poolPath') }}</dt><dd>{{ pool.target || '—' }}</dd><dt>{{ t('cloudNative.capacity') }}</dt><dd>{{ pool.capacity }}</dd><dt>{{ t('cloudNative.allocated') }}</dt><dd>{{ pool.allocation }}</dd><dt>{{ t('cloudNative.available') }}</dt><dd>{{ pool.available }}</dd><dt>{{ t('cloudNative.autostart') }}</dt><dd>{{ pool.autostart }}</dd></dl><div class="resource-actions"><button class="btn role-link btn-sm" @click="inspectResource('pool', pool)">{{ t('cloudNative.details') }}</button><button v-if="permissions.canAdministerHost && pool.type === 'dir' && pool.state.toLowerCase() !== 'running'" class="btn role-secondary btn-sm" :disabled="busy === `storage:${pool.name}`" @click="editPool(pool)">{{ t('cloudNative.edit') }}</button><button v-if="permissions.canAdministerHost" class="btn role-secondary btn-sm" :disabled="busy === `storage:${pool.name}`" @click="actOnLibvirt('storage-pools', pool.name, pool.state.toLowerCase() === 'running' ? 'stop' : 'start')">{{ pool.state.toLowerCase() === 'running' ? t('cloudNative.stop') : t('cloudNative.start') }}</button><button v-if="permissions.canAdministerHost" class="btn role-link btn-sm" :disabled="busy === `storage:${pool.name}`" @click="actOnLibvirt('storage-pools', pool.name, pool.autostart === 'yes' ? 'disable' : 'enable')">{{ pool.autostart === 'yes' ? t('cloudNative.disableAutostart') : t('cloudNative.enableAutostart') }}</button><button v-if="permissions.canAdministerHost" class="btn role-link btn-sm" :disabled="busy === `storage:${pool.name}`" @click="deletePool(pool.name)">{{ t('cloudNative.delete') }}</button></div></article></div></div>
         <div class="subsection">
           <div class="subsection-heading"><div><h3>{{ t('cloudNative.storageVolumes') }}</h3><p>{{ t('cloudNative.storageVolumesHelp') }}</p></div><button v-if="permissions.canAdministerHost" class="btn role-secondary btn-sm" @click="showVolumeForm = !showVolumeForm">{{ t(showVolumeForm ? 'cloudNative.cancel' : 'cloudNative.createVolume') }}</button></div>
@@ -136,7 +143,18 @@
       <section v-else-if="activeTab === 'accounts'" class="section-panel">
         <div class="section-heading"><div><span class="eyebrow">SYSTEM USERS</span><h2>{{ t('cloudNative.accounts') }}</h2><p class="muted">{{ t('cloudNative.accountsDescription') }}</p></div><div class="section-tools"><input v-model="accountFilter" class="search-input" :placeholder="t('cloudNative.searchAccounts')" :aria-label="t('cloudNative.searchAccounts')" /><button v-if="permissions.canAdministerHost" class="btn role-primary" @click="openAccountForm()">{{ t('cloudNative.addAccount') }}</button></div></div>
         <div class="table-wrap"><table class="table"><thead><tr><th>{{ t('cloudNative.account') }}</th><th>UID / GID</th><th>{{ t('cloudNative.homeDirectory') }}</th><th>{{ t('cloudNative.shell') }}</th><th>{{ t('cloudNative.groups') }}</th><th>{{ t('hosts.action') }}</th></tr></thead><tbody><tr v-for="account in filteredAccounts" :key="account.username"><td><button class="resource-name" @click="inspectResource('account', account)">{{ account.username }}</button><small>{{ account.locked ? t('cloudNative.locked') : t('cloudNative.unlocked') }}</small></td><td>{{ account.uid }} / {{ account.gid }}</td><td>{{ account.home }}</td><td>{{ account.shell }}</td><td>{{ account.groups.join(', ') || '—' }}</td><td class="row-actions"><button v-if="permissions.canAdministerHost" class="btn role-secondary btn-sm" :disabled="busy === `account:${account.username}` || (!account.locked && (account.username === host.username || account.uid === 0))" @click="actOnAccount(account, account.locked ? 'unlock' : 'lock')">{{ account.locked ? t('cloudNative.unlock') : t('cloudNative.lock') }}</button><button v-if="permissions.canAdministerHost" class="btn role-link btn-sm" :disabled="busy === `account:${account.username}`" @click="openAccountForm(account)">{{ t('cloudNative.edit') }}</button><button v-if="permissions.canAdministerHost" class="btn role-link btn-sm" :disabled="busy === `account:${account.username}` || account.username === host.username || account.uid === 0" @click="actOnAccount(account, 'delete')">{{ t('cloudNative.delete') }}</button><button v-if="permissions.canAdministerHost" class="btn role-link btn-sm" :disabled="busy === `account:${account.username}`" @click="accountPasswordTarget = account.username; accountPassword = ''">{{ t('cloudNative.setPassword') }}</button></td></tr><tr v-if="!filteredAccounts.length"><td colspan="6" class="empty-row">{{ t(accountFilter ? 'cloudNative.noAccountMatch' : 'cloudNative.noAccounts') }}</td></tr></tbody></table></div><p class="safety-note">{{ t('cloudNative.accountsWarning') }}</p>
-        <form v-if="accountForm" class="admin-form" @submit.prevent="saveAccount"><h3>{{ t(accountForm.action === 'create' ? 'cloudNative.addAccount' : 'cloudNative.editAccount') }}</h3><label>{{ t('cloudNative.account') }}<input v-model="accountForm.username" class="search-input" :readonly="accountForm.action === 'edit'" required maxlength="32" pattern="[a-z_][a-z0-9_-]{0,31}" /></label><label>{{ t('cloudNative.shell') }}<input v-model="accountForm.shell" class="search-input" placeholder="/bin/bash" /></label><label>{{ t('cloudNative.homeDirectory') }}<input v-model="accountForm.home" class="search-input" placeholder="/home/user" /></label><label>{{ t('cloudNative.groups') }}<input v-model="accountForm.groups" class="search-input" placeholder="users, libvirt" /></label><label v-if="accountForm.action === 'create'">{{ t('cloudNative.newPassword') }}<input v-model="accountForm.password" class="search-input" type="password" minlength="8" autocomplete="new-password" required /></label><div class="row-actions"><button type="button" class="btn role-secondary" @click="accountForm = null">{{ t('cloudNative.cancel') }}</button><button class="btn role-primary" :disabled="busy === `account:${accountForm.username}`">{{ t('cloudNative.saveChanges') }}</button></div></form>
+        <form v-if="accountForm" class="admin-form guided-admin-form" @submit.prevent="saveAccount">
+          <header class="form-intro"><span class="eyebrow">{{ t('cloudNative.accountSettings') }}</span><h3>{{ t(accountForm.action === 'create' ? 'cloudNative.addAccount' : 'cloudNative.editAccount') }}</h3><p>{{ t('cloudNative.accountFormHelp') }}</p></header>
+          <div class="admin-field-grid">
+            <label class="field-wide">{{ t('cloudNative.account') }}<input v-model.trim="accountForm.username" class="search-input" :readonly="accountForm.action === 'edit'" required maxlength="32" pattern="[a-z_][a-z0-9_-]{0,31}" autocomplete="off" /><small>{{ t('cloudNative.accountNameHelp') }}</small></label>
+            <label>{{ t('cloudNative.shell') }}<input v-model.trim="accountForm.shell" class="search-input" placeholder="/bin/bash" autocomplete="off" /><small>{{ t('cloudNative.shellHelp') }}</small></label>
+            <label>{{ t('cloudNative.homeDirectory') }}<input v-model.trim="accountForm.home" class="search-input" placeholder="/home/username" autocomplete="off" /><small>{{ t('cloudNative.homeHelp') }}</small></label>
+            <label class="field-wide">{{ t('cloudNative.groups') }}<input v-model.trim="accountForm.groups" class="search-input" placeholder="users, libvirt" autocomplete="off" /><small>{{ t('cloudNative.groupsEditHelp') }}</small></label>
+            <label v-if="accountForm.action === 'create'" class="field-wide">{{ t('cloudNative.newPassword') }}<input v-model="accountForm.password" class="search-input" type="password" minlength="8" maxlength="1024" autocomplete="new-password" required /><small>{{ t('cloudNative.passwordPolicyHelp') }}</small></label>
+          </div>
+          <p class="safety-note">{{ t('cloudNative.accountFormWarning') }}</p>
+          <div class="row-actions"><button type="button" class="btn role-secondary" @click="accountForm = null">{{ t('cloudNative.cancel') }}</button><button class="btn role-primary" :disabled="busy === `account:${accountForm.username}`">{{ t('cloudNative.saveChanges') }}</button></div>
+        </form>
       </section>
 
       <section v-else-if="activeTab === 'repositories'" class="section-panel">
@@ -151,8 +169,26 @@
       </section>
 
       <section v-else-if="activeTab === 'subscriptions'" class="section-panel">
-        <div class="section-heading"><div><span class="eyebrow">SUSECONNECT</span><h2>{{ t('cloudNative.subscriptions') }}</h2><p class="muted">{{ t('cloudNative.subscriptionsDescription') }}</p></div><button class="btn role-secondary" :disabled="loading" @click="load">{{ t('cloudNative.refreshStatus') }}</button></div>
-        <article class="info-panel"><div class="resource-row"><span>{{ t('cloudNative.client') }}</span><strong>{{ inventory.subscription.available ? 'SUSEConnect' : t('cloudNative.notInstalled') }}</strong></div><h3>{{ t('cloudNative.registrationStatus') }}</h3><pre class="status-view">{{ inventory.subscription.status || t('cloudNative.noSubscriptionData') }}</pre><div v-if="permissions.canAdministerHost && inventory.subscription.available" class="row-actions"><button class="btn role-primary" @click="showSubscriptionForm = !showSubscriptionForm">{{ t('cloudNative.registerSubscription') }}</button><button class="btn role-link" @click="deregisterSubscription">{{ t('cloudNative.deregisterSubscription') }}</button></div><form v-if="showSubscriptionForm" class="admin-form" @submit.prevent="registerSubscription"><h3>{{ t('cloudNative.registerSubscription') }}</h3><label>{{ t('cloudNative.registrationEmail') }}<input v-model="subscriptionForm.email" class="search-input" type="email" autocomplete="email" required /></label><label>{{ t('cloudNative.registrationCode') }}<input v-model="subscriptionForm.regcode" class="search-input" type="password" autocomplete="off" required maxlength="256" /></label><p class="safety-note">{{ t('cloudNative.registrationCodeHelp') }}</p><div class="row-actions"><button type="button" class="btn role-secondary" @click="showSubscriptionForm = false">{{ t('cloudNative.cancel') }}</button><button class="btn role-primary" :disabled="busy === 'subscription'">{{ t('cloudNative.registerSubscription') }}</button></div></form></article><p class="safety-note">{{ t('cloudNative.subscriptionWarning') }}</p>
+        <div class="section-heading"><div><span class="eyebrow">SUSECONNECT</span><h2>{{ t('cloudNative.subscriptions') }}</h2><p class="muted">{{ t('cloudNative.subscriptionsDescription') }}</p></div><button class="btn role-secondary" :disabled="loading || extensionsLoading" @click="refreshSubscriptions">{{ t('cloudNative.refreshStatus') }}</button></div>
+        <article class="info-panel subscription-card">
+          <div class="resource-row"><span>{{ t('cloudNative.client') }}</span><strong>{{ inventory.subscription.available ? 'SUSEConnect' : t('cloudNative.notInstalled') }}</strong></div>
+          <div class="subscription-status-row"><h3>{{ t('cloudNative.registrationStatus') }}</h3><span class="state" :class="subscriptionRegistered ? 'ready' : 'unknown'"><i></i>{{ t(subscriptionRegistered ? 'cloudNative.registered' : 'cloudNative.notRegistered') }}</span></div>
+          <pre class="status-view">{{ inventory.subscription.status || t('cloudNative.noSubscriptionData') }}</pre>
+          <div v-if="permissions.canAdministerHost && inventory.subscription.available" class="row-actions"><button class="btn role-primary" @click="showSubscriptionForm = !showSubscriptionForm">{{ t(subscriptionRegistered ? 'cloudNative.changeSubscription' : 'cloudNative.registerSubscription') }}</button><button v-if="subscriptionRegistered" class="btn role-link" @click="deregisterSubscription">{{ t('cloudNative.deregisterSubscription') }}</button></div>
+          <form v-if="showSubscriptionForm" class="admin-form" @submit.prevent="registerSubscription"><h3>{{ t(subscriptionRegistered ? 'cloudNative.changeSubscription' : 'cloudNative.registerSubscription') }}</h3><p class="muted">{{ t(subscriptionRegistered ? 'cloudNative.changeSubscriptionHelp' : 'cloudNative.registerSubscriptionHelp') }}</p><label>{{ t('cloudNative.registrationEmail') }}<input v-model="subscriptionForm.email" class="search-input" type="email" autocomplete="email" required /></label><label>{{ t('cloudNative.registrationCode') }}<input v-model="subscriptionForm.regcode" class="search-input" type="password" autocomplete="off" required maxlength="256" /></label><p class="safety-note">{{ t('cloudNative.registrationCodeHelp') }}</p><div class="row-actions"><button type="button" class="btn role-secondary" @click="showSubscriptionForm = false">{{ t('cloudNative.cancel') }}</button><button class="btn role-primary" :disabled="busy === 'subscription'">{{ t(subscriptionRegistered ? 'cloudNative.changeSubscription' : 'cloudNative.registerSubscription') }}</button></div></form>
+        </article><p class="safety-note">{{ t('cloudNative.subscriptionWarning') }}</p>
+        <section v-if="inventory.subscription.available" class="subsection extension-manager">
+          <div class="subsection-heading"><div><h3>{{ t('cloudNative.extensionsTitle') }}</h3><p>{{ t('cloudNative.extensionsDescription') }}</p></div><button class="btn role-secondary btn-sm" :disabled="extensionsLoading" @click="loadSubscriptionExtensions">{{ extensionsLoading ? t('cloudNative.loadingExtensions') : t('cloudNative.refreshStatus') }}</button></div>
+          <div v-if="extensionsError" class="banner error" role="alert">{{ extensionsError }}</div>
+          <div v-if="extensionsLoading && !extensions.length" class="loading">{{ t('cloudNative.loadingExtensions') }}</div>
+          <div v-else-if="!extensions.length" class="empty-state">{{ t('cloudNative.noExtensions') }}</div>
+          <article v-if="haExtension" class="ha-addon-card"><span class="ha-addon-mark">HA</span><div><strong>{{ t('cloudNative.haAddon') }}</strong><p>{{ t(haExtension.active ? 'cloudNative.haAddonActive' : 'cloudNative.haAddonAvailable') }}</p><code>{{ haExtension.product }}</code></div><span class="state" :class="haExtension.active ? 'ready' : 'unknown'"><i></i>{{ t(haExtension.active ? 'cloudNative.extensionActive' : 'cloudNative.extensionAvailable') }}</span><template v-if="permissions.canAdministerHost && !haExtension.active"><input v-if="haExtension.requires_regcode" v-model="extensionRegcodes[haExtension.product]" class="search-input extension-code" type="password" autocomplete="off" :placeholder="t('cloudNative.registrationCode')" :aria-label="`${t('cloudNative.registrationCode')} ${haExtension.name}`" maxlength="256" /><button class="btn role-primary btn-sm" :disabled="busy === 'subscription' || (haExtension.requires_regcode && !extensionRegcodes[haExtension.product])" @click="changeExtension(haExtension, 'activate_extension')">{{ t('cloudNative.activateExtension') }}</button></template></article>
+          <div v-else-if="extensions.length" class="info-panel ha-addon-missing"><strong>{{ t('cloudNative.haAddon') }}</strong><p>{{ t('cloudNative.haAddonNotOffered') }}</p></div>
+          <div v-if="extensions.length" class="table-wrap"><table class="table"><thead><tr><th>{{ t('cloudNative.extensionName') }}</th><th>{{ t('cloudNative.productId') }}</th><th>{{ t('cloudNative.state') }}</th><th>{{ t('hosts.action') }}</th></tr></thead><tbody>
+            <tr v-for="extension in extensions" :key="extension.product"><td><strong>{{ extension.name }}</strong><small v-if="extension.requires_regcode && !extension.active">{{ t('cloudNative.extensionCodeRequired') }}</small></td><td><code>{{ extension.product }}</code></td><td><span class="state" :class="extension.active ? 'ready' : 'unknown'">{{ extension.active ? t('cloudNative.extensionActive') : t('cloudNative.extensionAvailable') }}</span></td><td class="extension-actions"><template v-if="permissions.canAdministerHost && !extension.active"><input v-if="extension.requires_regcode" v-model="extensionRegcodes[extension.product]" class="search-input extension-code" type="password" autocomplete="off" :placeholder="t('cloudNative.registrationCode')" :aria-label="`${t('cloudNative.registrationCode')} ${extension.name}`" maxlength="256" /><button class="btn role-primary btn-sm" :disabled="busy === 'subscription' || (extension.requires_regcode && !extensionRegcodes[extension.product])" @click="changeExtension(extension, 'activate_extension')">{{ t('cloudNative.activateExtension') }}</button></template><button v-else-if="permissions.canAdministerHost && extension.active && !extension.protected" class="btn role-secondary btn-sm" :disabled="busy === 'subscription'" @click="changeExtension(extension, 'deactivate_extension')">{{ t('cloudNative.deactivateExtension') }}</button><span v-else-if="extension.protected" class="muted">{{ t('cloudNative.coreExtensionProtected') }}</span></td></tr>
+          </tbody></table></div>
+          <p class="safety-note">{{ t('cloudNative.extensionChangesWarning') }}</p>
+        </section>
       </section>
 
       <section v-else-if="activeTab === 'terminal' && permissions.canAdministerHost" class="section-panel">
@@ -167,9 +203,9 @@
     </template>
     <div v-if="selectedVmName" class="modal-backdrop" @click.self="closeVmDetails">
       <section class="details-modal" role="dialog" aria-modal="true" :aria-label="t('cloudNative.vmDetails')">
-        <header><div><span class="eyebrow">{{ t('cloudNative.vmDetails') }}</span><h2>{{ selectedVmName }}</h2></div><div class="row-actions"><button v-if="permissions.canOperateVms" class="btn role-primary btn-sm" :disabled="!vmDetail || !vmIsRunning(vmDetail)" :title="!vmDetail || !vmIsRunning(vmDetail) ? t('cloudNative.consoleRequiresRunning') : t('cloudNative.vmConsole')" @click="vmDetail && vmIsRunning(vmDetail) && openVmConsole(vmDetail)">{{ t('cloudNative.vmConsole') }}</button><button class="btn role-secondary btn-sm" @click="closeVmDetails">{{ t('cloudNative.close') }}</button></div></header>
+        <header><div><span class="eyebrow">{{ t('cloudNative.vmDetails') }}</span><h2>{{ selectedVmName }}</h2></div><div class="row-actions"><button v-if="permissions.canOperateVms" class="btn role-primary btn-sm" :disabled="!vmDetail || !vmIsRunning(vmDetail) || vmDetail.serial_console === false" :title="!vmDetail || !vmDetail.serial_console ? t('cloudNative.serialConsoleMissing') : !vmIsRunning(vmDetail) ? t('cloudNative.consoleRequiresRunning') : t('cloudNative.vmConsole')" @click="vmDetail && vmIsRunning(vmDetail) && vmDetail.serial_console !== false && openVmConsole(vmDetail)">{{ t('cloudNative.vmConsole') }}</button><button class="btn role-secondary btn-sm" @click="closeVmDetails">{{ t('cloudNative.close') }}</button></div></header>
         <p v-if="vmDetailLoading" class="loading">{{ t('cloudNative.loadingVmDetails') }}</p>
-        <div v-else-if="vmDetail" class="details-content"><div class="detail-stats"><div><span>{{ t('cloudNative.stateLabel') }}</span><strong>{{ vmDetail.state }}</strong></div><div><span>vCPU</span><strong>{{ vmDetail.current_vcpus || vmDetail.vcpus }}</strong></div><div><span>{{ t('cloudNative.maxMemory') }}</span><strong>{{ memoryLabel(vmDetail.memory_kib) }}</strong></div></div><h3>{{ t('cloudNative.disk') }}</h3><div v-if="!vmDetail.disks?.length" class="empty-state">{{ t('cloudNative.noDisk') }}</div><div v-for="disk in vmDetail.disks" :key="disk.target" class="detail-row"><b>{{ disk.target }}</b><span>{{ disk.source }}</span><small>{{ disk.type }} · {{ disk.device }}</small></div><h3>{{ t('cloudNative.interfaces') }}</h3><div v-if="!vmDetail.interfaces?.length" class="empty-state">{{ t('cloudNative.noInterface') }}</div><div v-for="nic in vmDetail.interfaces" :key="nic.mac" class="detail-row"><b>{{ nic.name }}</b><span>{{ nic.ip_addresses?.join(', ') || t('cloudNative.noIpAddresses') }}</span><small>{{ nic.mac }} · {{ nic.type }} · {{ nic.source }} · {{ nic.model }}</small></div></div>
+        <div v-else-if="vmDetail" class="details-content"><div v-if="vmDetail.serial_console === false" class="banner warning" role="status">{{ t('cloudNative.serialConsoleMissing') }}</div><div class="detail-stats"><div><span>{{ t('cloudNative.stateLabel') }}</span><strong>{{ vmDetail.state }}</strong></div><div><span>vCPU</span><strong>{{ vmDetail.current_vcpus || vmDetail.vcpus }}</strong></div><div><span>{{ t('cloudNative.maxMemory') }}</span><strong>{{ memoryLabel(vmDetail.memory_kib) }}</strong></div></div><h3>{{ t('cloudNative.disk') }}</h3><div v-if="!vmDetail.disks?.length" class="empty-state">{{ t('cloudNative.noDisk') }}</div><div v-for="disk in vmDetail.disks" :key="disk.target" class="detail-row"><b>{{ disk.target }}</b><span>{{ disk.source }}</span><small>{{ disk.type }} · {{ disk.device }}</small></div><h3>{{ t('cloudNative.interfaces') }}</h3><div v-if="!vmDetail.interfaces?.length" class="empty-state">{{ t('cloudNative.noInterface') }}</div><div v-for="nic in vmDetail.interfaces" :key="nic.mac" class="detail-row"><b>{{ nic.name }}</b><span>{{ nic.ip_addresses?.join(', ') || t('cloudNative.noIpAddresses') }}</span><small>{{ nic.mac }} · {{ nic.type }} · {{ nic.source }} · {{ nic.model }}</small></div></div>
         <div v-if="vmDetailError" class="banner error">{{ vmDetailError }}</div>
       </section>
     </div>
@@ -187,13 +223,14 @@ const shellLayoutSnapshots = new WeakMap<HTMLElement, { navWidth: string; navWid
 
 type Host = { id: string; name: string; address: string; port: number; hostname?: string; username: string; status: string };
 type Vm = { name: string; uuid: string; state: string; vcpus: number; current_vcpus: number; max_vcpus: number; memory_kib: number; used_memory_kib: number; autostart: string; ip_addresses?: string[] };
-type VmDetail = Vm & { disks: { type: string; device: string; target: string; source: string }[]; interfaces: { name: string; type: string; source: string; model: string; mac: string; ip_addresses?: string[] }[] };
+type VmDetail = Vm & { serial_console?: boolean; disks: { type: string; device: string; target: string; source: string }[]; interfaces: { name: string; type: string; source: string; model: string; mac: string; ip_addresses?: string[] }[] };
 type Service = { name: string; load: string; active: string; sub: string; description: string };
 type Account = { username: string; uid: number; gid: number; home: string; shell: string; groups: string[]; locked: boolean };
 type Repository = { alias: string; name: string; enabled: boolean; autorefresh: boolean; uri: string };
 type TerminalResult = { stdout: string; stderr: string; return_code: number };
 type NetworkConnection = { name: string; uuid: string; type: string; device: string; active: boolean; ipv4_method: string; ipv4_addresses: string[]; ipv4_gateway: string; ipv4_dns: string[] };
 type StorageVolume = { pool: string; name: string; path: string; format: string; capacity_bytes: number; allocation_bytes: number };
+type SubscriptionExtension = { product: string; name: string; active: boolean; requires_regcode: boolean; protected: boolean };
 type Permissions = { canOperateVms: boolean; canAdministerHost: boolean };
 type SystemInfo = { hostname: string; os: string; kernel: string; architecture: string; cpu_count: number; memory_total_kib: number; memory_available_kib: number; uptime_seconds: number; load_average: number[] };
 type Inventory = {
@@ -213,10 +250,11 @@ export default defineComponent({
   components: { VmTable, VmConsole },
   data() {
     return {
-      host: null as Host | null, inventory: null as Inventory | null, permissions: { canOperateVms: false, canAdministerHost: false } as Permissions, loading: false, error: '', actionError: '', actionSuccess: false, dataUpdatedAt: '', metricsRefreshing: false, metricsTimer: 0 as number,
+      host: null as Host | null, inventory: null as Inventory | null, permissions: { canOperateVms: false, canAdministerHost: false } as Permissions, loading: false, error: '', actionError: '', actionSuccess: false, dataUpdatedAt: '', metricsRefreshing: false, metricsTimer: 0 as number, loadSequence: 0,
       busy: '' as string, activeTab: 'overview', vmFilter: '', vmStateFilter: 'all', storageFilter: '', accountFilter: '', repositoryFilter: '', networkFilter: '', networkStateFilter: 'all', serviceFilter: '', serviceStateFilter: 'all', serviceLimit: 25, logFilter: '', terminalCommand: '', terminalResult: null as TerminalResult | null, accountPasswordTarget: '', accountPassword: '', selectedResource: null as null | { title: string; subtitle: string; fields: { label: string; value: string }[] },
       showPoolForm: false, poolForm: { action: 'create' as 'create' | 'edit', name: '', target: '' }, networkForm: null as null | { name: string; uuid: string; method: string; addresses: string; gateway: string; dns: string }, accountForm: null as null | { action: 'create' | 'edit'; username: string; shell: string; home: string; groups: string; password: string }, showRepositoryForm: false, repositoryForm: { alias: '', name: '', uri: '' }, showSubscriptionForm: false, subscriptionForm: { email: '', regcode: '' },
       storageVolumes: [] as StorageVolume[], volumesLoading: false, volumesLoaded: false, showVolumeForm: false, volumeForm: { pool: '', name: '', capacity_gib: 10, format: 'qcow2' },
+      extensions: [] as SubscriptionExtension[], extensionsLoading: false, extensionsLoaded: false, extensionsError: '', extensionRegcodes: {} as Record<string, string>,
       selectedVmName: '', vmDetail: null as VmDetail | null, vmDetailLoading: false, vmDetailError: '', consoleVm: null as Vm | null,
       navGroups: [{ id: 'system' }, { id: 'tools' }],
       tabs: [
@@ -231,6 +269,8 @@ export default defineComponent({
   },
   computed: {
     hostId(): string { return String(this.$route.query.hostId || ''); },
+    subscriptionRegistered(): boolean { const value = this.inventory?.subscription; return !!value?.available && value.return_code === 0 && !/not registered|unregistered/i.test(value.status || ''); },
+    haExtension(): SubscriptionExtension | undefined { return this.extensions.find((item) => /(^|\/)sle-ha(\/|$)|high.?availability/i.test(`${item.product} ${item.name}`)); },
     availableTabs(): { id: string; group: string; icon: string; countKey?: string }[] { return this.tabs.filter((tab) => tab.id !== 'terminal' || this.permissions.canAdministerHost); },
     runningVmCount(): number { return this.inventory?.vms.filter((vm) => vm.state.toLowerCase().includes('running')).length || 0; },
     vmRunningPercent(): number { return this.inventory?.vms.length ? Math.round(this.runningVmCount / this.inventory.vms.length * 100) : 0; },
@@ -277,10 +317,14 @@ export default defineComponent({
     filteredLogs(): string[] { const term = this.logFilter.toLowerCase().trim(); return (this.inventory?.logs || []).filter((line) => !term || line.toLowerCase().includes(term)); },
   },
   watch: {
+    hostId(newHostId: string, oldHostId: string) { if (newHostId && newHostId !== oldHostId) this.load(); },
+    '$route.query.tab'(tab: string) { if (this.tabs.some((item) => item.id === tab)) this.selectTab(tab); },
     serviceFilter() { this.serviceLimit = 25; },
     serviceStateFilter() { this.serviceLimit = 25; },
   },
   mounted() {
+    const initialTab = String(this.$route.query.tab || '');
+    if (this.tabs.some((tab) => tab.id === initialTab)) this.selectTab(initialTab);
     this.load();
     this.metricsTimer = window.setInterval(() => { if (!document.hidden) this.refreshMetrics(); }, 30000);
     document.addEventListener('visibilitychange', this.onVisibilityChange);
@@ -371,26 +415,37 @@ export default defineComponent({
     },
     async load() {
       if (!this.hostId) { this.error = this.t('cloudNative.hostRequired'); return; }
+      const requestedHostId = this.hostId;
+      const sequence = ++this.loadSequence;
       this.loading = true; this.error = ''; this.actionError = ''; this.actionSuccess = false;
       try {
-        const [hosts, inventory, permissions] = await Promise.all([this.request('/hosts'), this.request(`/hosts/${this.hostId}/cloud-native`), this.request('/permissions')]);
-        this.host = hosts.find((item: Host) => item.id === this.hostId) || null;
+        const [hosts, inventory, permissions] = await Promise.all([this.request('/hosts'), this.request(`/hosts/${requestedHostId}/cloud-native`), this.request('/permissions')]);
+        if (sequence !== this.loadSequence || requestedHostId !== this.hostId) return;
+        this.host = hosts.find((item: Host) => item.id === requestedHostId) || null;
         if (!this.host) throw new Error(this.t('cloudNative.hostRemoved'));
         this.inventory = inventory; this.permissions = permissions;
         this.dataUpdatedAt = new Date().toISOString();
-      } catch (error) { this.error = (error as Error).message; }
-      finally { this.loading = false; }
+      } catch (error) { if (sequence === this.loadSequence && requestedHostId === this.hostId) this.error = (error as Error).message; }
+      finally { if (sequence === this.loadSequence) this.loading = false; }
+      // Refresh this shared metrics snapshot after a potentially slow full inventory query.
+      // Both the summary cards and Overview read inventory.system, so they show the same sample.
+      if (sequence === this.loadSequence && this.inventory && this.host?.id === requestedHostId) await this.refreshMetrics();
     },
     async refreshMetrics() {
-      if (!this.inventory || !this.hostId || this.metricsRefreshing || document.hidden) return;
+      if (!this.inventory || !this.hostId || this.host?.id !== this.hostId || this.metricsRefreshing || document.hidden) return;
+      const requestedHostId = this.hostId;
+      const targetInventory = this.inventory;
       this.metricsRefreshing = true;
       try {
-        const metrics = await this.request(`/hosts/${this.hostId}/metrics`);
-        if (!this.inventory || this.hostId !== String(this.$route.query.hostId || '')) return;
-        Object.assign(this.inventory.system, metrics);
+        const metrics = await this.request(`/hosts/${requestedHostId}/metrics`);
+        if (this.hostId !== requestedHostId || this.host?.id !== requestedHostId || this.inventory !== targetInventory) return;
+        Object.assign(targetInventory.system, metrics);
         this.dataUpdatedAt = new Date().toISOString(); this.error = '';
-      } catch (error) { this.error = (error as Error).message; }
-      finally { this.metricsRefreshing = false; }
+      } catch (error) { if (this.hostId === requestedHostId && this.inventory === targetInventory) this.error = (error as Error).message; }
+      finally {
+        this.metricsRefreshing = false;
+        if (this.host?.id === this.hostId && this.inventory && this.inventory !== targetInventory && !document.hidden) this.refreshMetrics();
+      }
     },
     onVisibilityChange() { if (!document.hidden) this.refreshMetrics(); },
     async actOnVm(vm: Vm, action: 'start' | 'shutdown' | 'reboot' | 'pause' | 'resume') {
@@ -503,10 +558,11 @@ export default defineComponent({
     },
     async registerSubscription() {
       const form = { ...this.subscriptionForm };
-      if (!window.confirm(this.t('cloudNative.confirmSubscriptionRegister'))) return;
+      const replacing = this.subscriptionRegistered;
+      if (!window.confirm(this.t(replacing ? 'cloudNative.confirmSubscriptionChange' : 'cloudNative.confirmSubscriptionRegister'))) return;
       this.busy = 'subscription'; this.actionError = ''; this.actionSuccess = false;
       try {
-        await this.request(`/hosts/${this.hostId}/subscriptions/actions`, { method: 'POST', body: JSON.stringify({ action: 'register', email: form.email, regcode: form.regcode }) });
+        await this.request(`/hosts/${this.hostId}/subscriptions/actions`, { method: 'POST', body: JSON.stringify({ action: replacing ? 'replace' : 'register', email: form.email, regcode: form.regcode }) });
         this.showSubscriptionForm = false; this.subscriptionForm = { email: '', regcode: '' }; await this.load(); this.actionSuccess = true;
       } catch (error) { this.actionError = (error as Error).message; }
       finally { this.busy = ''; }
@@ -516,6 +572,26 @@ export default defineComponent({
       this.busy = 'subscription'; this.actionError = ''; this.actionSuccess = false;
       try { await this.request(`/hosts/${this.hostId}/subscriptions/actions`, { method: 'POST', body: JSON.stringify({ action: 'deregister' }) }); await this.load(); this.actionSuccess = true; }
       catch (error) { this.actionError = (error as Error).message; }
+      finally { this.busy = ''; }
+    },
+    async loadSubscriptionExtensions() {
+      if (this.extensionsLoading) return;
+      this.extensionsLoading = true; this.extensionsError = '';
+      try { this.extensions = await this.request(`/hosts/${this.hostId}/subscriptions/extensions`); this.extensionsLoaded = true; }
+      catch (error) { this.extensionsError = (error as Error).message; }
+      finally { this.extensionsLoading = false; }
+    },
+    async refreshSubscriptions() { await this.load(); await this.loadSubscriptionExtensions(); },
+    async changeExtension(extension: SubscriptionExtension, action: 'activate_extension' | 'deactivate_extension') {
+      const actionLabel = this.t(action === 'activate_extension' ? 'cloudNative.activateExtension' : 'cloudNative.deactivateExtension');
+      if (!window.confirm(this.t('cloudNative.confirmExtensionAction', { action: actionLabel, name: extension.name }))) return;
+      const regcode = this.extensionRegcodes[extension.product] || '';
+      this.busy = 'subscription'; this.actionError = ''; this.actionSuccess = false;
+      try {
+        await this.request(`/hosts/${this.hostId}/subscriptions/actions`, { method: 'POST', body: JSON.stringify({ action, product: extension.product, regcode }) });
+        delete this.extensionRegcodes[extension.product];
+        await Promise.all([this.load(), this.loadSubscriptionExtensions()]); this.actionSuccess = true;
+      } catch (error) { this.actionError = (error as Error).message; }
       finally { this.busy = ''; }
     },
     async setSecurityMode(mode: 'enforcing' | 'permissive') {
@@ -566,7 +642,7 @@ export default defineComponent({
     logLineClass(line: string) { return /\b(err|error|failed|critical|panic)\b/i.test(line) ? 'log-error' : /\b(warn|warning)\b/i.test(line) ? 'log-warning' : ''; },
     usageClass(value: string) { const percent = Number.parseInt(value, 10); return percent >= 90 ? 'usage-high' : percent >= 75 ? 'usage-medium' : 'usage-normal'; },
     usagePercent(value: string) { return Math.max(0, Math.min(100, Number.parseInt(value, 10) || 0)); },
-    selectTab(tab: string) { this.activeTab = tab; if (tab === 'storage') this.loadStorageVolumes(); },
+    selectTab(tab: string) { this.activeTab = tab; if (tab === 'storage') this.loadStorageVolumes(); if (tab === 'subscriptions') this.loadSubscriptionExtensions(); },
     async loadStorageVolumes() {
       if (this.volumesLoading) return;
       this.volumesLoading = true;
@@ -752,7 +828,10 @@ small { display:block; margin-top:4px; font-size:12px; }
 .safety-note { margin:12px 2px; color:var(--cn-muted); font-size:12px; }
 .security-panel { max-width:720px; }.security-panel h3 { margin:0 0 10px; }.security-actions { margin-top:16px; }
 .status-view { max-height:55vh; overflow:auto; padding:16px; border:1px solid var(--cn-border); border-radius:6px; color:var(--body-text,#e5e7eb); background:rgba(12,18,27,.72); white-space:pre-wrap; overflow-wrap:anywhere; font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace; }
+.subscription-card h3 { margin:14px 0 8px; }.subscription-status-row { display:flex; align-items:center; justify-content:space-between; gap:12px; }.subscription-status-row h3 { margin:12px 0 8px; }
+.ha-addon-card { display:flex; flex-wrap:wrap; align-items:center; gap:14px; margin:14px 0; padding:14px; border:1px solid var(--cn-border); border-radius:7px; background:var(--body-bg,#252b33); }.ha-addon-card>div { flex:1; min-width:200px; }.ha-addon-card p { margin:4px 0; color:var(--muted,#9aa4b2); font-size:12px; }.ha-addon-card code { overflow-wrap:anywhere; font-size:11px; }.ha-addon-card .extension-code { min-width:155px; max-width:200px; }.ha-addon-mark { display:grid; width:42px; height:42px; flex:0 0 42px; place-items:center; border-radius:8px; color:#b5f3ce; background:rgba(50,170,112,.18); font-size:13px; font-weight:800; }.ha-addon-missing { margin-top:14px; }.ha-addon-missing p { margin:5px 0 0; color:var(--muted,#9aa4b2); }
 .resource-actions { display:flex; flex-wrap:wrap; gap:6px; margin-top:14px; }
+.extension-manager { margin-top:24px; }.extension-actions { min-width:280px; white-space:normal !important; }.extension-actions .search-input { margin-right:6px; }.extension-code { min-width:150px; max-width:190px; padding:7px 9px; }
 .terminal-form { display:grid; justify-items:start; gap:10px; }.terminal-form label { font-weight:600; }.terminal-input { width:100%; max-width:900px; font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; }.terminal-result { margin-top:22px; }.terminal-result-header { display:flex; justify-content:space-between; gap:12px; margin-bottom:8px; }.ready-text { color:#67d391; }.error-text { color:#ff9690; }
 .usage-pill { display:inline-block; border-radius:12px; padding:3px 8px; font-size:11px; font-weight:600; }.usage-normal { color:#287447; background:#e8f6ed; }.usage-medium { color:#8b5a00; background:#fff4db; }.usage-high { color:#a52822; background:#fdeceb; }
 .usage-cell { display:grid; gap:5px; min-width:80px; }.usage-track { display:block; height:4px; overflow:hidden; border-radius:5px; background:rgba(120,135,160,.2); }.usage-track i { display:block; height:100%; border-radius:5px; background:#45a86d; }.usage-track i.usage-medium { background:#d99c30; }.usage-track i.usage-high { background:#d45b52; }
@@ -770,6 +849,17 @@ small { display:block; margin-top:4px; font-size:12px; }
 .resource-details-panel dt,.resource-details-panel dd { padding:12px 0; border-bottom:1px solid var(--cn-border); font-size:12px; }
 .resource-details-panel dt { color:var(--cn-muted); }.resource-details-panel dd { margin:0; overflow-wrap:anywhere; font-weight:500; }
 .admin-form { display:grid; gap:12px; margin:16px 0; padding:18px; border:1px solid var(--cn-border); border-radius:8px; background:var(--cn-panel); }
+.guided-admin-form { gap:18px; padding:22px; }
+.form-intro { padding-bottom:14px; border-bottom:1px solid var(--cn-border); }
+.form-intro .eyebrow { color:var(--cn-muted); font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; }
+.form-intro h3 { margin:5px 0; font-size:18px; }
+.form-intro p { margin:6px 0 0; max-width:800px; color:var(--cn-muted); font-size:13px; line-height:1.5; }
+.admin-field-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px 20px; }
+.admin-field-grid .field-wide { grid-column:1/-1; }
+.guided-admin-form label { display:grid; gap:7px; max-width:none; font-size:13px; font-weight:600; }
+.guided-admin-form label small { color:var(--cn-muted); font-size:12px; font-weight:400; line-height:1.45; }
+.guided-admin-form .search-input { width:100%; max-width:none; min-height:38px; box-sizing:border-box; }
+.guided-admin-form .row-actions { padding-top:12px; border-top:1px solid var(--cn-border); }
 .admin-form h3,.admin-form h4 { margin:0 0 2px; }
 .admin-form label { display:grid; gap:6px; max-width:680px; font-size:13px; font-weight:600; }
 .admin-form .row-actions { justify-content:flex-end; }
@@ -783,4 +873,5 @@ small { display:block; margin-top:4px; font-size:12px; }
 @media (max-width:820px) { .page-header,.section-heading { align-items:flex-start; flex-direction:column; }.toolbar { flex-wrap:wrap; }.filter-bar { justify-content:flex-start; }.overview-grid { grid-template-columns:1fr; }.admin-layout { display:block; }.admin-tabs { position:static; flex-direction:row; max-height:none; overflow:visible; margin:0 0 20px; padding:0 0 12px; border-right:0; border-bottom:1px solid var(--cn-border); }.nav-group { min-width:190px; }.admin-tabs button { padding:8px 10px; } }
 @media (max-width:820px) { .network-page .section-heading { align-items:flex-start; }.network-summary,.storage-summary { grid-template-columns:repeat(3,minmax(0,1fr)); width:100%; }.network-editor { grid-template-columns:1fr; }.editor-heading,.network-editor-footer { grid-column:auto; }.section-tools { justify-content:flex-start; } }
 @media (max-width:560px) { .cloud-native-page { padding:18px 12px 32px; }.cluster-summary { grid-template-columns:1fr; }.host-card { flex-wrap:wrap; }.host-card .state { margin-left:48px; }.admin-tabs { overflow-x:auto; }.search-input { max-width:100%; }.detail-stats { grid-template-columns:1fr; }.network-summary,.storage-summary { grid-template-columns:1fr; }.connection-details { grid-template-columns:1fr 1fr; }.network-card-heading,.connection-main { align-items:flex-start; }.gateway-card { grid-template-columns:auto 1fr; }.gateway-card>div:last-child { grid-column:2; }.network-editor-footer { align-items:flex-start; flex-direction:column; }.connection-actions { justify-content:flex-start; }.section-tools,.section-tools>.row-actions { width:100%; }.section-tools>.row-actions { min-width:0; justify-content:flex-start; }.resource-details-panel dl { grid-template-columns:1fr; }.resource-details-panel dt { padding-bottom:3px; border-bottom:0; }.resource-details-panel dd { padding-top:3px; } }
+@media (max-width:680px) { .admin-field-grid { grid-template-columns:1fr; }.admin-field-grid .field-wide { grid-column:auto; }.guided-admin-form { padding:16px; } }
 </style>
