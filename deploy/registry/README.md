@@ -1,5 +1,7 @@
-# Registry de imagens
+# Optional Docker Registry example
 
-Os manifests desta pasta instalam uma instância básica do Distribution Registry com TLS e autenticação. Antes de aplicar, crie os Secrets `registry-auth` e `registry-tls`, ajuste o armazenamento persistente e publique o serviço em um endereço acessível pelos clientes Docker e pelos nós Kubernetes.
+`registry.yaml` is an optional single-instance Distribution Registry example. It is not required to build or install Rancher KVM Manager; the project publishes the API image through GitHub Actions to GHCR, with optional Docker Hub publishing.
 
-Não inclua certificados privados, senhas ou credenciais neste repositório. Instale a CA do registry nos clientes Docker e nos nós Kubernetes que farão pull da imagem. Esta implantação simples não replica o armazenamento; use uma solução com alta disponibilidade para ambientes de produção.
+Before using this example, create the `registry-auth` and `registry-tls` Secrets, configure persistent storage for a StorageClass available in your cluster, and expose the service through an address reachable by Docker clients and Kubernetes nodes.
+
+Do not commit passwords, access tokens, or private TLS keys. Install the registry CA on clients and nodes that pull images. This example does not replicate storage or provide high availability, so it is not intended as a production registry without further hardening.

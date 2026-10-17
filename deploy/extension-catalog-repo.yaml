@@ -6,4 +6,3 @@ spec:
   url: https://OWNER.github.io/REPOSITORY
   refreshInterval: 300
   enabled: true
-  forceUpdate: "2026-10-15T23:46:00Z"

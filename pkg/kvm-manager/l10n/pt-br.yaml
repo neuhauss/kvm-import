@@ -25,6 +25,11 @@ kvmManager:
     addTitle: Add KVM host
     editTitle: Edit host
     hostDescription: Enter an existing host. The extension does not install or change packages on the host.
+    editorIntro: Conecte um host KVM existente ao Rancher. A extensão valida o acesso SSH e libvirt antes de adicioná-lo.
+    hostDetails: Detalhes do host
+    hostDetailsDescription: Informe o nome do host e o endereço SSH usado para administrar este servidor KVM.
+    sshCredentials: Credenciais SSH
+    sshCredentialsDescription: As credenciais são criptografadas quando armazenadas. A senha continua necessária para o login automático no Cockpit.
     displayName: Display name
     ipDns: IP address or DNS name
     sshPort: SSH port

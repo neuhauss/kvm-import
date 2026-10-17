@@ -1,9 +1,0 @@
-apiVersion: catalog.cattle.io/v1
-kind: ClusterRepo
-metadata:
-  name: kvm-extension-catalog
-spec:
-  # O índice fica na raiz do GitHub Pages; os charts usam o caminho assets/kvm-manager.
-  url: https://OWNER.github.io/REPOSITORY
-  refreshInterval: 300
-  enabled: true

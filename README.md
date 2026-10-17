@@ -1,61 +1,57 @@
 # Rancher KVM Manager
 
-Extensão Rancher para importar hosts SUSE Linux com KVM/libvirt já instalado e administrá-los sem instalar software no host. Para publicar o projeto e instalar em outro ambiente, siga o [guia de implantação em quatro passos](GUIA-INSTALACAO-4-PASSOS.md).
+Rancher KVM Manager imports and administers existing KVM/libvirt hosts from Rancher. It does not install KVM or change the imported host's software configuration.
 
-## Recursos da versão 0.7.14
+The extension provides host inventory and health details, VM inventory and serial consoles, storage and network views, service and log views, Cockpit access, SSH credential management, and an audit log. Its interface follows Rancher UI patterns and supports English and Brazilian Portuguese.
 
-- Cadastro, validação, edição, atualização e remoção de hosts KVM existentes.
-- Estado, última consulta, nome do host, CPU, memória e diagnóstico SSH/libvirt.
-- Administração do host em duas opções: Cockpit original ou interface cloud native no padrão de navegação do Rancher/Harvester.
-- Menu de administração por host para abrir Cockpit ou Cloud Native, mantendo a navegação lateral do KVM focada na lista de hosts.
-- Interface localizada em português do Brasil e inglês, seguindo o idioma selecionado no Rancher.
-- Tabelas e formulários usando cores de texto, fundo e borda do tema Rancher, com visual simplificado sem ícones decorativos.
-- Visão geral do host com sistema operacional, kernel, disponibilidade, CPU, memória e tempo ativo.
-- Console serial interativo para abrir terminal em VMs ligadas e configuradas com console serial.
-- Inventário de VMs com endereços IP quando disponíveis pelo lease DHCP, guest agent ou ARP; ações de VM e serviços atualizam apenas a lista afetada.
-- Filtros por estado para VMs, data da última atualização completa e preservação do último inventário quando a atualização falha.
-- Assets JavaScript servidos com compressão HTTP quando o cliente oferece suporte.
-- Áreas para VMs, armazenamento, rede, serviços systemd e logs, com ações de ciclo de vida de VMs e serviços registradas na auditoria.
-- Cockpit aberto no mesmo domínio do Rancher, autenticado com as credenciais já salvas.
-- Autenticação SSH por senha ou por chave privada; a frase secreta também é criptografada.
-- Histórico de auditoria com usuário Rancher, ação, alvo e resultado.
-- Autorização por Global Role do Rancher, configurável por `KVM_ALLOWED_GLOBAL_ROLES` (padrão: `admin`).
-- Ícone KVM próprio na navegação lateral do Rancher.
+## Requirements
 
-A extensão não cria nem remove VMs e não instala pacotes nos hosts. O desligamento de VM usa a ação normal de libvirt, sem `destroy` forçado. A senha do usuário continua necessária para o login automático do Cockpit, mesmo quando a chave SSH autentica o túnel.
+- Rancher 2.10 or later with UI Extensions enabled (the published chart currently targets Rancher 2.15+).
+- Existing Linux hosts with KVM/libvirt and SSH access.
+- A Kubernetes cluster with a default StorageClass, or a StorageClass selected for the API data PVC.
+- A public API image from GHCR or Docker Hub, plus access to the Rancher HTTPS endpoint from the API pod.
+- A trusted Rancher CA certificate and an SSH account on each host. The SSH account needs the privileges required for the selected administrative actions.
 
-## Segurança e dados
+## Install
 
-A API valida a sessão do Rancher e aceita apenas Global Roles configuradas. Os segredos SSH (senha, chave privada e frase secreta) ficam criptografados no SQLite com `KVM_CREDENTIAL_KEY` e nunca são devolvidos pela API. O Cockpit é acessado por um túnel SSH que fixa a chave do servidor; o cookie de sessão Rancher não é encaminhado ao host.
+In Rancher, add this Helm repository under **Apps > Repositories**:
 
-O banco guarda inventário e auditoria no PVC `kvm-api-data`. Faça backup coordenado desse volume e de `KVM_CREDENTIAL_KEY`; sem a chave não é possível descriptografar os dados. Os eventos de auditoria não incluem senhas nem chaves privadas. A autorização permite administrar todos os hosts cadastrados; esta versão ainda não restringe ações por host ou por projeto.
-
-Ao abrir o Cockpit pela primeira vez, a extensão ajusta `cockpit.conf`, guardando backup quando existe configuração anterior. Ao remover o cadastro, a restauração é tentada, mas uma falha de rede ou `sudo` não bloqueia a remoção; a reimportação do mesmo host pode reassumir a configuração marcada pela extensão.
-
-## Build e release
-
-Requisitos de desenvolvimento: Node.js 24+, Yarn e Python com PyYAML.
-
-```sh
-cd rancher-kvm
-./node_modules/.bin/yarn build-pkg kvm-manager
+```text
+https://neuhauss.github.io/kvm-import
 ```
 
-Para preparar a release e regenerar os manifests de assets/API:
+Then find **KVM Manager** in **Apps > Charts** and install it. The chart installs the Rancher extension, API, and UI assets; set the Rancher URL and review storage and ingress values in the Rancher install form. See [INSTALLATION.md](INSTALLATION.md) for details. The manifests under `deploy/` are optional examples for maintainers and manual deployments.
+
+## Security notes
+
+- The API authenticates requests through Rancher and restricts access by Global Role. The default allowed role is `admin`.
+- SSH passwords, private keys, and key passphrases are encrypted in SQLite using `KVM_CREDENTIAL_KEY`.
+- Keep the encryption key and the API data volume together in secure backups. Losing the key makes saved credentials unrecoverable.
+- Verify SSH host fingerprints before trusting them. The UI can pin a host key during import when the operator explicitly enables that option.
+- Cockpit access is proxied through an SSH tunnel. Rancher session cookies are not forwarded to the KVM host.
+- The audit log records administrative actions without passwords or private keys.
+
+## Build and release
+
+Development requirements: Node.js 24+, Yarn, Python 3, PyYAML, and Helm.
 
 ```sh
-CHART_REPO_URL=https://<OWNER>.github.io/<REPOSITORY>/assets/kvm-manager scripts/package-release.sh
+yarn install --frozen-lockfile
+yarn build-pkg kvm-manager
 ```
 
-A release GitHub `v0.7.6` aciona o workflow único de publicação da API no GHCR e Docker Hub. Configure os secrets `DOCKERHUB_USERNAME` e `DOCKERHUB_TOKEN` em Actions. O workflow de charts publica o catálogo na branch `gh-pages`. O [guia de quatro passos](GUIA-INSTALACAO-4-PASSOS.md) cobre publicação, instalação e os componentes que precisam estar acessíveis ao Rancher.
+To prepare a local release bundle and manifests:
 
-Os dados persistentes usam PVCs no StorageClass `default`, sem gravar diretamente no filesystem do nó. Ajuste o StorageClass para o padrão do cluster de destino, se necessário.
+```sh
+CHART_REPO_URL=. scripts/package-release.sh
+```
 
-## Estrutura
+Publishing a GitHub Release tagged `kvm-manager-<version>` builds the API image on GHCR and publishes the extension chart to GitHub Pages. Make the GHCR package public for community installs. Docker Hub publishing is an optional secondary target and requires the repository secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`.
 
-- `pkg/kvm-manager/`: interface Rancher e ícone SVG.
-- `service/`: API FastAPI, proxy autenticado do Cockpit e cliente SSH/libvirt.
-- `charts/kvm-manager/`: chart que registra o `UIPlugin`.
-- `deploy/`: manifests de referência, ConfigMaps e catálogo.
-- `deploy/container-image/`: overlay Kustomize que troca o modo ConfigMap pelo container Docker da API.
-- `scripts/`: empacotamento e geração dos ConfigMaps da release.
+## Contributing
+
+Issues and pull requests are welcome. Keep changes inside this extension and its deployment examples; do not patch Rancher or SUSE Virtualization source code. See [UI-DESIGN-PRINCIPLES.md](UI-DESIGN-PRINCIPLES.md) for the interface conventions used by the project.
+
+## License
+
+No license has been selected for this repository yet. Until a license is added, copyright remains with the authors and reuse rights are not granted by default.

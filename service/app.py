@@ -38,7 +38,7 @@ DB_PATH = Path(os.getenv("KVM_DB_PATH", "./data/kvm-hosts.sqlite3"))
 KNOWN_HOSTS = os.getenv("KVM_KNOWN_HOSTS", "./known_hosts")
 credential_key = os.environ.get("KVM_CREDENTIAL_KEY", "")
 RANCHER_API_URL = os.getenv("RANCHER_API_URL", "https://rancher.example.com").rstrip("/")
-RANCHER_CA_FILE = os.getenv("RANCHER_CA_FILE", "/etc/rancher-ca/ca.crt")
+RANCHER_CA_FILE = os.getenv("RANCHER_CA_FILE", "").strip() or None
 if len(credential_key) < 32:
     raise RuntimeError("Configure KVM_CREDENTIAL_KEY with at least 32 random characters")
 FERNET_KEY = base64.urlsafe_b64encode(hashlib.sha256(credential_key.encode()).digest())

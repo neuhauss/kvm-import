@@ -5,7 +5,7 @@ resources:
 images:
   - name: python:3.12-slim
     newName: ghcr.io/your-github-owner/rancher-kvm-api
-    newTag: 0.7.5
+    newTag: 0.7.15
 patches:
   - target:
       group: apps

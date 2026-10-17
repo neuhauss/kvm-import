@@ -31,7 +31,7 @@ spec:
         - /bin/sh
         - -ec
         args:
-        - mkdir -p /tmp/www && cp -R /usr/local/apache2/htdocs/. /tmp/www/ && gzip -dc /tmp/www/kvm-manager/0.7.14/plugin/kvm-manager-0.7.14.umd.min.303.js.gz > /tmp/www/kvm-manager/0.7.14/plugin/kvm-manager-0.7.14.umd.min.303.js && rm /tmp/www/kvm-manager/0.7.14/plugin/kvm-manager-0.7.14.umd.min.303.js.gz && sed -e 's/^Listen 80$/Listen 8080/' -e 's#DocumentRoot "/usr/local/apache2/htdocs"#DocumentRoot "/tmp/www"#' -e 's#<Directory "/usr/local/apache2/htdocs">#<Directory "/tmp/www">#' -e 's/^#LoadModule deflate_module /LoadModule deflate_module /' -e '/^LoadModule deflate_module /a AddOutputFilterByType DEFLATE text/javascript application/javascript application/json text/css image/svg+xml' /usr/local/apache2/conf/httpd.conf > /tmp/httpd.conf && exec httpd -f /tmp/httpd.conf -DFOREGROUND
+        - mkdir -p /tmp/www && cp -R /usr/local/apache2/htdocs/. /tmp/www/ && gzip -dc /tmp/www/kvm-manager/0.7.15/plugin/kvm-manager-0.7.15.umd.min.303.js.gz > /tmp/www/kvm-manager/0.7.15/plugin/kvm-manager-0.7.15.umd.min.303.js && rm /tmp/www/kvm-manager/0.7.15/plugin/kvm-manager-0.7.15.umd.min.303.js.gz && sed -e 's/^Listen 80$/Listen 8080/' -e 's#DocumentRoot "/usr/local/apache2/htdocs"#DocumentRoot "/tmp/www"#' -e 's#<Directory "/usr/local/apache2/htdocs">#<Directory "/tmp/www">#' -e 's/^#LoadModule deflate_module /LoadModule deflate_module /' -e '/^LoadModule deflate_module /a AddOutputFilterByType DEFLATE text/javascript application/javascript application/json text/css image/svg+xml' /usr/local/apache2/conf/httpd.conf > /tmp/httpd.conf && exec httpd -f /tmp/httpd.conf -DFOREGROUND
         ports:
         - name: http
           containerPort: 8080
@@ -60,30 +60,30 @@ spec:
       volumes:
       - name: assets
         configMap:
-          name: kvm-extension-assets-0-7-14
+          name: kvm-extension-assets-0-7-15
           items:
-          - key: files-0.7.14.txt
-            path: kvm-manager/0.7.14/files.txt
-          - key: package-0.7.14.json
-            path: kvm-manager/0.7.14/plugin/package.json
-          - key: kvm-manager-0.7.14.umd.min.148.js
-            path: kvm-manager/0.7.14/plugin/kvm-manager-0.7.14.umd.min.148.js
-          - key: kvm-manager-0.7.14.umd.min.303.js.gz
-            path: kvm-manager/0.7.14/plugin/kvm-manager-0.7.14.umd.min.303.js.gz
-          - key: kvm-manager-0.7.14.umd.min.37.js
-            path: kvm-manager/0.7.14/plugin/kvm-manager-0.7.14.umd.min.37.js
-          - key: kvm-manager-0.7.14.umd.min.js
-            path: kvm-manager/0.7.14/plugin/kvm-manager-0.7.14.umd.min.js
-          - key: kvm-manager-0.7.14.umd.min.kvm-vm-console.js
-            path: kvm-manager/0.7.14/plugin/kvm-manager-0.7.14.umd.min.kvm-vm-console.js
-          - key: asset-0.7.14-kvm.f932afc0.svg
-            path: kvm-manager/0.7.14/plugin/img/kvm.f932afc0.svg
+          - key: files-0.7.15.txt
+            path: kvm-manager/0.7.15/files.txt
+          - key: package-0.7.15.json
+            path: kvm-manager/0.7.15/plugin/package.json
+          - key: kvm-manager-0.7.15.umd.min.148.js
+            path: kvm-manager/0.7.15/plugin/kvm-manager-0.7.15.umd.min.148.js
+          - key: kvm-manager-0.7.15.umd.min.303.js.gz
+            path: kvm-manager/0.7.15/plugin/kvm-manager-0.7.15.umd.min.303.js.gz
+          - key: kvm-manager-0.7.15.umd.min.37.js
+            path: kvm-manager/0.7.15/plugin/kvm-manager-0.7.15.umd.min.37.js
+          - key: kvm-manager-0.7.15.umd.min.js
+            path: kvm-manager/0.7.15/plugin/kvm-manager-0.7.15.umd.min.js
+          - key: kvm-manager-0.7.15.umd.min.kvm-vm-console.js
+            path: kvm-manager/0.7.15/plugin/kvm-manager-0.7.15.umd.min.kvm-vm-console.js
+          - key: asset-0.7.15-kvm.f932afc0.svg
+            path: kvm-manager/0.7.15/plugin/img/kvm.f932afc0.svg
           - key: catalog-index.yaml
             path: catalog/index.yaml
-          - key: catalog-chart-0.7.13.tgz
-            path: catalog/kvm-manager-0.7.13.tgz
           - key: catalog-chart-0.7.14.tgz
             path: catalog/kvm-manager-0.7.14.tgz
+          - key: catalog-chart-0.7.15.tgz
+            path: catalog/kvm-manager-0.7.15.tgz
       - name: tmp
         emptyDir: {}
       - name: logs
@@ -115,8 +115,8 @@ metadata:
 spec:
   plugin:
     name: kvm-manager
-    version: 0.7.14
-    endpoint: http://kvm-extension-assets.rancher-kvm-registry.svc:8080/kvm-manager/0.7.14
+    version: 0.7.15
+    endpoint: http://kvm-extension-assets.rancher-kvm-registry.svc:8080/kvm-manager/0.7.15
     noCache: false
     noAuth: false
     metadata:

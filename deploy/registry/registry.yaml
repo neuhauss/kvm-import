@@ -182,7 +182,6 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
-  storageClassName: default
   resources:
     requests:
       storage: 20Gi

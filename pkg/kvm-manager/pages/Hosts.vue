@@ -1,5 +1,85 @@
 <template>
   <div class="kvm-page">
+    <section v-if="dialog" class="host-editor" :aria-label="editing ? t('hosts.editTitle') : t('hosts.addTitle')">
+      <header class="host-editor-header">
+        <h1><span>KVM:</span> {{ editing ? t('hosts.editTitle') : t('hosts.addTitle') }}</h1>
+        <p class="text-muted">{{ t('hosts.hostDescription') }}</p>
+      </header>
+
+      <form class="host-editor-form" @submit.prevent="save">
+        <div class="host-editor-content">
+          <div class="host-editor-callout" role="note">{{ t('hosts.editorIntro') }}</div>
+
+          <section class="host-form-section" aria-labelledby="host-details-heading">
+            <header class="host-form-section-heading">
+              <h2 id="host-details-heading">{{ t('hosts.hostDetails') }}</h2>
+              <p class="text-muted">{{ t('hosts.hostDetailsDescription') }}</p>
+            </header>
+            <div class="host-field-grid">
+              <label class="rancher-field field-name">
+                <span>{{ t('hosts.displayName') }} <b aria-hidden="true">*</b></span>
+                <input v-model.trim="form.name" required maxlength="80" autocomplete="off" placeholder="kvm-prod-01">
+              </label>
+              <label class="rancher-field field-address">
+                <span>{{ t('hosts.ipDns') }} <b aria-hidden="true">*</b></span>
+                <input v-model.trim="form.address" required autocomplete="url" placeholder="192.0.2.10">
+              </label>
+              <label class="rancher-field field-port">
+                <span>{{ t('hosts.sshPort') }} <b aria-hidden="true">*</b></span>
+                <input v-model.number="form.port" type="number" min="1" max="65535" required inputmode="numeric">
+              </label>
+            </div>
+          </section>
+
+          <section class="host-form-section" aria-labelledby="host-credentials-heading">
+            <header class="host-form-section-heading">
+              <h2 id="host-credentials-heading">{{ t('hosts.sshCredentials') }}</h2>
+              <p class="text-muted">{{ t('hosts.sshCredentialsDescription') }}</p>
+            </header>
+            <div class="host-field-grid">
+              <label class="rancher-field field-wide">
+                <span>{{ t('hosts.sshUser') }} <b aria-hidden="true">*</b></span>
+                <input v-model.trim="form.username" required autocomplete="username" placeholder="sles">
+              </label>
+              <label class="rancher-field field-wide">
+                <span>{{ t('hosts.password') }}<b v-if="!editing" aria-hidden="true"> *</b></span>
+                <input v-model="form.password" type="password" :required="!editing" autocomplete="new-password" :placeholder="editing ? t('hosts.keepPassword') : ''">
+                <small>{{ t('hosts.passwordHelp') }}</small>
+              </label>
+              <label class="rancher-field field-wide">
+                <span>{{ t('hosts.sshKey') }}</span>
+                <textarea v-model="form.ssh_private_key" rows="4" autocomplete="off" spellcheck="false" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"></textarea>
+                <small>{{ t('hosts.sshKeyHelp') }}</small>
+              </label>
+              <label v-if="form.ssh_private_key" class="rancher-field field-wide">
+                <span>{{ t('hosts.keyPassphrase') }}</span>
+                <input v-model="form.ssh_key_passphrase" type="password" autocomplete="new-password" :placeholder="t('common.optional')">
+              </label>
+            </div>
+          </section>
+
+          <section class="host-form-section host-trust-section" aria-label="SSH host verification">
+            <label v-if="editing" class="rancher-check">
+              <input v-model="form.remove_ssh_key" type="checkbox">
+              <span>{{ t('hosts.removeSavedKey') }}</span>
+            </label>
+            <label class="rancher-check">
+              <input v-model="form.accept_new_host_key" type="checkbox">
+              <span><strong>{{ t('hosts.acceptHostKey') }}</strong><small>{{ t('hosts.trustKeyHelp') }}</small></span>
+            </label>
+          </section>
+
+          <div v-if="formError" class="banner error" role="alert">{{ formError }}</div>
+        </div>
+
+        <footer class="host-editor-footer">
+          <button type="button" class="btn role-secondary" :disabled="saving" @click="closeForm">{{ t('hosts.cancel') }}</button>
+          <button class="btn role-primary" :disabled="saving">{{ saving ? t('hosts.validating') : (editing ? t('hosts.save') : t('hosts.import')) }}</button>
+        </footer>
+      </form>
+    </section>
+
+    <template v-else>
     <div class="header">
       <div>
         <h1>{{ t('hosts.title') }}</h1>
@@ -53,34 +133,7 @@
       </table>
     </div>
 
-    <div v-if="dialog" class="modal-backdrop" @click.self="dialog = false">
-      <section class="modal">
-        <h2>{{ editing ? t('hosts.editTitle') : t('hosts.addTitle') }}</h2>
-        <p class="text-muted">{{ t('hosts.hostDescription') }}</p>
-        <form @submit.prevent="save">
-          <label>{{ t('hosts.displayName') }}<input v-model.trim="form.name" required maxlength="80" placeholder="kvm-prod-01"></label>
-          <div class="form-row">
-            <label>{{ t('hosts.ipDns') }}<input v-model.trim="form.address" required placeholder="192.0.2.10"></label>
-            <label>{{ t('hosts.sshPort') }}<input v-model.number="form.port" type="number" min="1" max="65535" required></label>
-          </div>
-          <label>{{ t('hosts.sshUser') }}<input v-model.trim="form.username" required autocomplete="username"></label>
-          <label>{{ t('hosts.password') }}<input v-model="form.password" type="password" :required="!editing" autocomplete="new-password" :placeholder="editing ? t('hosts.keepPassword') : ''"><small>{{ t('hosts.passwordHelp') }}</small></label>
-          <label>{{ t('hosts.sshKey') }}<textarea v-model="form.ssh_private_key" rows="5" autocomplete="off" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"></textarea><small>{{ t('hosts.sshKeyHelp') }}</small></label>
-          <label v-if="form.ssh_private_key" class="key-passphrase">{{ t('hosts.keyPassphrase') }}<input v-model="form.ssh_key_passphrase" type="password" autocomplete="new-password" :placeholder="t('common.optional')"></label>
-          <label v-if="editing" class="trust-key-option"><input v-model="form.remove_ssh_key" type="checkbox"><span>{{ t('hosts.removeSavedKey') }}</span></label>
-          <label class="trust-key-option">
-            <input v-model="form.accept_new_host_key" type="checkbox">
-            <span><strong>{{ t('hosts.acceptHostKey') }}</strong><small>{{ t('hosts.trustKeyHelp') }}</small></span>
-          </label>
-          <div v-if="formError" class="banner error">{{ formError }}</div>
-          <div class="modal-actions">
-            <button type="button" class="btn role-secondary" @click="dialog = false">{{ t('hosts.cancel') }}</button>
-            <button class="btn role-primary" :disabled="saving">{{ saving ? t('hosts.validating') : (editing ? t('hosts.save') : t('hosts.import')) }}</button>
-          </div>
-        </form>
-      </section>
-    </div>
-
+    </template>
   </div>
 </template>
 
@@ -147,6 +200,10 @@ export default defineComponent({
       this.editing = ''; this.formError = '';
       this.form = { name: '', address: '', port: 22, username: '', password: '', ssh_private_key: '', ssh_key_passphrase: '', remove_ssh_key: false, accept_new_host_key: false }; this.dialog = true;
     },
+    closeForm() {
+      this.dialog = false; this.editing = ''; this.formError = '';
+      this.form = { name: '', address: '', port: 22, username: '', password: '', ssh_private_key: '', ssh_key_passphrase: '', remove_ssh_key: false, accept_new_host_key: false };
+    },
     edit(host: Host) {
       this.editing = host.id; this.formError = '';
       this.form = { name: host.name, address: host.address, port: host.port, username: host.username, password: '', ssh_private_key: '', ssh_key_passphrase: '', remove_ssh_key: false, accept_new_host_key: false }; this.dialog = true;
@@ -163,7 +220,7 @@ export default defineComponent({
           : await this.request('/hosts', { method: 'POST', body: JSON.stringify(payload) });
         if (!this.editing) this.hosts.unshift(host);
         else Object.assign(this.hosts.find((item) => item.id === this.editing) || {}, host);
-        this.dialog = false;
+        this.closeForm();
       } catch (e) { this.formError = (e as Error).message; }
       finally { this.saving = false; }
     },
@@ -215,7 +272,7 @@ export default defineComponent({
 </script>
 
 <style scoped>
-.kvm-page { padding: 24px; }
+.kvm-page { min-height: calc(100vh - 100px); padding: 24px; box-sizing: border-box; }
 .header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 24px; }
 .header-actions { display: flex; gap: 8px; }
 h1 { margin: 0 0 6px; }
@@ -238,17 +295,38 @@ small { display: block; font-size: 12px; margin-top: 4px; }
 .banner { padding: 12px; border-radius: 4px; margin: 12px 0; }
 .error { background: #fff0ee; color: #8f211a; }
 .empty-state { padding: 64px 16px; text-align: center; border: 1px dashed var(--border, #d8dde6); }
-.modal-backdrop { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; background: #0008; }
-.modal { width: min(520px, calc(100vw - 32px)); padding: 24px; border-radius: 6px; background: var(--body-bg, white); box-shadow: 0 8px 32px #0003; }
-.modal form { display: grid; gap: 14px; }
-.modal label { display: grid; gap: 6px; }
-.modal input,.modal textarea { color:var(--input-text, var(--body-text)); background:var(--input-bg, var(--body-bg)); border:1px solid var(--input-border, var(--border)); }
-.modal input { width: 100%; padding: 9px 10px; border-radius: 4px; box-sizing: border-box; }
-.modal textarea { width: 100%; padding: 9px 10px; border-radius: 4px; box-sizing: border-box; resize: vertical; font-family: monospace; }
-.modal .trust-key-option { display: flex; align-items: flex-start; gap: 10px; padding: 10px; border: 1px solid var(--border, #d8dde6); border-radius: 4px; }
-.trust-key-option input { width: auto; margin-top: 3px; }
-.trust-key-option span { display: grid; gap: 4px; }
-.form-row { display: grid; grid-template-columns: 1fr 130px; gap: 12px; }
-.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
-@media (max-width: 700px) { .header { flex-direction: column; } .header-actions { width: 100%; flex-wrap: wrap; } .form-row { grid-template-columns: 1fr; } }
+.host-editor { min-height: calc(100vh - 148px); display: flex; flex-direction: column; }
+.host-editor-header { padding: 0 0 20px; margin-bottom: 24px; border-bottom: 1px solid var(--border, #39414d); }
+.host-editor-header h1 { margin: 0 0 12px; font-size: 24px; font-weight: 400; }
+.host-editor-header h1 span { color: var(--link, #7aa7e8); }
+.host-editor-header p { margin: 0; }
+.host-editor-form { flex: 1; display: flex; flex-direction: column; }
+.host-editor-content { width: min(100%, 1100px); padding-bottom: 32px; }
+.host-editor-callout { margin-bottom: 22px; padding: 12px 14px; border-left: 4px solid var(--primary, #3d98ff); color: var(--body-text, #e5e7eb); background: color-mix(in srgb, var(--primary, #3d98ff) 14%, var(--body-bg, #252b33)); }
+.host-form-section { padding: 20px 0; border-bottom: 1px solid var(--border, #39414d); }
+.host-form-section-heading { margin-bottom: 18px; }
+.host-form-section-heading h2 { margin: 0 0 6px; font-size: 18px; }
+.host-form-section-heading p { margin: 0; }
+.host-field-grid { display: grid; grid-template-columns: repeat(12,minmax(0,1fr)); gap: 18px 16px; }
+.rancher-field { position: relative; display: flex; flex-direction: column; min-width: 0; }
+.rancher-field > span { position: absolute; z-index: 1; top: 9px; left: 12px; color: var(--muted, #8b95a5); font-size: 12px; line-height: 16px; pointer-events: none; }
+.rancher-field > span b { color: var(--primary, #53c99a); font-weight: 600; }
+.rancher-field input,.rancher-field textarea { width: 100%; min-height: 68px; padding: 27px 12px 10px; box-sizing: border-box; border: 1px solid var(--input-border, var(--border, #4b5563)); border-radius: 4px; outline: none; color: var(--input-text, var(--body-text, #e5e7eb)); background: var(--input-bg, var(--body-bg, #252b33)); font: inherit; }
+.rancher-field textarea { min-height: 108px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+.rancher-field input:focus,.rancher-field textarea:focus { border-color: var(--primary, #53c99a); box-shadow: 0 0 0 1px var(--primary, #53c99a); }
+.rancher-field input::placeholder,.rancher-field textarea::placeholder { color: var(--muted, #8b95a5); opacity: .78; }
+.rancher-field small,.rancher-check small { display: block; margin-top: 7px; color: var(--muted, #8b95a5); font-size: 12px; line-height: 1.45; }
+.field-wide { grid-column: 1 / -1; }
+.field-name { grid-column: span 6; }
+.field-address { grid-column: span 8; }
+.field-port { grid-column: span 4; }
+.host-trust-section { display: grid; gap: 16px; border-bottom: 0; }
+.rancher-check { display: flex; align-items: flex-start; gap: 10px; color: var(--body-text); }
+.rancher-check input { flex: 0 0 auto; width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--primary, #53c99a); }
+.rancher-check span { min-width: 0; }
+.rancher-check small { max-width: 760px; }
+.host-editor-footer { position: sticky; bottom: 0; display: flex; justify-content: flex-end; gap: 12px; margin: auto -24px -24px; padding: 14px 24px; border-top: 1px solid var(--border, #39414d); background: var(--body-bg, #252b33); }
+.banner { padding: 12px; border-radius: 4px; margin: 12px 0; }
+.error { background: var(--error-bg, #fff0ee); color: var(--error-text, #8f211a); }
+@media (max-width: 700px) { .kvm-page { padding: 16px; }.header { flex-direction: column; }.header-actions { width: 100%; flex-wrap: wrap; }.host-editor { min-height: calc(100vh - 120px); }.host-editor-header h1 { font-size: 21px; }.field-wide,.field-name,.field-address,.field-port { grid-column: 1 / -1; }.host-editor-footer { margin: auto -16px -16px; padding: 12px 16px; } }
 </style>

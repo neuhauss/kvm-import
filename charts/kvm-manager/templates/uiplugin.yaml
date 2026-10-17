@@ -10,10 +10,10 @@ spec:
   plugin:
     name: {{ .Chart.Name }}
     version: {{ .Chart.Version | quote }}
-    endpoint: {{ .Values.plugin.endpoint | default (printf "http://kvm-extension-assets.rancher-kvm-registry.svc:8080/kvm-manager/%s" .Chart.Version) | quote }}
+    endpoint: {{ .Values.plugin.endpoint | default (printf "http://kvm-extension-assets.%s.svc:8080/kvm-manager/%s" .Values.backend.namespace .Chart.Version) | quote }}
     noCache: false
     noAuth: false
     metadata:
       catalog.cattle.io/display-name: KVM
-      catalog.cattle.io/rancher-version: ">=2.15.0"
+      catalog.cattle.io/rancher-version: ">=2.10.0"
       catalog.cattle.io/ui-extensions-version: ">=3.0.0 <4.0.0"

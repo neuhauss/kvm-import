@@ -7,4 +7,6 @@ VERSION="$(node -p "require('./pkg/kvm-manager/package.json').version")"
 ./node_modules/.bin/yarn build-pkg kvm-manager
 python3 scripts/package-chart.py
 python3 scripts/render-configmaps.py
-printf 'Release %s empacotada. Revise deploy/ e publique a tag v%s no GitHub.\n' "$VERSION" "$VERSION"
+python3 scripts/package-chart.py
+python3 scripts/render-configmaps.py
+printf 'Release %s packaged. Review deploy/ and publish a GitHub Release tagged kvm-manager-%s.\n' "$VERSION" "$VERSION"

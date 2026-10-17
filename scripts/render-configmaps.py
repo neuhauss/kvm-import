@@ -117,6 +117,23 @@ for doc in ui_docs:
                 if not chart_version:
                     chart_version = "0.1.5"
                 new_items.append((chart_key, f"catalog/kvm-manager-{chart_version}.tgz"))
+        # The public Helm chart carries just the UI plugin files. It serves them
+        # from an in-cluster assets Service and does not need the legacy chart catalog.
+        helm_items = [
+            {"key": key, "path": path}
+            for key, path in new_items
+            if key != "catalog-index.yaml" and not key.startswith("catalog-chart")
+        ]
+        helm_data = {item["key"]: assets["data"][item["key"]] for item in helm_items if item["key"] in assets["data"]}
+        helm_binary = {item["key"]: binary_data[item["key"]] for item in helm_items if item["key"] in binary_data}
+        chart_files = ROOT / "charts/kvm-manager/files"
+        chart_files.mkdir(parents=True, exist_ok=True)
+        (chart_files / "assets-data.yaml").write_text(
+            yaml.safe_dump({"data": helm_data, "binaryData": helm_binary}, sort_keys=False, width=1000)
+        )
+        (chart_files / "assets-items.yaml").write_text(
+            yaml.safe_dump(helm_items, sort_keys=False, width=1000)
+        )
         doc["spec"]["template"]["spec"]["volumes"][0]["configMap"]["items"] = [
             {"key": key, "path": path} for key, path in new_items
         ]

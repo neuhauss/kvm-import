@@ -1,3 +1,47 @@
+# Public Rancher URL users open in the browser. Override this when installing.
+rancher:
+  publicOrigin: https://rancher.example.com
+  # Optional; defaults to publicOrigin. Must resolve and be trusted from the API pod.
+  apiUrl: ""
+  # Optional PEM CA bundle for a Rancher instance using a private CA.
+  caBundle: ""
+  allowedGlobalRoles:
+    - admin
+
+backend:
+  namespace: rancher-kvm-registry
+  storage:
+    size: 1Gi
+    # Empty uses the cluster's default StorageClass.
+    storageClassName: ""
+  image:
+    repository: ghcr.io/neuhauss/rancher-kvm-api
+    tag: "" # Defaults to the chart appVersion.
+    pullPolicy: IfNotPresent
+  imagePullSecrets: []
+  resources:
+    requests:
+      cpu: 100m
+      memory: 192Mi
+    limits:
+      cpu: "1"
+      memory: 768Mi
+
+ingress:
+  enabled: true
+  className: traefik
+  annotations: {}
+
+assets:
+  image: httpd:2.4-alpine
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
 plugin:
-  # Override with a public HTTPS URL when serving the extension bundle externally.
+  # Override to use an external URL. The default is the in-cluster asset server.
   endpoint: ""

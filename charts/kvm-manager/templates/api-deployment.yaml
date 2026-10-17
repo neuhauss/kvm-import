@@ -1,0 +1,109 @@
+{{- $caEnabled := .Values.rancher.caBundle -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kvm-api
+  namespace: {{ .Values.backend.namespace }}
+  labels:
+    app.kubernetes.io/name: kvm-api
+    app.kubernetes.io/part-of: rancher-kvm
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kvm-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kvm-api
+        app.kubernetes.io/part-of: rancher-kvm
+    spec:
+      {{- with .Values.backend.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: api
+          image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+          env:
+            - name: KVM_DB_PATH
+              value: /data/kvm-hosts.sqlite3
+            - name: KVM_KNOWN_HOSTS
+              value: /etc/kvm/known_hosts
+            - name: KVM_CREDENTIAL_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: kvm-api-secrets
+                  key: credential-key
+            - name: RANCHER_API_URL
+              value: {{ .Values.rancher.apiUrl | default .Values.rancher.publicOrigin | quote }}
+            - name: RANCHER_CA_FILE
+              value: {{ ternary "/etc/rancher-ca/ca.crt" "" $caEnabled | quote }}
+            - name: RANCHER_PUBLIC_ORIGIN
+              value: {{ trimSuffix "/" .Values.rancher.publicOrigin | quote }}
+            - name: KVM_ALLOWED_GLOBAL_ROLES
+              value: {{ join "," .Values.rancher.allowedGlobalRoles | quote }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          resources:
+            {{- toYaml .Values.backend.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 20
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: known-hosts
+              mountPath: /etc/kvm
+              readOnly: true
+            {{- if $caEnabled }}
+            - name: rancher-ca
+              mountPath: /etc/rancher-ca
+              readOnly: true
+            {{- end }}
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: kvm-api-data
+        - name: known-hosts
+          configMap:
+            name: kvm-known-hosts
+        {{- if $caEnabled }}
+        - name: rancher-ca
+          configMap:
+            name: kvm-rancher-ca
+        {{- end }}
+        - name: tmp
+          emptyDir: {}
