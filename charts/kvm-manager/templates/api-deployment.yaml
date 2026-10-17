@@ -1,4 +1,4 @@
-{{- $caEnabled := .Values.rancher.caBundle -}}
+{{- $caEnabled := ne (.Values.rancher.caBundle | toString) "" -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
