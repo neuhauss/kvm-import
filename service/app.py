@@ -1521,13 +1521,20 @@ def info(pool,name):
  values={line.split(':',1)[0].strip().lower():line.split(':',1)[1].strip() for line in text.splitlines() if ':' in line}
  xml=ET.fromstring(run(['virsh','-c','qemu:///system','vol-dumpxml',name,'--pool',pool]))
  return {'pool':pool,'name':name,'path':path,'format':(xml.findtext('./target/format') or values.get('type','unknown')),'capacity_bytes':int(values.get('capacity','0')),'allocation_bytes':int(values.get('allocation','0'))}
+def names(pool):
+ text=run(['virsh','-c','qemu:///system','vol-list','--pool',pool])
+ result=[]
+ for line in text.splitlines():
+  line=line.strip()
+  if not line or line.startswith('---') or line.lower().startswith('name '): continue
+  cols=line.split(None,1)
+  if cols: result.append(cols[0])
+ return result
 if sys.argv[1]=='list':
  pools=[x.strip() for x in run(['virsh','-c','qemu:///system','pool-list','--all','--name']).splitlines() if x.strip()]
  volumes=[]
  for pool in pools:
-  names=run(['virsh','-c','qemu:///system','vol-list','--pool',pool,'--name']).splitlines()
-  for name in names:
-   name=name.strip()
+  for name in names(pool):
    if name:
     try: volumes.append(info(pool,name))
     except Exception: continue
@@ -1543,8 +1550,7 @@ if action=='create':
  if not any(x.lower().startswith('state:') and 'running' in x.lower() for x in pool_info.splitlines()): raise SystemExit('Storage pool must be running')
  free=next((int(x.split(':',1)[1].strip()) for x in pool_info.splitlines() if x.lower().startswith('available:')),0)
  if int(capacity)>free: raise SystemExit('Requested capacity exceeds the pool free space')
- names=[x.strip() for x in run(['virsh','-c','qemu:///system','vol-list','--pool',pool,'--name']).splitlines() if x.strip()]
- if name in names: raise SystemExit('A volume with this name already exists in the pool')
+ if name in names(pool): raise SystemExit('A volume with this name already exists in the pool')
  run(['virsh','-c','qemu:///system','vol-create-as',pool,name,capacity,'--format',fmt])
  print(json.dumps(info(pool,name))); raise SystemExit
 if action=='delete':
