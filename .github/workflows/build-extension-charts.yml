@@ -1,26 +1,53 @@
-name: Build and Release Extension Charts
+name: Publish Rancher Extension Chart
 
 on:
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       tagged_release:
-        description: "Extension package tag, for example kvm-manager-0.7.7"
+        description: "Release tag to publish, for example kvm-manager-0.7.16"
         required: true
         type: string
-  release:
-    types: [released]
 
-defaults:
-  run:
-    shell: bash
-    working-directory: ./
+permissions:
+  contents: write
 
 jobs:
-  build-extension-charts:
-    uses: rancher/dashboard/.github/workflows/build-extension-charts.yml@master
-    permissions:
-      contents: write
-      pull-requests: write
-    with:
-      target_branch: gh-pages
-      tagged_release: ${{ inputs.tagged_release || github.ref_name }}
+  publish-chart:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the release
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tagged_release || github.event.release.tag_name || github.ref_name }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Package the complete extension chart
+        env:
+          CHART_REPO_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
+        run: |
+          python -m pip install --disable-pip-version-check pyyaml
+          python3 scripts/package-chart.py
+
+      - name: Publish the Helm repository to GitHub Pages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/kvm-pages"
+          cp -a deploy/extension-catalog/. "$RUNNER_TEMP/kvm-pages/"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan gh-pages
+          git clean -fdx
+          cp -a "$RUNNER_TEMP/kvm-pages/." .
+          touch .nojekyll
+          git add --all
+          git commit -m "Publish KVM Manager chart ${GITHUB_REF_NAME}"
+          git push --force origin HEAD:gh-pages

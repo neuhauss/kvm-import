@@ -16,7 +16,7 @@ bundle_js = sorted(bundle_dir.glob("*.js"))
 compressed_bundle_files = set()
 chart_path = ROOT / "deploy/extension-catalog" / f"kvm-manager-{version}.tgz"
 if not (bundle_dir / bundle_name).is_file() or not chart_path.is_file():
-    raise SystemExit("Gere o bundle (yarn build-pkg) e o chart (helm package) antes de executar este script.")
+    raise SystemExit("Build the extension bundle and chart before running this script.")
 
 api = {
     "apiVersion": "v1", "kind": "ConfigMap",
@@ -159,4 +159,4 @@ for doc in ui_docs:
         doc["spec"]["plugin"]["endpoint"] = f"http://kvm-extension-assets.rancher-kvm-registry.svc:8080/kvm-manager/{version}"
         doc["spec"]["plugin"]["noCache"] = False
 ui_path.write_text(yaml.safe_dump_all(ui_docs, sort_keys=False, width=1000))
-print(f"ConfigMaps e UIPlugin atualizados para kvm-manager {version}.")
+print(f"ConfigMaps and UIPlugin updated for kvm-manager {version}.")

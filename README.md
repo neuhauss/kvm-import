@@ -43,7 +43,7 @@ yarn build-pkg kvm-manager
 To prepare a local release bundle and manifests:
 
 ```sh
-CHART_REPO_URL=. scripts/package-release.sh
+CHART_REPO_URL=https://OWNER.github.io/REPOSITORY scripts/package-release.sh
 ```
 
 Publishing a GitHub Release tagged `kvm-manager-<version>` builds the API image on GHCR and publishes the extension chart to GitHub Pages. Make the GHCR package public for community installs. Docker Hub publishing is an optional secondary target and requires the repository secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`.

@@ -52,9 +52,9 @@ Uninstalling the chart removes its UI plugin and workloads. Persistent applicati
 
 These steps are for maintainers publishing a new version, not for users installing it:
 
-1. Update the extension and chart versions, then prepare the package with `CHART_REPO_URL=. scripts/package-release.sh`.
+1. Update the extension and chart versions, then prepare the package with `CHART_REPO_URL=https://OWNER.github.io/REPOSITORY scripts/package-release.sh`.
 2. Push the source changes and create a GitHub Release named `kvm-manager-<version>`.
-3. GitHub Actions builds the API image and publishes the chart repository to the `gh-pages` branch. The GHCR package must be public for a public community install.
+3. GitHub Actions builds the API image and publishes the complete chart repository to the `gh-pages` branch. The GHCR package must be public for a public community install.
 4. Check the release workflow and verify that `https://neuhauss.github.io/kvm-import` serves the refreshed chart index.
 
 The Docker Hub image is an optional secondary publishing target and requires the `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` repository secrets. Users do not need Docker Hub credentials to install from the Rancher chart repository.

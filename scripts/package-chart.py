@@ -26,8 +26,7 @@ with tarfile.open(archive, "w:gz", format=tarfile.PAX_FORMAT) as package:
 index_path = REPO_DIR / "index.yaml"
 index = yaml.safe_load(index_path.read_text()) if index_path.exists() else {"apiVersion": "v1", "entries": {}}
 entries = index.setdefault("entries", {}).setdefault(name, [])
-for existing in entries:
-    existing["urls"] = [f"{base_url}/{name}-{existing['version']}.tgz"]
+entries.clear()
 entry = {key: value for key, value in CHART.items() if key in {
     "apiVersion", "name", "version", "description", "type", "appVersion", "deprecated", "home", "icon", "keywords", "maintainers", "sources", "annotations"
 }}
@@ -36,9 +35,12 @@ entry.update({
     "digest": hashlib.sha256(archive.read_bytes()).hexdigest(),
     "urls": [f"{base_url}/{archive.name}"],
 })
-entries[:] = [item for item in entries if str(item.get("version")) != version]
 entries.append(entry)
 entries.sort(key=lambda item: tuple(int(part) if part.isdigit() else part for part in str(item["version"]).replace("-", ".").split(".")), reverse=True)
 index["apiVersion"] = "v1"
+index["generated"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 index_path.write_text(yaml.safe_dump(index, sort_keys=False, allow_unicode=True))
-print(f"Criado {archive.relative_to(ROOT)} e atualizado {index_path.relative_to(ROOT)}")
+for stale_archive in REPO_DIR.glob(f"{name}-*.tgz"):
+    if stale_archive != archive:
+        stale_archive.unlink()
+print(f"Created {archive.relative_to(ROOT)} and updated {index_path.relative_to(ROOT)}")

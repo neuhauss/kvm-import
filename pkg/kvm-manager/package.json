@@ -1,7 +1,7 @@
 {
   "name": "kvm-manager",
   "description": "Import and inventory existing KVM hosts from Rancher",
-  "version": "0.7.15",
+  "version": "0.7.16",
   "private": false,
   "rancher": {
     "annotations": {
