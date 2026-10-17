@@ -35,4 +35,11 @@ spec:
                 name: kvm-api
                 port:
                   number: 8080
+          - path: /kvm-manager
+            pathType: Prefix
+            backend:
+              service:
+                name: kvm-extension-assets
+                port:
+                  number: 8080
 {{- end }}

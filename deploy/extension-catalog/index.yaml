@@ -14,8 +14,8 @@ entries:
       catalog.cattle.io/namespace: cattle-ui-plugin-system
       catalog.cattle.io/rancher-version: '>=2.15.0'
       catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
-    created: '2026-10-17T14:58:30.169951Z'
-    digest: 77473a99160c6a5be37c21ac364a17ed29430d10ed6fde76e4dc9bfcfcc1a49d
+    created: '2026-10-17T15:01:09.659748Z'
+    digest: 50b1be8b35eecde00f598d301869c31f5e038335e92115ee676ec4351f1d5ddb
     urls:
     - ./kvm-manager-0.7.15.tgz
   - apiVersion: v2

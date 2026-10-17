@@ -10,7 +10,7 @@ spec:
   plugin:
     name: {{ .Chart.Name }}
     version: {{ .Chart.Version | quote }}
-    endpoint: {{ .Values.plugin.endpoint | default (printf "http://kvm-extension-assets.%s.svc:8080/kvm-manager/%s" .Values.backend.namespace .Chart.Version) | quote }}
+    endpoint: {{ .Values.plugin.endpoint | default (printf "%s/kvm-manager/%s" (trimSuffix "/" .Values.rancher.publicOrigin) .Chart.Version) | quote }}
     noCache: false
     noAuth: false
     metadata:

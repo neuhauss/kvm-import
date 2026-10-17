@@ -31,7 +31,7 @@ Set these values in the Rancher chart installation form when they differ from th
 | `backend.storage.size` | Persistent volume size for the API database. Defaults to `1Gi`. |
 | `backend.storage.storageClassName` | Optional StorageClass. Empty uses the cluster default. |
 | `backend.image.repository` | API image location. The default points to the published project image. Forks should change this to their own published image. |
-| `ingress.enabled` | Creates routes for `/kvm-api` and `/kvm-cockpit` on the configured Rancher host. |
+| `ingress.enabled` | Creates routes for `/kvm-api`, `/kvm-cockpit`, and the extension assets at `/kvm-manager` on the configured Rancher host. |
 | `ingress.className` | Ingress class used by this cluster. Defaults to `traefik`; change it if needed. |
 
 For a Rancher installation using a private CA, paste the CA certificate chain into `rancher.caBundle`. Do not paste a private key. Ensure the selected StorageClass supports a single-writer persistent volume.
