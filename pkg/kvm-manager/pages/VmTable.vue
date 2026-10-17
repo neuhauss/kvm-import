@@ -1,11 +1,12 @@
 <template>
   <div class="table-wrap">
     <table class="table">
-      <thead><tr><th>{{ t('vm') }}</th><th>{{ t('state') }}</th><th>vCPU</th><th>{{ t('memory') }}</th><th>{{ t('autostart') }}</th><th>{{ t('actions') }}</th></tr></thead>
+      <thead><tr><th>{{ t('vm') }}</th><th>{{ t('state') }}</th><th>{{ t('ipAddresses') }}</th><th>vCPU</th><th>{{ t('memory') }}</th><th>{{ t('autostart') }}</th><th>{{ t('actions') }}</th></tr></thead>
       <tbody>
         <tr v-for="vm in vms" :key="vm.uuid || vm.name">
           <td><button class="vm-name" @click="$emit('details', vm)">{{ vm.name }}</button><small>{{ vm.uuid }}</small></td>
           <td><span class="state" :class="stateClass(vm.state)"><i></i>{{ vm.state }}</span></td>
+          <td class="vm-addresses">{{ vm.ip_addresses?.join(', ') || '—' }}</td>
           <td>{{ vm.current_vcpus || vm.vcpus }}</td>
           <td>{{ (Number(vm.memory_kib || 0) / 1048576).toFixed(1) }} GiB</td>
           <td><button class="toggle-pill" :class="{ enabled: isAutostart(vm) }" :disabled="busy === vm.name" @click="$emit('autostart', vm)">{{ t(isAutostart(vm) ? 'enabled' : 'disabled') }}</button></td>
@@ -18,7 +19,7 @@
             <button class="btn role-link btn-sm" :disabled="busy === vm.name || !isRunning(vm)" @click="$emit('action', vm, 'reboot')">{{ t('restart') }}</button>
           </td>
         </tr>
-        <tr v-if="!vms.length"><td colspan="6" class="empty-row">{{ t('empty') }}</td></tr>
+        <tr v-if="!vms.length"><td colspan="7" class="empty-row">{{ t('empty') }}</td></tr>
       </tbody>
     </table>
   </div>
@@ -27,7 +28,7 @@
 <script lang="ts">
 import { defineComponent, PropType } from 'vue';
 
-type VmRow = { name: string; uuid: string; state: string; vcpus: number; current_vcpus: number; memory_kib: number; autostart: string };
+type VmRow = { name: string; uuid: string; state: string; vcpus: number; current_vcpus: number; memory_kib: number; autostart: string; ip_addresses?: string[] };
 
 export default defineComponent({
   name: 'KvmVmTable',
@@ -60,6 +61,7 @@ export default defineComponent({
   overflow-wrap: anywhere;
 }
 .vm-name:hover { text-decoration: underline; }
+.vm-addresses { min-width: 120px; max-width: 240px; white-space: normal !important; overflow-wrap: anywhere; }
 .toggle-pill {
   min-width: 70px;
   border: 1px solid var(--border, #4b5563) !important;

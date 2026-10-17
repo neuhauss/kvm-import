@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Render the API/UI ConfigMaps after building the extension bundle and chart."""
 import base64
+import gzip
 import json
 import os
 from pathlib import Path
@@ -12,6 +13,7 @@ version = json.loads((ROOT / "pkg/kvm-manager/package.json").read_text())["versi
 bundle_dir = ROOT / "dist-pkg" / f"kvm-manager-{version}"
 bundle_name = f"kvm-manager-{version}.umd.min.js"
 bundle_js = sorted(bundle_dir.glob("*.js"))
+compressed_bundle_files = set()
 chart_path = ROOT / "deploy/extension-catalog" / f"kvm-manager-{version}.tgz"
 if not (bundle_dir / bundle_name).is_file() or not chart_path.is_file():
     raise SystemExit("Gere o bundle (yarn build-pkg) e o chart (helm package) antes de executar este script.")
@@ -49,6 +51,10 @@ for key in list(assets["data"]):
             del assets["data"][key]
 assets["data"]["catalog-index.yaml"] = (ROOT / "deploy/extension-catalog/index.yaml").read_text()
 binary_data = assets.setdefault("binaryData", {})
+bundle_names = {path.name for path in bundle_js}
+for key in list(binary_data):
+    if key.startswith("kvm-manager-") and (key.endswith(".js") or key.endswith(".js.gz")) and key not in bundle_names and key not in {f"{name}.gz" for name in bundle_names}:
+        del binary_data[key]
 for path in bundle_js:
     # xterm's bundle contains terminal control bytes. Kubernetes rejects those
     # bytes in ConfigMap.data, but binaryData safely stores the exact bundle.
@@ -56,7 +62,9 @@ for path in bundle_js:
     text = contents.decode("utf-8")
     if any(ord(char) < 32 and char not in "\n\r\t" for char in text):
         assets["data"].pop(path.name, None)
-        binary_data[path.name] = base64.b64encode(contents).decode()
+        binary_data.pop(path.name, None)
+        compressed_bundle_files.add(path.name)
+        binary_data[f"{path.name}.gz"] = base64.b64encode(gzip.compress(contents, compresslevel=9, mtime=0)).decode()
     else:
         assets["data"][path.name] = text
         binary_data.pop(path.name, None)
@@ -94,7 +102,13 @@ for doc in ui_docs:
             (f"files-{version}.txt", f"kvm-manager/{version}/files.txt"),
             (f"package-{version}.json", f"kvm-manager/{version}/plugin/package.json"),
         ]
-        new_items.extend((path.name, f"kvm-manager/{version}/plugin/{path.name}") for path in bundle_js)
+        new_items.extend(
+            (
+                f"{path.name}.gz" if path.name in compressed_bundle_files else path.name,
+                f"kvm-manager/{version}/plugin/{path.name}.gz" if path.name in compressed_bundle_files else f"kvm-manager/{version}/plugin/{path.name}",
+            )
+            for path in bundle_js
+        )
         new_items.extend((asset_keys[path], f"kvm-manager/{version}/plugin/{path.relative_to(bundle_dir).as_posix()}") for path in asset_files)
         new_items.append(("catalog-index.yaml", "catalog/index.yaml"))
         for chart_key in assets.get("binaryData", {}):
@@ -106,9 +120,26 @@ for doc in ui_docs:
         doc["spec"]["template"]["spec"]["volumes"][0]["configMap"]["items"] = [
             {"key": key, "path": path} for key, path in new_items
         ]
+        inflate_commands = [
+            f"gzip -dc /tmp/www/kvm-manager/{version}/plugin/{name}.gz > /tmp/www/kvm-manager/{version}/plugin/{name} && rm /tmp/www/kvm-manager/{version}/plugin/{name}.gz"
+            for name in sorted(compressed_bundle_files)
+        ]
+        init_assets = "mkdir -p /tmp/www && cp -R /usr/local/apache2/htdocs/. /tmp/www/"
+        if inflate_commands:
+            init_assets += " && " + " && ".join(inflate_commands)
+        init_assets += (
+            " && sed -e 's/^Listen 80$/Listen 8080/'"
+            " -e 's#DocumentRoot \"/usr/local/apache2/htdocs\"#DocumentRoot \"/tmp/www\"#'"
+            " -e 's#<Directory \"/usr/local/apache2/htdocs\">#<Directory \"/tmp/www\">#'"
+            " -e 's/^#LoadModule deflate_module /LoadModule deflate_module /'"
+            " -e '/^LoadModule deflate_module /a AddOutputFilterByType DEFLATE text/javascript application/javascript application/json text/css image/svg+xml'"
+            " /usr/local/apache2/conf/httpd.conf > /tmp/httpd.conf"
+            " && exec httpd -f /tmp/httpd.conf -DFOREGROUND"
+        )
+        doc["spec"]["template"]["spec"]["containers"][0]["args"] = [init_assets]
     if doc.get("kind") == "UIPlugin" and doc.get("metadata", {}).get("name") == "kvm-manager":
         doc["spec"]["plugin"]["version"] = version
         doc["spec"]["plugin"]["endpoint"] = f"http://kvm-extension-assets.rancher-kvm-registry.svc:8080/kvm-manager/{version}"
-        doc["spec"]["plugin"]["noCache"] = True
+        doc["spec"]["plugin"]["noCache"] = False
 ui_path.write_text(yaml.safe_dump_all(ui_docs, sort_keys=False, width=1000))
 print(f"ConfigMaps e UIPlugin atualizados para kvm-manager {version}.")

@@ -2,7 +2,7 @@
 
 Extensão Rancher para importar hosts SUSE Linux com KVM/libvirt já instalado e administrá-los sem instalar software no host. Para publicar o projeto e instalar em outro ambiente, siga o [guia de implantação em quatro passos](GUIA-INSTALACAO-4-PASSOS.md).
 
-## Recursos da versão 0.7.9
+## Recursos da versão 0.7.14
 
 - Cadastro, validação, edição, atualização e remoção de hosts KVM existentes.
 - Estado, última consulta, nome do host, CPU, memória e diagnóstico SSH/libvirt.
@@ -12,6 +12,9 @@ Extensão Rancher para importar hosts SUSE Linux com KVM/libvirt já instalado e
 - Tabelas e formulários usando cores de texto, fundo e borda do tema Rancher, com visual simplificado sem ícones decorativos.
 - Visão geral do host com sistema operacional, kernel, disponibilidade, CPU, memória e tempo ativo.
 - Console serial interativo para abrir terminal em VMs ligadas e configuradas com console serial.
+- Inventário de VMs com endereços IP quando disponíveis pelo lease DHCP, guest agent ou ARP; ações de VM e serviços atualizam apenas a lista afetada.
+- Filtros por estado para VMs, data da última atualização completa e preservação do último inventário quando a atualização falha.
+- Assets JavaScript servidos com compressão HTTP quando o cliente oferece suporte.
 - Áreas para VMs, armazenamento, rede, serviços systemd e logs, com ações de ciclo de vida de VMs e serviços registradas na auditoria.
 - Cockpit aberto no mesmo domínio do Rancher, autenticado com as credenciais já salvas.
 - Autenticação SSH por senha ou por chave privada; a frase secreta também é criptografada.

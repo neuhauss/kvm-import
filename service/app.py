@@ -1027,6 +1027,25 @@ def run(args):
     if result.returncode:
         raise SystemExit(result.stderr.strip() or result.stdout.strip() or 'Comando libvirt falhou')
     return result.stdout
+def addresses_for(name, state):
+    sources = ('lease','agent') if 'running' in state.lower() else ('lease',)
+    for source in sources:
+        try:
+            result = subprocess.run(['virsh','-c','qemu:///system','domifaddr',name,'--source',source], capture_output=True, text=True, timeout=3)
+            if result.returncode:
+                continue
+            addresses = []
+            for line in result.stdout.splitlines():
+                parts = line.split()
+                if len(parts) >= 4 and ':' in parts[1] and '/' in parts[-1]:
+                    address = parts[-1].split('/',1)[0]
+                    if address not in addresses:
+                        addresses.append(address)
+            if addresses:
+                return addresses
+        except Exception:
+            continue
+    return []
 names = run(['virsh','-c','qemu:///system','list','--all','--name']).splitlines()
 items = []
 for name in filter(None, (n.strip() for n in names)):
@@ -1034,10 +1053,23 @@ for name in filter(None, (n.strip() for n in names)):
     for line in run(['virsh','-c','qemu:///system','dominfo',name]).splitlines():
         if ':' in line:
             key,value = line.split(':',1); info[key.strip().lower()] = value.strip()
-    items.append({'name':name,'uuid':info.get('uuid',''),'state':info.get('state') or run(['virsh','-c','qemu:///system','domstate',name]).strip(),
+    state = info.get('state') or run(['virsh','-c','qemu:///system','domstate',name]).strip()
+    items.append({'name':name,'uuid':info.get('uuid',''),'state':state,
         'vcpus':int(info.get('cpu(s)','0') or '0'),'memory_kib':int(info.get('max memory','0').split()[0] or '0'),
-        'autostart':info.get('autostart','unknown')})
+        'autostart':info.get('autostart','unknown'),'ip_addresses':addresses_for(name,state)})
 print(json.dumps(items))
+'''
+
+SERVICE_LIST_SCRIPT = r'''import json, subprocess
+result = subprocess.run(['systemctl','list-units','--all','--type=service','--no-legend','--no-pager'], capture_output=True, text=True, timeout=30)
+if result.returncode:
+    raise SystemExit(result.stderr.strip() or result.stdout.strip() or 'Could not query system services')
+services = []
+for line in result.stdout.splitlines():
+    parts = line.split(None,4)
+    if len(parts) >= 4:
+        services.append({'name':parts[0], 'load':parts[1], 'active':parts[2], 'sub':parts[3], 'description':parts[4] if len(parts) > 4 else ''})
+print(json.dumps(services))
 '''
 
 VM_DETAIL_SCRIPT = r'''import json, subprocess, sys
@@ -1067,7 +1099,23 @@ interfaces = []
 for line in run(['virsh','-c','qemu:///system','domiflist',name]).splitlines():
     parts = line.split(None,4)
     if len(parts) == 5 and parts[0] not in ('Interface','-'):
-        interfaces.append({'name':parts[0], 'type':parts[1], 'source':parts[2], 'model':parts[3], 'mac':parts[4]})
+        interfaces.append({'name':parts[0], 'type':parts[1], 'source':parts[2], 'model':parts[3], 'mac':parts[4], 'ip_addresses':[]})
+# Query the guest agent first, then libvirt DHCP leases/ARP. This is read-only;
+# guests without an agent or lease simply show no address in the UI.
+by_mac = {item['mac'].lower(): item for item in interfaces if item.get('mac')}
+for source in ('agent','lease','arp'):
+    try:
+        result = subprocess.run(['virsh','-c','qemu:///system','domifaddr',name,'--source',source], capture_output=True, text=True, timeout=10)
+        if result.returncode:
+            continue
+        for line in result.stdout.splitlines():
+            parts = line.split()
+            if len(parts) >= 4 and ':' in parts[1] and '/' in parts[-1]:
+                iface = by_mac.get(parts[1].lower())
+                if iface and parts[-1] not in iface['ip_addresses']:
+                    iface['ip_addresses'].append(parts[-1])
+    except Exception:
+        continue
 result = {'name':name, 'uuid':info.get('uuid',''), 'state':info.get('state') or run(['virsh','-c','qemu:///system','domstate',name]).strip(),
     'vcpus':int(info.get('cpu(s)','0') or '0'), 'current_vcpus':int(vcpu.get('current_live',vcpu.get('current_config','0')) or '0'),
     'max_vcpus':int(vcpu.get('maximum_live',vcpu.get('maximum_config','0')) or '0'), 'memory_kib':int(info.get('max memory','0').split()[0] or '0'),
@@ -1096,7 +1144,20 @@ def parse_info(name):
     for line in run(['virsh','-c','qemu:///system','vcpucount',name]).splitlines():
         parts=line.split()
         if len(parts)>=3: vcpu[f'{parts[0].lower()}_{parts[1].lower()}']=parts[2]
-    return {'name':name,'uuid':info.get('uuid',''),'state':info.get('state') or run(['virsh','-c','qemu:///system','domstate',name]).strip(),
+    state=info.get('state') or run(['virsh','-c','qemu:///system','domstate',name]).strip()
+    addresses=[]
+    for source in (('lease','agent') if 'running' in state.lower() else ('lease',)):
+        try:
+            result=subprocess.run(['virsh','-c','qemu:///system','domifaddr',name,'--source',source],capture_output=True,text=True,timeout=3)
+            if result.returncode: continue
+            for line in result.stdout.splitlines():
+                parts=line.split()
+                if len(parts)>=4 and ':' in parts[1] and '/' in parts[-1]:
+                    address=parts[-1].split('/',1)[0]
+                    if address not in addresses: addresses.append(address)
+            if addresses: break
+        except Exception: continue
+    return {'name':name,'uuid':info.get('uuid',''),'state':state,'ip_addresses':addresses,
         'vcpus':int(info.get('cpu(s)','0') or '0'),'current_vcpus':int(vcpu.get('current_live',vcpu.get('current_config','0')) or '0'),
         'max_vcpus':int(vcpu.get('maximum_live',vcpu.get('maximum_config','0')) or '0'),
         'memory_kib':int(info.get('max memory','0').split()[0] or '0'),'used_memory_kib':int(info.get('used memory','0').split()[0] or '0'),
@@ -1244,6 +1305,16 @@ def list_vms(host_id: str) -> list[dict[str, Any]]:
         return json.loads(output or "[]")
     except Exception as exc:
         raise HTTPException(502, f"Could not query virtual machines: {exc}") from exc
+
+
+@app.get("/kvm-api/hosts/{host_id}/services", dependencies=[Depends(require_auth)])
+def list_services(host_id: str) -> list[dict[str, Any]]:
+    host = cockpit_host_record(host_id)
+    try:
+        output = run_sudo_python(host, SERVICE_LIST_SCRIPT, timeout=45)
+        return json.loads(output or "[]")
+    except Exception as exc:
+        raise HTTPException(502, f"Could not query system services: {exc}") from exc
 
 
 @app.get("/kvm-api/hosts/{host_id}/vms/detail", dependencies=[Depends(require_auth)])

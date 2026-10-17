@@ -62,6 +62,12 @@ kvmManager:
     openCockpit: Open Cockpit
     updateData: Refresh data
     updating: Refreshing...
+    lastUpdatedAt: "Última atualização completa: {time}"
+    updateFailedAt: "A atualização falhou. Exibindo dados de {time}."
+    filterVmState: Filtrar máquinas virtuais por estado
+    allVmStates: Todos os estados
+    stopped: Parada
+    noVmMatch: Nenhuma máquina virtual corresponde aos filtros.
     connected: Connected
     vms: Virtual machines
     runningStopped: "{running} running · {stopped} stopped"
@@ -231,6 +237,8 @@ kvmManager:
     model: Model
     device: Device
     vmDetails: Virtual machine details
+    actionSucceeded: Ação concluída com sucesso. Inventário atualizado.
+    noIpAddresses: Nenhum IP informado (agente do guest ou lease DHCP pode estar indisponível).
     close: Close details
     loadingVmDetails: Loading virtual machine details...
     hostRemoved: This host is no longer imported in Rancher.
@@ -260,6 +268,7 @@ kvmManager:
   vmTable:
     vm: Virtual machine
     state: State
+    ipAddresses: Endereços IP
     memory: Memory
     autostart: Autostart
     actions: Actions

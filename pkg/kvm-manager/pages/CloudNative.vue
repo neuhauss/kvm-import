@@ -2,7 +2,7 @@
   <div class="cloud-native-page">
     <div class="breadcrumbs"><button @click="backToHosts">KVM</button><span>›</span><button @click="backToHosts">{{ t('hosts.title') }}</button><span>›</span><strong>{{ host?.hostname || host?.name || t('cloudNative.title') }}</strong></div>
     <header class="page-header">
-      <div class="title-block"><span class="eyebrow">{{ t('cloudNative.title') }}</span><h1>{{ host ? host.hostname || host.name : t('cloudNative.title') }}</h1><p class="muted">{{ t('cloudNative.subtitle') }}</p></div>
+      <div class="title-block"><span class="eyebrow">{{ t('cloudNative.title') }}</span><h1>{{ host ? host.hostname || host.name : t('cloudNative.title') }}</h1><p class="muted">{{ t('cloudNative.subtitle') }}</p><small v-if="dataUpdatedAt" class="updated-at" :class="{ stale: !!error }">{{ t(error ? 'cloudNative.updateFailedAt' : 'cloudNative.lastUpdatedAt', { time: dateLabel(dataUpdatedAt) }) }}</small></div>
       <div v-if="host" class="toolbar">
         <span class="state" :class="host.status"><i></i>{{ statusLabel(host.status) }}</span>
         <form :action="cockpitUrl(host)" method="post" target="_blank"><button class="btn role-secondary" type="submit">{{ t('cloudNative.openCockpit') }}</button></form>
@@ -10,8 +10,8 @@
       </div>
     </header>
 
-    <div v-if="error" class="banner error">{{ error }}</div>
-    <div v-else-if="loading && !inventory" class="loading">{{ t('cloudNative.queryHost') }}</div>
+    <div v-if="error" class="banner error" role="alert">{{ error }}</div>
+    <div v-if="loading && !inventory" class="loading">{{ t('cloudNative.queryHost') }}</div>
     <template v-else-if="inventory">
       <div class="cluster-summary">
         <article class="summary-card host-card"><div><span>Host</span><strong>{{ inventory.system.hostname }}</strong><small>{{ inventory.system.os }}</small></div><span class="state ready"><i></i>{{ t('cloudNative.connected') }}</span></article>
@@ -39,7 +39,7 @@
         <VmTable :vms="inventory.vms.slice(0, 5)" :busy="busy" @action="actOnVm" @details="showVmDetails" @autostart="setAutostart" @console="openVmConsole" />
       </section>
 
-      <section v-else-if="activeTab === 'vms'" class="section-panel"><div class="section-heading"><div><span class="eyebrow">LIBVIRT</span><h2>{{ t('cloudNative.vms') }}</h2><p class="muted">{{ t('cloudNative.vmLifecycle') }}</p></div><input v-model="vmFilter" class="search-input" :placeholder="t('cloudNative.filterVms')" :aria-label="t('cloudNative.filterVms')" /></div><VmTable :vms="filteredVms" :busy="busy" @action="actOnVm" @details="showVmDetails" @autostart="setAutostart" @console="openVmConsole" /></section>
+      <section v-else-if="activeTab === 'vms'" class="section-panel"><div class="section-heading"><div><span class="eyebrow">LIBVIRT</span><h2>{{ t('cloudNative.vms') }}</h2><p class="muted">{{ t('cloudNative.vmLifecycle') }}</p></div><div class="filter-bar"><input v-model="vmFilter" class="search-input" :placeholder="t('cloudNative.filterVms')" :aria-label="t('cloudNative.filterVms')" /><select v-model="vmStateFilter" class="search-input" :aria-label="t('cloudNative.filterVmState')"><option value="all">{{ t('cloudNative.allVmStates') }}</option><option value="running">{{ t('cloudNative.running') }}</option><option value="paused">{{ t('cloudNative.paused') }}</option><option value="stopped">{{ t('cloudNative.stopped') }}</option></select></div></div><div v-if="!filteredVms.length" class="empty-state">{{ t(vmFilter || vmStateFilter !== 'all' ? 'cloudNative.noVmMatch' : 'cloudNative.noVm') }}</div><VmTable v-else :vms="filteredVms" :busy="busy" @action="actOnVm" @details="showVmDetails" @autostart="setAutostart" @console="openVmConsole" /></section>
 
       <section v-else-if="activeTab === 'storage'" class="section-panel">
         <div class="section-heading"><div><span class="eyebrow">HOST + LIBVIRT</span><h2>{{ t('cloudNative.storage') }}</h2><p class="muted">{{ t('cloudNative.storageDescription') }}</p></div></div>
@@ -87,7 +87,8 @@
       </section>
 
       <section v-else class="section-panel"><div class="section-heading"><div><span class="eyebrow">JOURNALD</span><h2>{{ t('cloudNative.systemLogs') }}</h2><p class="muted">{{ t('cloudNative.lastJournal', { count: inventory.logs.length }) }}</p></div><input v-model="logFilter" class="search-input" :placeholder="t('cloudNative.filterLogs')" :aria-label="t('cloudNative.filterLogs')" /></div><pre class="log-view"><span v-for="(line, index) in filteredLogs" :key="index" :class="logLineClass(line)">{{ line }}</span><span v-if="!filteredLogs.length">{{ t('cloudNative.noLogMatch') }}</span></pre></section>
-    <div v-if="actionError" class="banner error">{{ actionError }}</div>
+    <div v-if="actionError" class="banner error" role="alert">{{ actionError }}</div>
+    <div v-else-if="actionSuccess" class="banner success" role="status">{{ t('cloudNative.actionSucceeded') }}</div>
     <div v-if="accountPasswordTarget" class="modal-backdrop" @click.self="accountPasswordTarget = ''"><section class="account-password-modal" role="dialog" aria-modal="true"><h2>{{ t('cloudNative.setPassword') }}: {{ accountPasswordTarget }}</h2><form @submit.prevent="saveAccountPassword"><label>{{ t('cloudNative.newPassword') }}<input v-model="accountPassword" class="search-input" type="password" minlength="8" maxlength="1024" autocomplete="new-password" required /></label><div class="modal-actions"><button type="button" class="btn role-secondary" @click="accountPasswordTarget = ''">{{ t('hosts.cancel') }}</button><button class="btn role-primary" :disabled="busy === `account:${accountPasswordTarget}`">{{ t('cloudNative.setPassword') }}</button></div></form></section></div>
       </main>
       </div>
@@ -96,7 +97,7 @@
       <section class="details-modal" role="dialog" aria-modal="true" :aria-label="t('cloudNative.vmDetails')">
         <header><div><span class="eyebrow">{{ t('cloudNative.vmDetails') }}</span><h2>{{ selectedVmName }}</h2></div><button class="btn role-secondary btn-sm" @click="closeVmDetails">{{ t('cloudNative.close') }}</button></header>
         <p v-if="vmDetailLoading" class="loading">{{ t('cloudNative.loadingVmDetails') }}</p>
-        <div v-else-if="vmDetail" class="details-content"><div class="detail-stats"><div><span>{{ t('cloudNative.stateLabel') }}</span><strong>{{ vmDetail.state }}</strong></div><div><span>vCPU</span><strong>{{ vmDetail.current_vcpus || vmDetail.vcpus }}</strong></div><div><span>{{ t('cloudNative.maxMemory') }}</span><strong>{{ memoryLabel(vmDetail.memory_kib) }}</strong></div></div><h3>{{ t('cloudNative.disk') }}</h3><div v-if="!vmDetail.disks?.length" class="empty-state">{{ t('cloudNative.noDisk') }}</div><div v-for="disk in vmDetail.disks" :key="disk.target" class="detail-row"><b>{{ disk.target }}</b><span>{{ disk.source }}</span><small>{{ disk.type }} · {{ disk.device }}</small></div><h3>{{ t('cloudNative.interfaces') }}</h3><div v-if="!vmDetail.interfaces?.length" class="empty-state">{{ t('cloudNative.noInterface') }}</div><div v-for="nic in vmDetail.interfaces" :key="nic.mac" class="detail-row"><b>{{ nic.name }}</b><span>{{ nic.mac }}</span><small>{{ nic.type }} · {{ nic.source }} · {{ nic.model }}</small></div></div>
+        <div v-else-if="vmDetail" class="details-content"><div class="detail-stats"><div><span>{{ t('cloudNative.stateLabel') }}</span><strong>{{ vmDetail.state }}</strong></div><div><span>vCPU</span><strong>{{ vmDetail.current_vcpus || vmDetail.vcpus }}</strong></div><div><span>{{ t('cloudNative.maxMemory') }}</span><strong>{{ memoryLabel(vmDetail.memory_kib) }}</strong></div></div><h3>{{ t('cloudNative.disk') }}</h3><div v-if="!vmDetail.disks?.length" class="empty-state">{{ t('cloudNative.noDisk') }}</div><div v-for="disk in vmDetail.disks" :key="disk.target" class="detail-row"><b>{{ disk.target }}</b><span>{{ disk.source }}</span><small>{{ disk.type }} · {{ disk.device }}</small></div><h3>{{ t('cloudNative.interfaces') }}</h3><div v-if="!vmDetail.interfaces?.length" class="empty-state">{{ t('cloudNative.noInterface') }}</div><div v-for="nic in vmDetail.interfaces" :key="nic.mac" class="detail-row"><b>{{ nic.name }}</b><span>{{ nic.ip_addresses?.join(', ') || t('cloudNative.noIpAddresses') }}</span><small>{{ nic.mac }} · {{ nic.type }} · {{ nic.source }} · {{ nic.model }}</small></div></div>
         <div v-if="vmDetailError" class="banner error">{{ vmDetailError }}</div>
       </section>
     </div>
@@ -112,8 +113,8 @@ const VmConsole = defineAsyncComponent(() => import(/* webpackChunkName: "kvm-vm
 const shellLayoutSnapshots = new WeakMap<HTMLElement, { navWidth: string; navWidthPriority: string; sideNav: HTMLElement | null; sideNavDisplay: string; sideNavDisplayPriority: string }>();
 
 type Host = { id: string; name: string; address: string; port: number; hostname?: string; username: string; status: string };
-type Vm = { name: string; uuid: string; state: string; vcpus: number; current_vcpus: number; max_vcpus: number; memory_kib: number; used_memory_kib: number; autostart: string };
-type VmDetail = Vm & { disks: { type: string; device: string; target: string; source: string }[]; interfaces: { name: string; type: string; source: string; model: string; mac: string }[] };
+type Vm = { name: string; uuid: string; state: string; vcpus: number; current_vcpus: number; max_vcpus: number; memory_kib: number; used_memory_kib: number; autostart: string; ip_addresses?: string[] };
+type VmDetail = Vm & { disks: { type: string; device: string; target: string; source: string }[]; interfaces: { name: string; type: string; source: string; model: string; mac: string; ip_addresses?: string[] }[] };
 type Service = { name: string; load: string; active: string; sub: string; description: string };
 type Account = { username: string; uid: number; gid: number; home: string; shell: string; groups: string[]; locked: boolean };
 type Repository = { alias: string; name: string; enabled: boolean; autorefresh: boolean; uri: string };
@@ -137,8 +138,8 @@ export default defineComponent({
   components: { VmTable, VmConsole },
   data() {
     return {
-      host: null as Host | null, inventory: null as Inventory | null, loading: false, error: '', actionError: '',
-      busy: '' as string, activeTab: 'overview', vmFilter: '', serviceFilter: '', serviceStateFilter: 'all', serviceLimit: 25, logFilter: '', terminalCommand: '', terminalResult: null as TerminalResult | null, accountPasswordTarget: '', accountPassword: '',
+      host: null as Host | null, inventory: null as Inventory | null, loading: false, error: '', actionError: '', actionSuccess: false, dataUpdatedAt: '',
+      busy: '' as string, activeTab: 'overview', vmFilter: '', vmStateFilter: 'all', serviceFilter: '', serviceStateFilter: 'all', serviceLimit: 25, logFilter: '', terminalCommand: '', terminalResult: null as TerminalResult | null, accountPasswordTarget: '', accountPassword: '',
       selectedVmName: '', vmDetail: null as VmDetail | null, vmDetailLoading: false, vmDetailError: '', consoleVm: null as Vm | null,
       navGroups: [{ id: 'system' }, { id: 'tools' }],
       tabs: [
@@ -158,7 +159,7 @@ export default defineComponent({
     cpuLoadPercent(): number { return Math.min(100, Math.round((this.inventory?.system.load_average?.[0] || 0) / Math.max(1, this.inventory?.system.cpu_count || 1) * 100)); },
     memoryUsedPercent(): number { const total = this.inventory?.system.memory_total_kib || 0; return total ? Math.round((total - (this.inventory?.system.memory_available_kib || 0)) / total * 100) : 0; },
     failedServiceCount(): number { return this.inventory?.services.filter((service) => service.active === 'failed').length || 0; },
-    filteredVms(): Vm[] { const term = this.vmFilter.toLowerCase().trim(); return (this.inventory?.vms || []).filter((vm) => !term || `${vm.name} ${vm.uuid}`.toLowerCase().includes(term)); },
+    filteredVms(): Vm[] { const term = this.vmFilter.toLowerCase().trim(); return (this.inventory?.vms || []).filter((vm) => { const state = vm.state.toLowerCase(); const matchesTerm = !term || `${vm.name} ${vm.uuid}`.toLowerCase().includes(term); const matchesState = this.vmStateFilter === 'all' || (this.vmStateFilter === 'running' && state.includes('running')) || (this.vmStateFilter === 'paused' && state.includes('paused')) || (this.vmStateFilter === 'stopped' && !state.includes('running') && !state.includes('paused')); return matchesTerm && matchesState; }); },
     filteredServices(): Service[] { const term = this.serviceFilter.toLowerCase().trim(); return (this.inventory?.services || []).filter((service) => { const matchesTerm = !term || `${service.name} ${service.description}`.toLowerCase().includes(term); const matchesState = this.serviceStateFilter === 'all' || service.active === this.serviceStateFilter; return matchesTerm && matchesState; }); },
     visibleServices(): Service[] { return this.filteredServices.slice(0, this.serviceLimit); },
     filteredLogs(): string[] { const term = this.logFilter.toLowerCase().trim(); return (this.inventory?.logs || []).filter((line) => !term || line.toLowerCase().includes(term)); },
@@ -208,22 +209,38 @@ export default defineComponent({
       if (!response.ok) { const body = await response.json().catch(() => ({})); throw new Error(body.detail || `API request failed (${response.status})`); }
       return response.status === 204 ? null : response.json();
     },
+    updateVmFromDetails(details: VmDetail) {
+      if (!this.inventory) return;
+      const row = { ...details, ip_addresses: [...new Set(details.interfaces.flatMap((nic) => nic.ip_addresses || []))] };
+      const index = this.inventory.vms.findIndex((vm) => vm.name === details.name);
+      if (index >= 0) this.inventory.vms.splice(index, 1, { ...this.inventory.vms[index], ...row });
+      else this.inventory.vms.push(row);
+    },
+    async refreshVmInventory(vmName: string) {
+      const details = await this.request(`/hosts/${this.hostId}/vms/detail?vm_name=${encodeURIComponent(vmName)}`);
+      this.updateVmFromDetails(details);
+    },
+    async refreshServiceInventory() {
+      const services = await this.request(`/hosts/${this.hostId}/services`);
+      if (this.inventory) this.inventory.services = services;
+    },
     async load() {
       if (!this.hostId) { this.error = this.t('cloudNative.hostRequired'); return; }
-      this.loading = true; this.error = ''; this.actionError = '';
+      this.loading = true; this.error = ''; this.actionError = ''; this.actionSuccess = false;
       try {
         const [hosts, inventory] = await Promise.all([this.request('/hosts'), this.request(`/hosts/${this.hostId}/cloud-native`)]);
         this.host = hosts.find((item: Host) => item.id === this.hostId) || null;
         if (!this.host) throw new Error(this.t('cloudNative.hostRemoved'));
         this.inventory = inventory;
+        this.dataUpdatedAt = new Date().toISOString();
       } catch (error) { this.error = (error as Error).message; }
       finally { this.loading = false; }
     },
     async actOnVm(vm: Vm, action: 'start' | 'shutdown' | 'reboot' | 'pause' | 'resume') {
       const labelKey = action === 'shutdown' ? 'shutdownVm' : action === 'reboot' ? 'rebootVm' : action === 'pause' ? 'pauseVm' : action === 'resume' ? 'resumeVm' : 'startVm';
       if (!window.confirm(this.t('cloudNative.confirmAction', { action: this.t(`cloudNative.${labelKey}`).toLowerCase(), name: vm.name }))) return;
-      this.busy = vm.name; this.actionError = '';
-      try { await this.request(`/hosts/${this.hostId}/vms/actions?vm_name=${encodeURIComponent(vm.name)}`, { method: 'POST', body: JSON.stringify({ action }) }); await this.load(); }
+      this.busy = vm.name; this.actionError = ''; this.actionSuccess = false;
+      try { await this.request(`/hosts/${this.hostId}/vms/actions?vm_name=${encodeURIComponent(vm.name)}`, { method: 'POST', body: JSON.stringify({ action }) }); await this.refreshVmInventory(vm.name); this.actionSuccess = true; }
       catch (error) { this.actionError = (error as Error).message; }
       finally { this.busy = ''; }
     },
@@ -231,8 +248,8 @@ export default defineComponent({
     async actOnService(service: Service, action: 'start' | 'stop' | 'restart') {
       const labelKey = action === 'stop' ? 'stop' : action === 'restart' ? 'restart' : 'start';
       if (!window.confirm(this.t('cloudNative.confirmService', { action: this.t(`cloudNative.${labelKey}`).toLowerCase(), name: service.name }))) return;
-      this.busy = service.name; this.actionError = '';
-      try { await this.request(`/hosts/${this.hostId}/services/actions?service_name=${encodeURIComponent(service.name)}`, { method: 'POST', body: JSON.stringify({ action }) }); await this.load(); }
+      this.busy = service.name; this.actionError = ''; this.actionSuccess = false;
+      try { await this.request(`/hosts/${this.hostId}/services/actions?service_name=${encodeURIComponent(service.name)}`, { method: 'POST', body: JSON.stringify({ action }) }); await this.refreshServiceInventory(); this.actionSuccess = true; }
       catch (error) { this.actionError = (error as Error).message; }
       finally { this.busy = ''; }
     },
@@ -241,54 +258,54 @@ export default defineComponent({
         ? this.t('cloudNative.confirmRepositoryRefresh')
         : this.t('cloudNative.confirmRepositoryChange', { action: this.t(`cloudNative.${action}`).toLowerCase(), alias });
       if (!window.confirm(confirmation)) return;
-      this.busy = action === 'refresh' ? 'repositories' : alias; this.actionError = '';
-      try { await this.request(`/hosts/${this.hostId}/repositories/actions`, { method: 'POST', body: JSON.stringify({ alias, action }) }); await this.load(); }
+      this.busy = action === 'refresh' ? 'repositories' : alias; this.actionError = ''; this.actionSuccess = false;
+      try { await this.request(`/hosts/${this.hostId}/repositories/actions`, { method: 'POST', body: JSON.stringify({ alias, action }) }); await this.load(); this.actionSuccess = true; }
       catch (error) { this.actionError = (error as Error).message; }
       finally { this.busy = ''; }
     },
     async actOnAccount(account: Account, action: 'lock' | 'unlock') {
       if (!window.confirm(this.t('cloudNative.confirmAccountAction', { action: this.t(`cloudNative.${action}`).toLowerCase(), username: account.username }))) return;
-      const key = `account:${account.username}`; this.busy = key; this.actionError = '';
-      try { await this.request(`/hosts/${this.hostId}/accounts/actions`, { method: 'POST', body: JSON.stringify({ username: account.username, action }) }); await this.load(); }
+      const key = `account:${account.username}`; this.busy = key; this.actionError = ''; this.actionSuccess = false;
+      try { await this.request(`/hosts/${this.hostId}/accounts/actions`, { method: 'POST', body: JSON.stringify({ username: account.username, action }) }); await this.load(); this.actionSuccess = true; }
       catch (error) { this.actionError = (error as Error).message; }
       finally { this.busy = ''; }
     },
     async saveAccountPassword() {
       const username = this.accountPasswordTarget;
       if (!username || !this.accountPassword) return;
-      const key = `account:${username}`; this.busy = key; this.actionError = '';
+      const key = `account:${username}`; this.busy = key; this.actionError = ''; this.actionSuccess = false;
       try {
         await this.request(`/hosts/${this.hostId}/accounts/actions`, { method: 'POST', body: JSON.stringify({ username, action: 'password', password: this.accountPassword }) });
-        this.accountPasswordTarget = ''; this.accountPassword = '';
+        this.accountPasswordTarget = ''; this.accountPassword = ''; this.actionSuccess = true;
       } catch (error) { this.actionError = (error as Error).message; }
       finally { this.busy = ''; }
     },
     async setSecurityMode(mode: 'enforcing' | 'permissive') {
       if (!window.confirm(this.t('cloudNative.confirmSecurityMode', { mode }))) return;
-      this.busy = 'selinux'; this.actionError = '';
-      try { await this.request(`/hosts/${this.hostId}/security/selinux`, { method: 'POST', body: JSON.stringify({ mode }) }); await this.load(); }
+      this.busy = 'selinux'; this.actionError = ''; this.actionSuccess = false;
+      try { await this.request(`/hosts/${this.hostId}/security/selinux`, { method: 'POST', body: JSON.stringify({ mode }) }); await this.load(); this.actionSuccess = true; }
       catch (error) { this.actionError = (error as Error).message; }
       finally { this.busy = ''; }
     },
     async actOnLibvirt(resource: 'storage-pools' | 'networks', name: string, action: 'start' | 'stop' | 'enable' | 'disable') {
       const key = `${resource}:${name}`;
       if (!window.confirm(this.t('cloudNative.confirmLibvirtAction', { action: this.t(`cloudNative.${action}`).toLowerCase(), name }))) return;
-      this.busy = key; this.actionError = '';
-      try { await this.request(`/hosts/${this.hostId}/libvirt/${resource}/actions`, { method: 'POST', body: JSON.stringify({ name, action }) }); await this.load(); }
+      this.busy = key; this.actionError = ''; this.actionSuccess = false;
+      try { await this.request(`/hosts/${this.hostId}/libvirt/${resource}/actions`, { method: 'POST', body: JSON.stringify({ name, action }) }); await this.load(); this.actionSuccess = true; }
       catch (error) { this.actionError = (error as Error).message; }
       finally { this.busy = ''; }
     },
     async actOnConnection(connection: NetworkConnection) {
       const action = connection.active ? 'down' : 'up';
       if (!window.confirm(this.t('cloudNative.confirmNetworkConnection', { action: this.t(`cloudNative.${action}`).toLowerCase(), name: connection.name }))) return;
-      this.busy = `connection:${connection.uuid}`; this.actionError = '';
-      try { await this.request(`/hosts/${this.hostId}/network-connections/actions`, { method: 'POST', body: JSON.stringify({ uuid: connection.uuid, action }) }); await this.load(); }
+      this.busy = `connection:${connection.uuid}`; this.actionError = ''; this.actionSuccess = false;
+      try { await this.request(`/hosts/${this.hostId}/network-connections/actions`, { method: 'POST', body: JSON.stringify({ uuid: connection.uuid, action }) }); await this.load(); this.actionSuccess = true; }
       catch (error) { this.actionError = (error as Error).message; }
       finally { this.busy = ''; }
     },
     async runTerminal() {
       if (!this.terminalCommand.trim()) return;
-      this.busy = 'terminal'; this.actionError = ''; this.terminalResult = null;
+      this.busy = 'terminal'; this.actionError = ''; this.actionSuccess = false; this.terminalResult = null;
       try { this.terminalResult = await this.request(`/hosts/${this.hostId}/terminal/command`, { method: 'POST', body: JSON.stringify({ command: this.terminalCommand }) }); }
       catch (error) { this.actionError = (error as Error).message; }
       finally { this.busy = ''; }
@@ -296,14 +313,14 @@ export default defineComponent({
     async setAutostart(vm: Vm) {
       const enabled = !(vm.autostart === 'enable' || vm.autostart === 'yes');
       if (!window.confirm(this.t('cloudNative.confirmAutostart', { action: enabled ? this.t('cloudNative.autostartOn').toLowerCase() : this.t('cloudNative.autostartOff').toLowerCase(), name: vm.name }))) return;
-      this.busy = vm.name; this.actionError = '';
-      try { await this.request(`/hosts/${this.hostId}/vms/autostart?vm_name=${encodeURIComponent(vm.name)}`, { method: 'POST', body: JSON.stringify({ enabled }) }); await this.load(); }
+      this.busy = vm.name; this.actionError = ''; this.actionSuccess = false;
+      try { await this.request(`/hosts/${this.hostId}/vms/autostart?vm_name=${encodeURIComponent(vm.name)}`, { method: 'POST', body: JSON.stringify({ enabled }) }); await this.refreshVmInventory(vm.name); this.actionSuccess = true; }
       catch (error) { this.actionError = (error as Error).message; }
       finally { this.busy = ''; }
     },
     async showVmDetails(vm: Vm) {
       this.selectedVmName = vm.name; this.vmDetail = null; this.vmDetailError = ''; this.vmDetailLoading = true;
-      try { this.vmDetail = await this.request(`/hosts/${this.hostId}/vms/detail?vm_name=${encodeURIComponent(vm.name)}`); }
+      try { const details: VmDetail = await this.request(`/hosts/${this.hostId}/vms/detail?vm_name=${encodeURIComponent(vm.name)}`); this.vmDetail = details; this.updateVmFromDetails(details); }
       catch (error) { this.vmDetailError = (error as Error).message; }
       finally { this.vmDetailLoading = false; }
     },
@@ -323,6 +340,7 @@ export default defineComponent({
     backToHosts() { window.location.assign(window.location.pathname.replace(/\/cloud-native\/?$/, '/hosts')); },
     cockpitUrl(host: Host) { return `${apiBase}/hosts/${host.id}/cockpit`; },
     statusLabel(status: string) { return this.t(`hosts.${status}`); },
+    dateLabel(value: string) { const locale = (this as any).$store?.state?.i18n?.selected; return new Date(value).toLocaleString(locale || undefined); },
     memoryLabel(kib: number) { return `${(kib / 1048576).toFixed(1)} GiB`; },
     bytesLabel(value: number) {
       if (!value) return '0 B';
