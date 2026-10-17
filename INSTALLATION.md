@@ -67,7 +67,7 @@ rancher:
 
 ## Update or remove
 
-The Rancher chart catalog provides chart updates. Review each version's release notes before upgrading. The API uses a persistent volume and a generated credential encryption key; keep the PVC and Secret together when backing up or restoring. Do not delete the PVC or the `kvm-api-secrets` Secret as part of a routine extension update.
+The Helm repository is checked by Rancher periodically. After a maintainer publishes a new GitHub Release, refresh the repository in **Apps > Repositories** (or wait for its refresh interval). Rancher then lists the new KVM Manager chart version under **Apps > Installed Apps**, where an administrator can review the version and apply the upgrade. No Rancher core files or manual ConfigMap edits are part of this update flow. Review each version's release notes before upgrading. The API uses a persistent volume and a generated credential encryption key; keep the PVC and Secret together when backing up or restoring. Do not delete the PVC or the `kvm-api-secrets` Secret as part of a routine extension update.
 
 Uninstalling the chart removes its UI plugin and workloads. Persistent application data is protected from Helm deletion, so remove the retained PVC and Secret separately only when you intend to permanently erase the host inventory and saved credentials.
 
@@ -75,9 +75,9 @@ Uninstalling the chart removes its UI plugin and workloads. Persistent applicati
 
 These steps are for maintainers publishing a new version, not for users installing it:
 
-1. Update the extension and chart versions, then prepare the package with `CHART_REPO_URL=https://OWNER.github.io/REPOSITORY scripts/package-release.sh`.
-2. Push the source changes and create a GitHub Release named `kvm-manager-<version>`.
-3. GitHub Actions builds the API image and publishes the complete chart repository to the `gh-pages` branch. The GHCR package must be public for a public community install.
-4. Check the release workflow and verify that `https://neuhauss.github.io/kvm-import` serves the refreshed chart index.
+1. Update the extension and chart versions together, build and review the release package locally, then push the source changes.
+2. Create and publish a GitHub Release tagged `kvm-manager-<version>`.
+3. GitHub Actions builds the API image and publishes the chart package and merged version index to the `gh-pages` branch. Previous chart versions remain available for upgrades and rollback; local preview files are excluded. The GHCR package must be public for a public community install.
+4. Check both release workflows. Then confirm that `https://OWNER.github.io/REPOSITORY/index.yaml` lists the new version. Rancher sees it on the next repository refresh.
 
 The Docker Hub image is an optional secondary publishing target and requires the `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` repository secrets. Users do not need Docker Hub credentials to install from the Rancher chart repository.
