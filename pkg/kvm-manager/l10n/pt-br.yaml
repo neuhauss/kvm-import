@@ -61,6 +61,15 @@ kvmManager:
     target: Target
     result: Result
     noHosts: No registered hosts
+    preflightTitle: Diagnóstico de conexão
+    preflightHelp: Execute verificações somente de leitura antes da importação. As credenciais não são salvas por esta verificação.
+    testConnection: Testar conexão
+    probing: Testando conexão...
+    auditSearch: Buscar eventos recentes
+    allHosts: Todos os hosts
+    allResults: Todos os resultados
+    exportCsv: Exportar CSV
+    detail: Detalhes
   cloudNative:
     title: Virtualization administration
     subtitle: Operational overview and tools for this KVM host.
@@ -205,7 +214,7 @@ kvmManager:
     deactivate: Desativar
     up: Ativar
     down: Desativar
-    networkWarning: Desativar a conexão usada pela sessão SSH pode interromper o acesso ao host.
+    networkWarning: O NetworkManager cria um ponto de restauração de 90 segundos. As alterações só são confirmadas após o retorno do SSH; caso contrário, são revertidas automaticamente.
     confirmNetworkConnection: "{action} a conexão de rede {name}? Isso pode desconectar o host."
     confirmLibvirtAction: "{action} {name}? Isso pode afetar as máquinas virtuais que usam esse recurso."
     enableAutostart: Ativar inicialização automática
@@ -227,6 +236,16 @@ kvmManager:
     noVm: No virtual machines found.
     storagePools: Libvirt storage pools
     noPool: No libvirt storage pools found.
+    storageVolumes: Volumes de armazenamento
+    storageVolumesHelp: Crie e remova volumes libvirt em pools de diretório ativos. Volumes conectados a uma VM não podem ser removidos.
+    createVolume: Criar volume
+    loadingVolumes: Carregando volumes...
+    noVolumes: Nenhum volume de armazenamento encontrado.
+    volumeName: Nome do volume
+    capacityGiB: Capacidade (GiB)
+    volumeFormat: Formato
+    selectPool: Selecione um pool de diretório ativo
+    confirmDeleteVolume: Excluir o volume {name}? Esta operação não pode ser desfeita.
     capacity: Capacity
     allocated: Allocated
     available: Available

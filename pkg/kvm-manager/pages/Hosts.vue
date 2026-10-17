@@ -69,12 +69,17 @@
             </label>
           </section>
 
+          <section v-if="!editing" class="host-form-section preflight-section">
+            <div class="row-actions"><div><h2>{{ t('hosts.preflightTitle') }}</h2><p class="text-muted">{{ t('hosts.preflightHelp') }}</p></div><button type="button" class="btn role-secondary" :disabled="probeLoading || !form.address || !form.username || !form.password" @click="runProbe">{{ probeLoading ? t('hosts.probing') : t('hosts.testConnection') }}</button></div>
+            <ul v-if="probeChecks.length" class="preflight-checks"><li v-for="check in probeChecks" :key="check.id" :class="check.status"><strong>{{ check.status === 'success' ? '✓' : check.status === 'warning' ? '!' : '×' }}</strong>{{ check.message }}</li></ul>
+          </section>
+
           <div v-if="formError" class="banner error" role="alert">{{ formError }}</div>
         </div>
 
         <footer class="host-editor-footer">
           <button type="button" class="btn role-secondary" :disabled="saving" @click="closeForm">{{ t('hosts.cancel') }}</button>
-          <button class="btn role-primary" :disabled="saving">{{ saving ? t('hosts.validating') : (editing ? t('hosts.save') : t('hosts.import')) }}</button>
+          <button class="btn role-primary" :disabled="saving || (!editing && (!probeOk || probeSignature !== formSignature()))">{{ saving ? t('hosts.validating') : (editing ? t('hosts.save') : t('hosts.import')) }}</button>
         </footer>
       </form>
     </section>
@@ -92,11 +97,12 @@
     <section v-if="showingAudit" class="table-wrap">
       <h2>{{ t('hosts.auditTitle') }}</h2>
       <p class="text-muted">{{ t('hosts.auditDescription') }}</p>
+      <div class="audit-filters"><input v-model="auditSearch" class="search-input" :placeholder="t('hosts.auditSearch')" /><select v-model="auditHost" class="search-input"><option value="">{{ t('hosts.allHosts') }}</option><option v-for="host in hosts" :key="host.id" :value="host.id">{{ host.hostname || host.name }}</option></select><select v-model="auditOutcome" class="search-input"><option value="">{{ t('hosts.allResults') }}</option><option value="success">success</option><option value="failure">failure</option></select><button class="btn role-secondary" :disabled="auditLoading" @click="exportAudit">{{ t('hosts.exportCsv') }}</button></div>
       <div v-if="auditLoading">{{ t('hosts.loading') }}</div>
       <div v-else-if="auditError" class="banner error">{{ auditError }}</div>
       <table v-else class="table"><thead><tr><th>{{ t('hosts.date') }}</th><th>{{ t('hosts.rancherUser') }}</th><th>{{ t('hosts.action') }}</th><th>{{ t('hosts.target') }}</th><th>{{ t('hosts.result') }}</th></tr></thead>
-        <tbody><tr v-for="event in auditEvents" :key="`${event.occurred_at}-${event.action}-${event.target}`"><td>{{ dateLabel(event.occurred_at) }}</td><td>{{ event.actor }}</td><td>{{ event.action }}</td><td>{{ event.detail || event.target }}</td><td>{{ event.outcome }}</td></tr>
-          <tr v-if="!auditEvents.length"><td colspan="5">{{ t('hosts.noAudit') }}</td></tr></tbody></table>
+        <tbody><tr v-for="event in filteredAuditEvents" :key="`${event.occurred_at}-${event.action}-${event.target}`"><td>{{ dateLabel(event.occurred_at) }}</td><td>{{ event.actor }}</td><td>{{ event.action }}</td><td>{{ event.detail || event.target }}</td><td>{{ event.outcome }}</td></tr>
+          <tr v-if="!filteredAuditEvents.length"><td colspan="5">{{ t('hosts.noAudit') }}</td></tr></tbody></table>
     </section>
     <div v-else-if="loading" class="loading">{{ t('hosts.loading') }}</div>
     <div v-else-if="hosts.length === 0" class="empty-state">
@@ -158,16 +164,19 @@ export default defineComponent({
       saving: false, error: '', formError: '', openMenu: '' as string, hostMenuStyle: {} as Record<string, string>,
       form: { name: '', address: '', port: 22, username: '', password: '', ssh_private_key: '', ssh_key_passphrase: '', remove_ssh_key: false, accept_new_host_key: false },
       showingAudit: false, auditEvents: [] as AuditEvent[], auditLoading: false, auditError: '',
+      probeChecks: [] as { id: string; status: string; message: string }[], probeLoading: false, probeOk: false, probeSignature: '', auditSearch: '', auditHost: '', auditOutcome: '', refreshTimer: 0 as number, refreshingStale: false,
     };
   },
   mounted() {
     this.load();
+    this.refreshTimer = window.setInterval(() => { if (document.visibilityState === 'visible' && !this.dialog && !this.showingAudit) this.refreshStale(); }, 60000);
     document.addEventListener('click', this.closeMenu);
     document.addEventListener('keydown', this.onMenuKeydown);
     window.addEventListener('resize', this.closeMenu);
     window.addEventListener('scroll', this.closeMenu, true);
   },
   beforeUnmount() {
+    window.clearInterval(this.refreshTimer);
     document.removeEventListener('click', this.closeMenu);
     document.removeEventListener('keydown', this.onMenuKeydown);
     window.removeEventListener('resize', this.closeMenu);
@@ -193,12 +202,27 @@ export default defineComponent({
       try {
         const [hosts, permissions] = await Promise.all([this.request('/hosts'), this.request('/permissions')]);
         this.hosts = hosts; this.permissions = permissions;
+        this.refreshStale();
       }
       catch (e) {
         this.hosts = [];
         this.error = `${this.t('hosts.cannotLoad')}: ${(e as Error).message}. ${this.t('hosts.verifyService')}`;
       }
       finally { this.loading = false; }
+    },
+    formSignature(): string { return JSON.stringify([this.form.address.trim(), Number(this.form.port), this.form.username.trim(), this.form.password, this.form.ssh_private_key, this.form.ssh_key_passphrase, this.form.accept_new_host_key]); },
+    async runProbe() {
+      this.probeLoading = true; this.probeChecks = []; this.probeOk = false; this.formError = '';
+      try { const result = await this.request('/hosts/probe', { method: 'POST', body: JSON.stringify(this.form) }); this.probeChecks = result.checks || []; this.probeOk = Boolean(result.ok); this.probeSignature = this.formSignature(); }
+      catch (e) { this.probeChecks = [{ id: 'ssh_libvirt', status: 'failure', message: (e as Error).message }]; }
+      finally { this.probeLoading = false; }
+    },
+    async refreshStale() {
+      if (this.refreshingStale || !this.hosts.length) return;
+      this.refreshingStale = true;
+      try { this.hosts = await this.request('/hosts/refresh-stale?max_age_seconds=120&limit=10', { method: 'POST' }); }
+      catch { /* Keep the last known values visible if a background refresh fails. */ }
+      finally { this.refreshingStale = false; }
     },
     openAdd() {
       this.editing = ''; this.formError = '';
@@ -258,9 +282,15 @@ export default defineComponent({
       this.showingAudit = !this.showingAudit;
       if (!this.showingAudit) return;
       this.auditLoading = true; this.auditError = '';
-      try { this.auditEvents = await this.request('/audit'); }
+      try { this.auditEvents = await this.request('/audit?limit=500'); }
       catch (e) { this.auditError = (e as Error).message; }
       finally { this.auditLoading = false; }
+    },
+    exportAudit() {
+      const quote = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+      const rows = [[this.t('hosts.date'), this.t('hosts.rancherUser'), this.t('hosts.action'), this.t('hosts.target'), this.t('hosts.result'), this.t('hosts.detail')], ...this.filteredAuditEvents.map((event) => [event.occurred_at, event.actor, event.action, event.target, event.outcome, event.detail || ''])];
+      const blob = new Blob([`\uFEFF${rows.map((row) => row.map(quote).join(',')).join('\r\n')}`], { type: 'text/csv;charset=utf-8' });
+      const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = 'kvm-audit.csv'; link.click(); URL.revokeObjectURL(link.href);
     },
     vmStateClass(state: string) { return state.toLowerCase().includes('running') ? 'ready' : 'unreachable'; },
     async remove(host: Host) {
@@ -271,6 +301,12 @@ export default defineComponent({
     statusLabel(status: string) { return this.t(`hosts.${status}`); },
     memoryLabel(bytes?: number) { return bytes ? `${(bytes / (1024 ** 3)).toFixed(1)} GiB` : '—'; },
     dateLabel(value?: string) { const locale = (this as any).$store?.state?.i18n?.selected; return value ? new Date(value).toLocaleString(locale || undefined) : '—'; },
+  },
+  computed: {
+    filteredAuditEvents(): AuditEvent[] {
+      const term = this.auditSearch.toLowerCase().trim();
+      return this.auditEvents.filter((event) => (!this.auditOutcome || event.outcome === this.auditOutcome) && (!this.auditHost || event.target === this.auditHost || event.target.startsWith(`${this.auditHost}/`)) && (!term || `${event.actor} ${event.action} ${event.target} ${event.detail || ''} ${event.outcome}`.toLowerCase().includes(term)));
+    },
   },
 });
 </script>
@@ -308,6 +344,7 @@ small { display: block; font-size: 12px; margin-top: 4px; }
 .host-editor-content { width: min(100%, 1100px); padding-bottom: 32px; }
 .host-editor-callout { margin-bottom: 22px; padding: 12px 14px; border-left: 4px solid var(--primary, #3d98ff); color: var(--body-text, #e5e7eb); background: color-mix(in srgb, var(--primary, #3d98ff) 14%, var(--body-bg, #252b33)); }
 .host-form-section { padding: 20px 0; border-bottom: 1px solid var(--border, #39414d); }
+.preflight-section .row-actions { display:flex; align-items:center; justify-content:space-between; gap:16px; }.preflight-section h2 { margin:0 0 5px; font-size:17px; }.preflight-section p { margin:0; }.preflight-checks { display:grid; gap:7px; margin:14px 0 0; padding:0; list-style:none; }.preflight-checks li { display:flex; gap:9px; padding:9px 11px; border-radius:4px; color:var(--body-text); background:color-mix(in srgb,var(--body-text) 7%,var(--body-bg)); }.preflight-checks li.success>strong { color:#2e9e5b; }.preflight-checks li.warning>strong { color:#b27a16; }.preflight-checks li.failure>strong { color:#c43e36; }
 .host-form-section-heading { margin-bottom: 18px; }
 .host-form-section-heading h2 { margin: 0 0 6px; font-size: 18px; }
 .host-form-section-heading p { margin: 0; }
@@ -330,6 +367,7 @@ small { display: block; font-size: 12px; margin-top: 4px; }
 .rancher-check span { min-width: 0; }
 .rancher-check small { max-width: 760px; }
 .host-editor-footer { position: sticky; bottom: 0; display: flex; justify-content: flex-end; gap: 12px; margin: auto -24px -24px; padding: 14px 24px; border-top: 1px solid var(--border, #39414d); background: var(--body-bg, #252b33); }
+.audit-filters { display:flex; flex-wrap:wrap; gap:8px; margin:14px 0; }.audit-filters .search-input { min-width:180px; padding:8px 10px; border:1px solid var(--border,#d8dde6); border-radius:4px; color:var(--body-text); background:var(--input-bg,var(--body-bg)); }
 .banner { padding: 12px; border-radius: 4px; margin: 12px 0; }
 .error { background: var(--error-bg, #fff0ee); color: var(--error-text, #8f211a); }
 @media (max-width: 700px) { .kvm-page { padding: 16px; }.header { flex-direction: column; }.header-actions { width: 100%; flex-wrap: wrap; }.host-editor { min-height: calc(100vh - 120px); }.host-editor-header h1 { font-size: 21px; }.field-wide,.field-name,.field-address,.field-port { grid-column: 1 / -1; }.host-editor-footer { margin: auto -16px -16px; padding: 12px 16px; } }

@@ -61,6 +61,15 @@ kvmManager:
     target: Target
     result: Result
     noHosts: No registered hosts
+    preflightTitle: Connection diagnostics
+    preflightHelp: Run read-only checks before importing. Credentials are not saved by this check.
+    testConnection: Test connection
+    probing: Testing connection...
+    auditSearch: Search recent events
+    allHosts: All hosts
+    allResults: All results
+    exportCsv: Export CSV
+    detail: Details
   cloudNative:
     title: Virtualization administration
     subtitle: Operational overview and tools for this KVM host.
@@ -205,7 +214,7 @@ kvmManager:
     deactivate: Deactivate
     up: Activate
     down: Deactivate
-    networkWarning: Deactivating the connection used by this SSH session can disconnect host management.
+    networkWarning: NetworkManager will create a 90-second checkpoint. Changes are committed only after SSH access returns; otherwise NetworkManager rolls them back.
     confirmNetworkConnection: "{action} network connection {name}? This can disconnect the host."
     confirmLibvirtAction: "{action} {name}? This may affect virtual machines using this resource."
     enableAutostart: Enable autostart
@@ -227,6 +236,16 @@ kvmManager:
     noVm: No virtual machines found.
     storagePools: Libvirt storage pools
     noPool: No libvirt storage pools found.
+    storageVolumes: Storage volumes
+    storageVolumesHelp: Create and remove libvirt volumes in active directory pools. Volumes attached to a VM cannot be removed.
+    createVolume: Create volume
+    loadingVolumes: Loading volumes...
+    noVolumes: No storage volumes found.
+    volumeName: Volume name
+    capacityGiB: Capacity (GiB)
+    volumeFormat: Format
+    selectPool: Select a running directory pool
+    confirmDeleteVolume: Delete volume {name}? This operation cannot be undone.
     capacity: Capacity
     allocated: Allocated
     available: Available

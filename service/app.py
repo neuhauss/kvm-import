@@ -18,6 +18,8 @@ import shlex
 import socket
 import socketserver
 import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 import urllib.error
 import urllib.request
 from contextlib import contextmanager
@@ -45,7 +47,7 @@ if len(credential_key) < 32:
     raise RuntimeError("Configure KVM_CREDENTIAL_KEY with at least 32 random characters")
 FERNET_KEY = base64.urlsafe_b64encode(hashlib.sha256(credential_key.encode()).digest())
 cipher = Fernet(FERNET_KEY)
-app = FastAPI(title="Rancher KVM Host API", version="0.7.19")
+app = FastAPI(title="Rancher KVM Host API", version="0.7.22")
 RANCHER_PUBLIC_ORIGIN = os.getenv("RANCHER_PUBLIC_ORIGIN", "https://rancher.example.com").rstrip("/")
 RANCHER_PUBLIC_HOST = urlsplit(RANCHER_PUBLIC_ORIGIN).netloc
 COCKPIT_PORT = 9090
@@ -111,6 +113,14 @@ class StoragePoolConfig(BaseModel):
     action: Literal["create", "edit", "delete"]
     name: str = Field(min_length=1, max_length=128)
     target: str | None = Field(default=None, max_length=512)
+
+
+class StorageVolumeConfig(BaseModel):
+    action: Literal["create", "delete"]
+    pool: str = Field(min_length=1, max_length=128)
+    name: str = Field(min_length=1, max_length=128)
+    capacity_bytes: int | None = Field(default=None, ge=1048576, le=10995116277760)
+    format: Literal["qcow2", "raw"] = "qcow2"
 
 
 class NetworkConnectionConfig(BaseModel):
@@ -1014,6 +1024,36 @@ def create_host(payload: HostInput, access: AuthorizationContext = Depends(requi
     return created
 
 
+@app.post("/kvm-api/hosts/probe")
+def probe_host(payload: HostInput, access: AuthorizationContext = Depends(require_permission("host_admin"))) -> dict[str, Any]:
+    """Validate an import without persisting credentials or host data."""
+    if not payload.password:
+        raise HTTPException(422, "A password is required to import the host")
+    host = payload.model_dump() | {"private_key": payload.ssh_private_key, "key_passphrase": payload.ssh_key_passphrase}
+    checks: list[dict[str, str]] = []
+    try:
+        facts = probe(host, accept_new_host_key=payload.accept_new_host_key)
+        checks.append({"id": "ssh_libvirt", "status": "success", "message": f"SSH identity verified; libvirt ready on {facts['hostname']}"})
+    except Exception as exc:
+        return {"ok": False, "checks": [{"id": "ssh_libvirt", "status": "failure", "message": str(exc)[:400]}], "facts": None}
+    try:
+        client = paramiko.SSHClient()
+        key_type, key_data = facts["ssh_host_key"].split(" ", 1)
+        client.get_host_keys().add(host["address"] if host["port"] == 22 else f'[{host["address"]}]:{host["port"]}', key_type, paramiko.PKey.from_type_string(key_type, base64.b64decode(key_data)))
+        client.set_missing_host_key_policy(PinnedHostKeyPolicy())
+        connect_ssh(client, host)
+        _, stdout, _ = client.exec_command("sudo -n true; printf 'SUDO=%s\\n' $?; command -v nmcli >/dev/null 2>&1; printf 'NMCLI=%s\\n' $?; command -v cockpit-ws >/dev/null 2>&1; printf 'COCKPIT=%s\\n' $?", timeout=15)
+        lines = stdout.read().decode("utf-8", "replace")
+        client.close()
+        for key, label in (("SUDO", "sudo without password"), ("NMCLI", "NetworkManager CLI"), ("COCKPIT", "Cockpit service")):
+            value = re.search(rf"{key}=(\d+)", lines)
+            status = "success" if value and value.group(1) == "0" else "warning"
+            checks.append({"id": key.lower(), "status": status, "message": f"{label}: {'available' if status == 'success' else 'not detected (some management actions may be unavailable)'}"})
+    except Exception as exc:
+        checks.append({"id": "optional", "status": "warning", "message": f"Optional capability check unavailable: {str(exc)[:250]}"})
+    return {"ok": True, "checks": checks, "facts": {k: facts[k] for k in ("hostname", "cpu_count", "memory_total_bytes", "status")}}
+
+
 @app.put("/kvm-api/hosts/{host_id}")
 def update_host(host_id: str, payload: HostInput, access: AuthorizationContext = Depends(require_permission("host_admin"))) -> dict[str, Any]:
     with connect_db() as db:
@@ -1080,6 +1120,30 @@ def refresh_host(host_id: str, access: AuthorizationContext = Depends(require_pe
         refreshed = public_host(read_host(db, host_id))
     record_audit(access.user_id, "host.refresh", host_id, "success" if refreshed["status"] == "ready" else "failure", refreshed.get("last_error"))
     return refreshed
+
+
+@app.post("/kvm-api/hosts/refresh-stale")
+def refresh_stale_hosts(max_age_seconds: int = 120, limit: int = 10, access: AuthorizationContext = Depends(require_permission("viewer"))) -> list[dict[str, Any]]:
+    """Refresh a bounded number of stale host facts with at most two SSH sessions at a time."""
+    max_age_seconds = min(max(30, max_age_seconds), 3600)
+    limit = min(max(1, limit), 10)
+    cutoff = (datetime.now(timezone.utc) - timedelta(seconds=max_age_seconds)).isoformat()
+    with connect_db() as db:
+        rows = [dict(row) for row in db.execute("SELECT * FROM hosts ORDER BY COALESCE(last_checked_at,'') ASC LIMIT ?", (limit * 4,))]
+    stale = [row for row in rows if not row.get("last_checked_at") or row["last_checked_at"] < cutoff][:limit]
+    def update(row: dict[str, Any]) -> None:
+        try:
+            row["password"] = cipher.decrypt(row["password"].encode()).decode()
+            decrypt_host_credentials(row)
+            facts = probe(row, pinned_host_key=row.get("ssh_host_key"))
+        except Exception as exc:
+            facts = {"status": "unreachable", "last_checked_at": now(), "last_error": str(exc)[:500]}
+        with connect_db() as db:
+            db.execute("UPDATE hosts SET hostname=COALESCE(?,hostname),status=?,cpu_count=COALESCE(?,cpu_count),memory_total_bytes=COALESCE(?,memory_total_bytes),last_checked_at=?,last_error=?,ssh_host_key=COALESCE(?,ssh_host_key) WHERE id=?", (facts.get("hostname"), facts["status"], facts.get("cpu_count"), facts.get("memory_total_bytes"), facts["last_checked_at"], facts.get("last_error"), facts.get("ssh_host_key"), row["id"]))
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        list(executor.map(update, stale))
+    with connect_db() as db:
+        return [public_host(row) for row in db.execute("SELECT * FROM hosts ORDER BY name COLLATE NOCASE")]
 
 
 @app.delete("/kvm-api/hosts/{host_id}", status_code=204)
@@ -1446,6 +1510,77 @@ def get_host_cloud_native(host_id: str) -> dict[str, Any]:
         raise HTTPException(502, f"Could not load host administration data: {exc}") from exc
 
 
+STORAGE_VOLUMES_SCRIPT = r'''import json,subprocess,sys,xml.etree.ElementTree as ET,re
+def run(args):
+ p=subprocess.run(args,capture_output=True,text=True,timeout=20)
+ if p.returncode: raise RuntimeError(p.stderr.strip() or p.stdout.strip() or 'libvirt command failed')
+ return p.stdout
+def info(pool,name):
+ path=run(['virsh','-c','qemu:///system','vol-path',name,'--pool',pool]).strip()
+ text=run(['virsh','-c','qemu:///system','vol-info',name,'--pool',pool,'--bytes'])
+ values={line.split(':',1)[0].strip().lower():line.split(':',1)[1].strip() for line in text.splitlines() if ':' in line}
+ xml=ET.fromstring(run(['virsh','-c','qemu:///system','vol-dumpxml',name,'--pool',pool]))
+ return {'pool':pool,'name':name,'path':path,'format':(xml.findtext('./target/format') or values.get('type','unknown')),'capacity_bytes':int(values.get('capacity','0')),'allocation_bytes':int(values.get('allocation','0'))}
+if sys.argv[1]=='list':
+ pools=[x.strip() for x in run(['virsh','-c','qemu:///system','pool-list','--all','--name']).splitlines() if x.strip()]
+ volumes=[]
+ for pool in pools:
+  names=run(['virsh','-c','qemu:///system','vol-list','--pool',pool,'--name']).splitlines()
+  for name in names:
+   name=name.strip()
+   if name:
+    try: volumes.append(info(pool,name))
+    except Exception: continue
+ print(json.dumps(volumes)); raise SystemExit
+action,pool,name,capacity,fmt=sys.argv[1:]
+if not re.fullmatch(r'[A-Za-z0-9_.+-]{1,128}',name): raise SystemExit('Invalid volume name')
+if pool not in [x.strip() for x in run(['virsh','-c','qemu:///system','pool-list','--all','--name']).splitlines()]: raise SystemExit('Storage pool not found')
+if action=='create':
+ if fmt not in ('qcow2','raw') or not capacity.isdigit() or int(capacity)<1048576: raise SystemExit('Invalid volume capacity or format')
+ root=ET.fromstring(run(['virsh','-c','qemu:///system','pool-dumpxml',pool]))
+ if root.get('type')!='dir': raise SystemExit('Volumes can only be created in directory-based storage pools')
+ pool_info=run(['virsh','-c','qemu:///system','pool-info','--bytes',pool])
+ if not any(x.lower().startswith('state:') and 'running' in x.lower() for x in pool_info.splitlines()): raise SystemExit('Storage pool must be running')
+ free=next((int(x.split(':',1)[1].strip()) for x in pool_info.splitlines() if x.lower().startswith('available:')),0)
+ if int(capacity)>free: raise SystemExit('Requested capacity exceeds the pool free space')
+ names=[x.strip() for x in run(['virsh','-c','qemu:///system','vol-list','--pool',pool,'--name']).splitlines() if x.strip()]
+ if name in names: raise SystemExit('A volume with this name already exists in the pool')
+ run(['virsh','-c','qemu:///system','vol-create-as',pool,name,capacity,'--format',fmt])
+ print(json.dumps(info(pool,name))); raise SystemExit
+if action=='delete':
+ volume=info(pool,name); path=volume['path']
+ domains=[x.strip() for x in run(['virsh','-c','qemu:///system','list','--all','--name']).splitlines() if x.strip()]
+ for domain in domains:
+  domain_xml=ET.fromstring(run(['virsh','-c','qemu:///system','dumpxml',domain]))
+  for source in domain_xml.findall('./devices/disk/source'):
+   if path in source.attrib.values(): raise SystemExit('Volume is attached to virtual machine '+domain)
+ run(['virsh','-c','qemu:///system','vol-delete',name,'--pool',pool]); print(json.dumps({'deleted':True})); raise SystemExit
+raise SystemExit('Unsupported storage volume action')
+'''
+
+
+@app.get("/kvm-api/hosts/{host_id}/storage-volumes", dependencies=[Depends(require_permission("viewer"))])
+def list_storage_volumes(host_id: str) -> list[dict[str, Any]]:
+    try:
+        return json.loads(run_sudo_python(cockpit_host_record(host_id), STORAGE_VOLUMES_SCRIPT, ["list", "", "", "", ""], timeout=45) or "[]")
+    except Exception as exc:
+        raise HTTPException(502, f"Could not list libvirt storage volumes: {exc}") from exc
+
+
+@app.post("/kvm-api/hosts/{host_id}/storage-volumes")
+def configure_storage_volume(host_id: str, payload: StorageVolumeConfig, access: AuthorizationContext = Depends(require_permission("host_admin"))) -> dict[str, Any]:
+    if not re.fullmatch(r"[A-Za-z0-9_.+-]{1,128}", payload.name):
+        raise HTTPException(422, "Volume name may contain letters, numbers, dot, underscore, plus, and hyphen")
+    host = cockpit_host_record(host_id)
+    try:
+        output = run_sudo_python(host, STORAGE_VOLUMES_SCRIPT, [payload.action, payload.pool, payload.name, str(payload.capacity_bytes or ""), payload.format], timeout=60)
+    except Exception as exc:
+        record_audit(access.user_id, f"storage-volume.{payload.action}", f"{host_id}/{payload.pool}/{payload.name}", "failure", str(exc)[:500])
+        raise HTTPException(409, f"Could not {payload.action} storage volume: {exc}") from exc
+    record_audit(access.user_id, f"storage-volume.{payload.action}", f"{host_id}/{payload.pool}/{payload.name}")
+    return json.loads(output or "{}")
+
+
 @app.post("/kvm-api/hosts/{host_id}/repositories/actions")
 def control_repository(host_id: str, payload: RepositoryAction, access: AuthorizationContext = Depends(require_permission("host_admin"))) -> dict[str, bool]:
     if payload.alias != "*" and not re.fullmatch(r"[A-Za-z0-9_.:-]+", payload.alias):
@@ -1660,27 +1795,76 @@ def configure_network_connection(host_id: str, payload: NetworkConnectionConfig,
     if payload.method == "manual" and not addresses:
         raise HTTPException(422, "At least one IP address is required for manual IPv4 configuration")
     host = cockpit_host_record(host_id)
-    script = r'''import shutil,subprocess,sys
-uuid,method,addresses,gateway,dns=sys.argv[1:]
-if not shutil.which('nmcli'): raise SystemExit('NetworkManager is not installed')
-listing=subprocess.run(['nmcli','-t','-f','UUID','connection','show'],capture_output=True,text=True,timeout=20)
-if listing.returncode or uuid not in listing.stdout.splitlines(): raise SystemExit('Network connection not found')
-active=subprocess.run(['nmcli','-t','-f','UUID','connection','show','--active'],capture_output=True,text=True,timeout=20)
-was_active=uuid in active.stdout.splitlines()
-args=['nmcli','connection','modify',uuid,'ipv4.method',method,'ipv4.addresses',addresses,'ipv4.gateway',gateway,'ipv4.dns',dns]
-result=subprocess.run(args,capture_output=True,text=True,timeout=30)
-if result.returncode: raise SystemExit(result.stderr.strip() or result.stdout.strip() or 'Network configuration failed')
-if was_active:
-    result=subprocess.run(['nmcli','connection','up',uuid],capture_output=True,text=True,timeout=60)
-    if result.returncode: raise SystemExit(result.stderr.strip() or result.stdout.strip() or 'Network configuration saved, but the active connection could not be reapplied')
-'''
     try:
-        run_sudo_python(host, script, [payload.uuid, payload.method, ",".join(addresses), gateway, ",".join(dns)], timeout=45)
+        configure_network_with_checkpoint(host, payload.uuid, payload.method, ",".join(addresses), gateway, ",".join(dns))
     except Exception as exc:
         record_audit(access.user_id, "network-connection.configure", f"{host_id}/{payload.uuid}", "failure", str(exc)[:500])
         raise HTTPException(502, f"Could not update the network connection: {exc}") from exc
     record_audit(access.user_id, "network-connection.configure", f"{host_id}/{payload.uuid}")
     return {"success": True}
+
+
+def configure_network_with_checkpoint(host: dict[str, Any], connection_uuid: str, method: str, addresses: str, gateway: str, dns: str) -> None:
+    """Use NetworkManager's built-in rollback timer and commit only after SSH recovers."""
+    remote = r'''import subprocess,sys
+uuid,method,addresses,gateway,dns=sys.argv[1:]
+check=subprocess.run(['nmcli','-t','-f','UUID','connection','show'],capture_output=True,text=True,timeout=20)
+if check.returncode or uuid not in check.stdout.splitlines(): raise SystemExit('Network connection not found')
+active=subprocess.run(['nmcli','-t','-f','UUID','connection','show','--active'],capture_output=True,text=True,timeout=20)
+if active.returncode: raise SystemExit(active.stderr.strip() or 'Could not inspect active connections')
+was_active=uuid in active.stdout.splitlines()
+inner="import subprocess,sys; u,m,a,g,d,wasflag=sys.argv[1:]; p=subprocess.run(['nmcli','connection','modify',u,'ipv4.method',m,'ipv4.addresses',a,'ipv4.gateway',g,'ipv4.dns',d],capture_output=True,text=True); p.returncode and sys.exit(p.stderr or p.stdout); wasflag=='1' and subprocess.run(['nmcli','connection','up',u],check=True,timeout=60)"
+cmd=['nmcli','device','checkpoint','--timeout','90','--','python3','-c',inner,uuid,method,addresses,gateway,dns,'1' if was_active else '0']
+p=subprocess.Popen(cmd,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,bufsize=1)
+for line in p.stdout:
+ sys.stdout.write(line); sys.stdout.flush()
+ if '?' in line and ('keep' in line.lower() or 'rollback' in line.lower() or 'checkpoint' in line.lower()):
+  print('KVM_NETWORK_CHECKPOINT_READY',flush=True)
+  decision=sys.stdin.readline().strip()
+  p.stdin.write(('Yes' if decision=='commit' else 'No')+'\n'); p.stdin.flush(); p.stdin.close(); break
+try: out,_=p.communicate(timeout=95)
+except subprocess.TimeoutExpired: p.kill(); raise SystemExit('NetworkManager checkpoint timed out and rolled back')
+if out: print(out,end='')
+if p.returncode: raise SystemExit('NetworkManager did not commit the checkpoint')
+'''
+    client = ssh_client_for_host(host)
+    command = f"sudo -S -p '' python3 -c {shlex.quote(remote)} " + " ".join(shlex.quote(v) for v in (connection_uuid, method, addresses, gateway, dns))
+    try:
+        stdin, stdout, stderr = client.exec_command(command, timeout=110)
+        stdin.write(host["password"] + "\n"); stdin.flush()
+        channel = stdout.channel
+        output = ""
+        deadline = datetime.now(timezone.utc).timestamp() + 105
+        while datetime.now(timezone.utc).timestamp() < deadline:
+            if channel.recv_ready():
+                output += channel.recv(4096).decode("utf-8", "replace")
+                if "KVM_NETWORK_CHECKPOINT_READY" in output:
+                    break
+            if channel.exit_status_ready():
+                raise RuntimeError((output + stderr.read().decode("utf-8", "replace")).strip() or "NetworkManager checkpoint failed before applying changes")
+            time.sleep(0.2)
+        else:
+            raise RuntimeError("Timed out waiting for the NetworkManager checkpoint; the host will roll back automatically")
+        reachable = False
+        last_error = "SSH reachability check failed"
+        for _ in range(12):
+            try:
+                check_client = ssh_client_for_host(host)
+                _, check_out, check_err = check_client.exec_command("true", timeout=5)
+                reachable = check_out.channel.recv_exit_status() == 0
+                check_client.close()
+                if reachable: break
+            except Exception as exc:
+                last_error = str(exc)
+            time.sleep(2)
+        stdin.write(("commit" if reachable else "rollback") + "\n"); stdin.flush(); stdin.channel.shutdown_write()
+        final_output = (output + stdout.read().decode("utf-8", "replace") + stderr.read().decode("utf-8", "replace")).replace("KVM_NETWORK_CHECKPOINT_READY", "").strip()
+        if not reachable:
+            raise RuntimeError(f"Could not re-establish SSH after the network change; NetworkManager rolled it back ({last_error})")
+        if channel.recv_exit_status() != 0:
+            raise RuntimeError(final_output or "NetworkManager checkpoint failed")
+    finally:
+        client.close()
 
 
 @app.post("/kvm-api/hosts/{host_id}/accounts/actions")
