@@ -1806,7 +1806,7 @@ def configure_network_connection(host_id: str, payload: NetworkConnectionConfig,
 
 def configure_network_with_checkpoint(host: dict[str, Any], connection_uuid: str, method: str, addresses: str, gateway: str, dns: str) -> None:
     """Use NetworkManager's built-in rollback timer and commit only after SSH recovers."""
-    remote = r'''import subprocess,sys
+    remote = r'''import os,select,subprocess,sys
 uuid,method,addresses,gateway,dns=sys.argv[1:]
 check=subprocess.run(['nmcli','-t','-f','UUID','connection','show'],capture_output=True,text=True,timeout=20)
 if check.returncode or uuid not in check.stdout.splitlines(): raise SystemExit('Network connection not found')
@@ -1816,9 +1816,14 @@ was_active=uuid in active.stdout.splitlines()
 inner="import subprocess,sys; u,m,a,g,d,wasflag=sys.argv[1:]; p=subprocess.run(['nmcli','connection','modify',u,'ipv4.method',m,'ipv4.addresses',a,'ipv4.gateway',g,'ipv4.dns',d],capture_output=True,text=True); p.returncode and sys.exit(p.stderr or p.stdout); wasflag=='1' and subprocess.run(['nmcli','connection','up',u],check=True,timeout=60)"
 cmd=['nmcli','device','checkpoint','--timeout','90','--','python3','-c',inner,uuid,method,addresses,gateway,dns,'1' if was_active else '0']
 p=subprocess.Popen(cmd,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,bufsize=1)
-for line in p.stdout:
- sys.stdout.write(line); sys.stdout.flush()
- if '?' in line and ('keep' in line.lower() or 'rollback' in line.lower() or 'checkpoint' in line.lower()):
+recent=''
+while p.poll() is None:
+ ready,_,_=select.select([p.stdout],[],[],1)
+ if not ready: continue
+ chunk=os.read(p.stdout.fileno(),4096).decode('utf-8','replace')
+ if not chunk: break
+ sys.stdout.write(chunk); sys.stdout.flush(); recent=(recent+chunk.lower())[-1024:]
+ if '?' in recent and ('keep' in recent or 'change' in recent or '[y/n]' in recent or '[yes/no]' in recent):
   print('KVM_NETWORK_CHECKPOINT_READY',flush=True)
   decision=sys.stdin.readline().strip()
   p.stdin.write(('Yes' if decision=='commit' else 'No')+'\n'); p.stdin.flush(); p.stdin.close(); break
