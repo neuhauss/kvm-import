@@ -1,6 +1,6 @@
 <template>
-  <section class="console-dock" role="region" :aria-label="t('cloudNative.vmConsole')" :class="{ expanded }">
-      <div class="dock-grip" aria-hidden="true"></div>
+    <section class="console-dock" role="region" :aria-label="t('cloudNative.vmConsole')" :class="{ expanded, resizing }" :style="dockStyle">
+      <button class="dock-grip" type="button" :aria-label="t('cloudNative.resizeTerminal')" @pointerdown="beginResize"></button>
       <header class="console-header">
         <div>
           <span class="eyebrow">{{ t('cloudNative.vmConsole') }} · {{ t('cloudNative.serialConsole') }}</span>
@@ -42,6 +42,10 @@ export default defineComponent({
       status: 'connecting' as 'connecting' | 'connected' | 'disconnected' | 'error',
       error: '',
       expanded: false,
+      panelHeight: 0,
+      resizing: false,
+      resizeStartY: 0,
+      resizeStartHeight: 0,
       resizeObserver: null as ResizeObserver | null,
     };
   },
@@ -63,6 +67,9 @@ export default defineComponent({
       if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(`KVM_CONTROL:${JSON.stringify({ type: 'resize', cols, rows })}`);
     });
     window.addEventListener('resize', this.fitTerminal);
+    window.addEventListener('pointermove', this.resizePanel);
+    window.addEventListener('pointerup', this.endResize);
+    this.panelHeight = Math.round(window.innerHeight * 0.44);
     this.resizeObserver = new ResizeObserver(() => this.fitTerminal());
     this.resizeObserver.observe(this.$refs.terminalElement as HTMLElement);
     this.$nextTick(this.fitTerminal);
@@ -70,6 +77,8 @@ export default defineComponent({
   },
   beforeUnmount() {
     window.removeEventListener('resize', this.fitTerminal);
+    window.removeEventListener('pointermove', this.resizePanel);
+    window.removeEventListener('pointerup', this.endResize);
     this.resizeObserver?.disconnect();
     this.socket?.close();
     this.terminal?.dispose();
@@ -80,6 +89,21 @@ export default defineComponent({
       return translate ? translate(`kvmManager.${key}`) : key;
     },
     fitTerminal() { this.fitAddon?.fit(); },
+    beginResize(event: PointerEvent) {
+      this.resizing = true;
+      this.resizeStartY = event.clientY;
+      this.resizeStartHeight = this.panelHeight || Math.round(window.innerHeight * 0.44);
+      (event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
+      event.preventDefault();
+    },
+    resizePanel(event: PointerEvent) {
+      if (!this.resizing) return;
+      const min = 220;
+      const max = Math.round(window.innerHeight * 0.88);
+      this.panelHeight = Math.min(max, Math.max(min, this.resizeStartHeight + this.resizeStartY - event.clientY));
+      this.$nextTick(this.fitTerminal);
+    },
+    endResize() { this.resizing = false; },
     connect() {
       this.socket?.close();
       this.error = '';
@@ -108,24 +132,33 @@ export default defineComponent({
           this.terminal?.write(new Uint8Array(event.data));
         }
       };
-      socket.onerror = () => {
-        if (this.socket !== socket) return;
-        this.status = 'error'; this.error = this.t('cloudNative.consoleConnectionError');
-      };
       socket.onclose = (event) => {
-        if (this.socket !== socket || this.status === 'error') return;
-        this.status = 'disconnected';
-        if (event.code !== 1000 && event.code !== 1005) this.error = `${this.t('cloudNative.consoleClosed')} (${event.code})`;
+        if (this.socket !== socket) return;
+        if (event.code === 4401) { this.status = 'error'; this.error = this.t('cloudNative.consoleSessionExpired'); }
+        else if (event.code === 4403) { this.status = 'error'; this.error = this.t('cloudNative.consolePermissionDenied'); }
+        else if (event.code === 4404) { this.status = 'error'; this.error = this.t('cloudNative.consoleHostNotFound'); }
+        else if (event.code === 4400) { this.status = 'error'; this.error = this.t('cloudNative.consoleInvalidVm'); }
+        else if (this.status !== 'error') {
+          this.status = event.code === 1000 || event.code === 1005 ? 'disconnected' : 'error';
+          if (event.code !== 1000 && event.code !== 1005) this.error = this.t('cloudNative.consoleConnectionError');
+        }
       };
+      socket.onerror = () => { /* onclose carries the useful auth or transport code */ };
+    },
+  },
+  computed: {
+    dockStyle(): Record<string, string> {
+      return { height: this.expanded ? 'min(78vh, 760px)' : `${this.panelHeight || 320}px` };
     },
   },
 });
 </script>
 
 <style scoped>
-.console-dock { position:fixed; z-index:1100; inset:auto 0 0; display:flex; flex-direction:column; height:min(44vh,440px); min-height:240px; padding:0 16px 12px; border:1px solid var(--border,#44505d); border-bottom:0; border-radius:8px 8px 0 0; background:var(--body-bg,#20262e); box-shadow:0 -12px 35px rgba(0,0,0,.3); }
-.console-dock.expanded { height:min(78vh,760px); }
-.dock-grip { width:44px; height:4px; flex:0 0 4px; align-self:center; margin:7px 0 9px; border-radius:4px; background:var(--muted,#65717e); }
+.console-dock { position:fixed; z-index:1100; inset:auto 0 0; display:flex; flex-direction:column; min-height:220px; max-height:88vh; padding:0 16px 12px; border:1px solid var(--border,#44505d); border-bottom:0; border-radius:8px 8px 0 0; background:var(--body-bg,#20262e); box-shadow:0 -12px 35px rgba(0,0,0,.3); }
+.console-dock.resizing { user-select:none; }
+.dock-grip { width:100%; height:20px; flex:0 0 20px; align-self:center; margin:0 0 5px; padding:0; border:0; background:transparent; cursor:ns-resize; touch-action:none; }
+.dock-grip::after { content:""; display:block; width:44px; height:4px; margin:auto; border-radius:4px; background:var(--muted,#65717e); }
 .console-header { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:14px; margin-bottom:8px; }
 .eyebrow { color:var(--muted,#9ba7b4); font-size:11px; font-weight:700; letter-spacing:.1em; }
 .console-header h2 { margin:4px 0 0; color:var(--body-text,#edf2f7); font-size:20px; }

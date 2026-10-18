@@ -47,7 +47,7 @@ if len(credential_key) < 32:
     raise RuntimeError("Configure KVM_CREDENTIAL_KEY with at least 32 random characters")
 FERNET_KEY = base64.urlsafe_b64encode(hashlib.sha256(credential_key.encode()).digest())
 cipher = Fernet(FERNET_KEY)
-app = FastAPI(title="Rancher KVM Host API", version="0.7.30")
+app = FastAPI(title="Rancher KVM Host API", version="0.7.32")
 RANCHER_PUBLIC_ORIGIN = os.getenv("RANCHER_PUBLIC_ORIGIN", "https://rancher.example.com").rstrip("/")
 RANCHER_PUBLIC_HOST = urlsplit(RANCHER_PUBLIC_ORIGIN).netloc
 COCKPIT_PORT = 9090
@@ -591,8 +591,28 @@ def open_vm_console(host: dict[str, Any], vm_name: str) -> tuple[paramiko.SSHCli
         channel.get_pty(term='xterm-256color', width=100, height=30)
         sudo_args = '-n' if passwordless_sudo else "-S -p ''"
         command = f"sudo {sudo_args} python3 -c {shlex.quote(VM_CONSOLE_SCRIPT)} {shlex.quote(vm_name)}"
+        if not passwordless_sudo:
+            # Paramiko's Channel.get_pty does not accept an echo flag. Wait for
+            # the remote PTY to disable echo before sending the host password;
+            # otherwise a fast send can race stty and leak it into the console.
+            marker = b'\x1eKVM_SUDO_READY\x1e'
+            command = f"stty -echo && printf '\\036KVM_SUDO_READY\\036' && {command}"
         channel.exec_command(command)
         if not passwordless_sudo:
+            deadline = time.monotonic() + 8
+            marker_buffer = bytearray()
+            channel.settimeout(0.25)
+            while marker not in marker_buffer:
+                if time.monotonic() >= deadline:
+                    raise RuntimeError('Could not prepare the secure host terminal for sudo')
+                try:
+                    chunk = channel.recv(1)
+                except socket.timeout:
+                    continue
+                if not chunk:
+                    raise RuntimeError('The remote host closed the terminal before sudo started')
+                marker_buffer.extend(chunk)
+            channel.settimeout(None)
             channel.sendall((host['password'] + '\n').encode())
         return client, channel
     except Exception:
@@ -828,7 +848,7 @@ async def vm_console_websocket(host_id: str, websocket: WebSocket) -> None:
         return
     try:
         actor = await asyncio.to_thread(
-            require_permission("vm_operator")(websocket.headers.get("authorization"), websocket.headers.get("cookie"))
+            require_permission("vm_operator"), websocket.headers.get("authorization"), websocket.headers.get("cookie")
         )
     except HTTPException as exc:
         await websocket.close(code=4403 if exc.status_code == 403 else 4401)

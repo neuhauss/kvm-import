@@ -71,6 +71,12 @@ spec:
               value: https://rancher.example.com
             - name: KVM_ALLOWED_GLOBAL_ROLES
               value: admin
+            - name: KVM_VIEWER_GLOBAL_ROLES
+              value: ""
+            - name: KVM_VM_OPERATOR_GLOBAL_ROLES
+              value: ""
+            - name: KVM_AUDIT_RETENTION_DAYS
+              value: "90"
           ports:
             - name: http
               containerPort: 8080

@@ -234,7 +234,7 @@ kvmManager:
     terminalWarning: Os comandos são executados como o usuário SSH importado. O uso do terminal é auditado, mas o texto dos comandos não é armazenado.
     vmConsole: Terminal da máquina virtual
     serialConsole: console serial
-    consoleWarning: A VM precisa estar em execução e configurada com um console serial e uma tela de login (por exemplo, serial-getty em ttyS0). O conteúdo digitado no terminal não é armazenado.
+    consoleWarning: A VM precisa estar em execução com console serial e tela de login (por exemplo, serial-getty em ttyS0). Entre com a conta do sistema guest; as credenciais do Rancher e do host SSH não autenticam na VM. O conteúdo digitado no terminal não é armazenado.
     serialConsoleMissing: Esta VM não tem console serial configurado. Adicione um console serial à definição libvirt e habilite uma tela de login no guest, como serial-getty@ttyS0.
     consoleStarting: Conectando ao console serial da VM...
     consoleClosed: Conexão do terminal encerrada
@@ -246,6 +246,11 @@ kvmManager:
     console_disconnected: Desconectado
     console_error: Erro
     consoleConnectionError: Não foi possível conectar ao console serial da VM.
+    resizeTerminal: Arraste para redimensionar o terminal
+    consoleSessionExpired: Sua sessão do Rancher expirou. Atualize a página e tente novamente.
+    consolePermissionDenied: Seu usuário não tem permissão para abrir o terminal desta VM.
+    consoleHostNotFound: Este host não está mais registrado na API da extensão. Atualize a lista e importe o host novamente.
+    consoleInvalidVm: O nome da máquina virtual é inválido. Feche e abra os detalhes novamente.
     commandResult: Resultado do comando
     exitCode: Código de saída
     noOutput: O comando terminou sem saída.
