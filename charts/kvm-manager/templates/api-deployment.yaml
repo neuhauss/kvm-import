@@ -57,8 +57,12 @@ spec:
               value: {{ join "," .Values.rancher.viewerGlobalRoles | quote }}
             - name: KVM_VM_OPERATOR_GLOBAL_ROLES
               value: {{ join "," .Values.rancher.vmOperatorGlobalRoles | quote }}
+            - name: KVM_HOST_OPERATOR_GLOBAL_ROLES
+              value: {{ join "," .Values.rancher.hostOperatorGlobalRoles | quote }}
             - name: KVM_AUDIT_RETENTION_DAYS
               value: {{ .Values.rancher.auditRetentionDays | default 90 | quote }}
+            - name: KVM_SLOW_REQUEST_MS
+              value: {{ .Values.rancher.slowRequestThresholdMs | default 1000 | quote }}
           ports:
             - name: http
               containerPort: 8080

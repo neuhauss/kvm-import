@@ -70,8 +70,8 @@
           </section>
 
           <section v-if="!editing" class="host-form-section preflight-section">
-            <div class="row-actions"><div><h2>{{ t('hosts.preflightTitle') }}</h2><p class="text-muted">{{ t('hosts.preflightHelp') }}</p></div><button type="button" class="btn role-secondary" :disabled="probeLoading || !form.address || !form.username || !form.password" @click="runProbe">{{ probeLoading ? t('hosts.probing') : t('hosts.testConnection') }}</button></div>
-            <ul v-if="probeChecks.length" class="preflight-checks"><li v-for="check in probeChecks" :key="check.id" :class="check.status"><strong>{{ check.status === 'success' ? '✓' : check.status === 'warning' ? '!' : '×' }}</strong>{{ check.message }}</li></ul>
+            <div class="row-actions"><div><h2>{{ t('hosts.preflightTitle') }}</h2><p class="text-muted">{{ t('hosts.preflightHelp') }}</p><small>{{ t('hosts.compatibilityMatrix') }}</small></div><button type="button" class="btn role-secondary" :disabled="probeLoading || !form.address || !form.username || !form.password" @click="runProbe">{{ probeLoading ? t('hosts.probing') : t('hosts.testConnection') }}</button></div>
+            <ul v-if="probeChecks.length" class="preflight-checks"><li v-for="check in probeChecks" :key="check.id" :class="check.status"><strong aria-hidden="true">{{ check.status === 'success' ? '✓' : check.status === 'warning' ? '!' : '×' }}</strong><span>{{ check.id === 'compatibility' ? t(check.status === 'success' ? 'hosts.compatibilityOk' : 'hosts.compatibilityWarning', { os: `${check.os_id || 'unknown'} ${check.os_version || ''}`.trim(), libvirt: check.libvirt_version || 'unavailable' }) : check.status === 'failure' ? t('hosts.preflightFailed') : check.id === 'optional' ? t('hosts.optionalCheckUnavailable') : check.message }}</span></li></ul>
           </section>
 
           <div v-if="formError" class="banner error" role="alert">{{ formError }}</div>
@@ -93,7 +93,8 @@
       <div class="header-actions"><button v-if="permissions.canAdministerHost" class="btn role-secondary" @click="toggleAudit">{{ showingAudit ? t('hosts.title') : t('hosts.audit') }}</button><button v-if="permissions.canAdministerHost" class="btn role-primary" @click="openAdd">{{ t('hosts.add') }}</button></div>
     </div>
 
-    <div v-if="error" class="banner error">{{ error }}</div>
+    <div v-if="error" class="banner error" role="alert">{{ error }}</div>
+    <div v-if="refreshWarning" class="banner warning" role="status">{{ refreshWarning }}</div>
     <section v-if="showingAudit" class="table-wrap">
       <h2>{{ t('hosts.auditTitle') }}</h2>
       <p class="text-muted">{{ t('hosts.auditDescription') }}</p>
@@ -119,10 +120,10 @@
           <tr v-for="host in hosts" :key="host.id">
             <td><strong>{{ host.hostname || host.name }}</strong><small>{{ host.name }}</small></td>
             <td>{{ host.address }}:{{ host.port }}</td>
-            <td><span class="state" :class="host.status">{{ statusLabel(host.status) }}</span><small v-if="host.last_error">{{ host.last_error }}</small></td>
+            <td><span class="state" :class="host.status">{{ statusLabel(host.status) }}</span><small v-if="host.last_error">{{ t('hosts.hostUnreachableHelp') }}</small></td>
             <td>{{ host.cpu_count ? `${host.cpu_count} vCPU` : '—' }}</td>
             <td>{{ memoryLabel(host.memory_total_bytes) }}</td>
-            <td>{{ dateLabel(host.last_checked_at) }}</td>
+            <td><span :class="{ stale: isHostStale(host) }">{{ dateLabel(host.last_checked_at) }}</span><small v-if="isHostStale(host)" class="stale-text">{{ t('hosts.dataStale') }}</small></td>
             <td class="actions">
               <div class="host-menu-wrap">
                 <button :id="`host-ui-${host.id}`" class="btn role-secondary btn-sm host-menu-trigger" :aria-expanded="openMenu === host.id" :aria-controls="`host-ui-menu-${host.id}`" :aria-label="`${t('hosts.uiMenu')} ${host.hostname || host.name}`" @click.stop="toggleMenu(host, $event)"><span aria-hidden="true">☰</span><span>{{ t('hosts.uiMenu') }}</span></button>
@@ -161,10 +162,10 @@ export default defineComponent({
   data() {
     return {
       hosts: [] as Host[], permissions: { canOperateVms: false, canAdministerHost: false } as Permissions, loading: false, refreshing: '' as string, dialog: false, editing: '' as string,
-      saving: false, error: '', formError: '', openMenu: '' as string, hostMenuStyle: {} as Record<string, string>,
+      saving: false, error: '', refreshWarning: '', formError: '', openMenu: '' as string, hostMenuStyle: {} as Record<string, string>,
       form: { name: '', address: '', port: 22, username: '', password: '', ssh_private_key: '', ssh_key_passphrase: '', remove_ssh_key: false, accept_new_host_key: false },
       showingAudit: false, auditEvents: [] as AuditEvent[], auditLoading: false, auditError: '',
-      probeChecks: [] as { id: string; status: string; message: string }[], probeLoading: false, probeOk: false, probeSignature: '', auditSearch: '', auditHost: '', auditOutcome: '', refreshTimer: 0 as number, refreshingStale: false,
+      probeChecks: [] as { id: string; status: string; message: string; os_id?: string; os_version?: string; libvirt_version?: string }[], probeLoading: false, probeOk: false, probeSignature: '', auditSearch: '', auditHost: '', auditOutcome: '', refreshTimer: 0 as number, refreshingStale: false,
     };
   },
   mounted() {
@@ -192,8 +193,12 @@ export default defineComponent({
         cache: 'no-store',
       });
       if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(body.detail || `API request failed (${response.status})`);
+        const key = response.status === 401 ? 'hosts.errorSessionExpired'
+          : response.status === 403 ? 'hosts.errorPermissionDenied'
+            : response.status === 422 ? 'hosts.errorValidation'
+              : response.status === 502 ? 'hosts.errorHostConnection'
+                : response.status >= 500 ? 'hosts.errorExtensionApi' : 'hosts.errorRequest';
+        throw new Error(this.t(key));
       }
       return response.status === 204 ? null : response.json();
     },
@@ -206,7 +211,7 @@ export default defineComponent({
       }
       catch (e) {
         this.hosts = [];
-        this.error = `${this.t('hosts.cannotLoad')}: ${(e as Error).message}. ${this.t('hosts.verifyService')}`;
+        this.error = `${this.t('hosts.cannotLoad')}: ${(e as Error).message}`;
       }
       finally { this.loading = false; }
     },
@@ -214,16 +219,17 @@ export default defineComponent({
     async runProbe() {
       this.probeLoading = true; this.probeChecks = []; this.probeOk = false; this.formError = '';
       try { const result = await this.request('/hosts/probe', { method: 'POST', body: JSON.stringify(this.form) }); this.probeChecks = result.checks || []; this.probeOk = Boolean(result.ok); this.probeSignature = this.formSignature(); }
-      catch (e) { this.probeChecks = [{ id: 'ssh_libvirt', status: 'failure', message: (e as Error).message }]; }
+      catch { this.probeChecks = [{ id: 'ssh_libvirt', status: 'failure', message: this.t('hosts.preflightFailed') }]; }
       finally { this.probeLoading = false; }
     },
     async refreshStale() {
       if (this.refreshingStale || !this.hosts.length) return;
       this.refreshingStale = true;
-      try { this.hosts = await this.request('/hosts/refresh-stale?max_age_seconds=120&limit=10', { method: 'POST' }); }
-      catch { /* Keep the last known values visible if a background refresh fails. */ }
+      try { this.hosts = await this.request('/hosts/refresh-stale?max_age_seconds=120&limit=10', { method: 'POST' }); this.refreshWarning = ''; }
+      catch { this.refreshWarning = this.t('hosts.backgroundRefreshFailed'); }
       finally { this.refreshingStale = false; }
     },
+    isHostStale(host: Host): boolean { return !host.last_checked_at || Date.now() - Date.parse(host.last_checked_at) > 180000; },
     openAdd() {
       this.editing = ''; this.formError = '';
       this.form = { name: '', address: '', port: 22, username: '', password: '', ssh_private_key: '', ssh_key_passphrase: '', remove_ssh_key: false, accept_new_host_key: false }; this.dialog = true;
@@ -324,6 +330,7 @@ small { display: block; font-size: 12px; margin-top: 4px; }
 .state { display: inline-block; padding: 3px 9px; border-radius: 12px; background: #edf0f4; }
 .state.ready { background: #e3f5e8; color: #23733a; }
 .state.unreachable { background: #fde8e7; color: #a52822; }
+.stale,.stale-text { color:var(--warning-text,var(--body-text)); font-weight:600; }
 .actions { text-align: right !important; }
 .host-menu-wrap { display:inline-block; margin-right:5px; }
 .host-menu-trigger { display:inline-flex; align-items:center; gap:8px; }
@@ -333,7 +340,7 @@ small { display: block; font-size: 12px; margin-top: 4px; }
 .btn-sm { margin-left: 4px; }
 .danger-text { color: #b42318; }
 .banner { padding: 12px; border-radius: 4px; margin: 12px 0; }
-.error { background: #fff0ee; color: #8f211a; }
+.error { background: color-mix(in srgb,#d45b52 16%,var(--body-bg,#252b33)); color:var(--body-text); }
 .empty-state { padding: 64px 16px; text-align: center; border: 1px dashed var(--border, #d8dde6); }
 .host-editor { min-height: calc(100vh - 148px); display: flex; flex-direction: column; }
 .host-editor-header { padding: 0 0 20px; margin-bottom: 24px; border-bottom: 1px solid var(--border, #39414d); }
@@ -369,6 +376,7 @@ small { display: block; font-size: 12px; margin-top: 4px; }
 .host-editor-footer { position: sticky; bottom: 0; display: flex; justify-content: flex-end; gap: 12px; margin: auto -24px -24px; padding: 14px 24px; border-top: 1px solid var(--border, #39414d); background: var(--body-bg, #252b33); }
 .audit-filters { display:flex; flex-wrap:wrap; gap:8px; margin:14px 0; }.audit-filters .search-input { min-width:180px; padding:8px 10px; border:1px solid var(--border,#d8dde6); border-radius:4px; color:var(--body-text); background:var(--input-bg,var(--body-bg)); }
 .banner { padding: 12px; border-radius: 4px; margin: 12px 0; }
-.error { background: var(--error-bg, #fff0ee); color: var(--error-text, #8f211a); }
+.error { background: color-mix(in srgb,#d45b52 16%,var(--body-bg,#252b33)); color:var(--body-text); }
+.warning { background:color-mix(in srgb,#d99c30 18%,var(--body-bg,#252b33)); color:var(--body-text); }
 @media (max-width: 700px) { .kvm-page { padding: 16px; }.header { flex-direction: column; }.header-actions { width: 100%; flex-wrap: wrap; }.host-editor { min-height: calc(100vh - 120px); }.host-editor-header h1 { font-size: 21px; }.field-wide,.field-name,.field-address,.field-port { grid-column: 1 / -1; }.host-editor-footer { margin: auto -16px -16px; padding: 12px 16px; } }
 </style>

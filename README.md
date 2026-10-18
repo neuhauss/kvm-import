@@ -48,6 +48,12 @@ CHART_REPO_URL=https://OWNER.github.io/REPOSITORY scripts/package-release.sh
 
 For the short local preview workflow, see [LOCAL-DEPLOYMENT.md](docs/LOCAL-DEPLOYMENT.md). It packages, applies, waits, and verifies the extension in one command without publishing artifacts.
 
+## Operator guides
+
+- [Rancher RBAC mapping](docs/rbac.md)
+- [KVM host compatibility](docs/host-compatibility.md)
+- [API performance telemetry](docs/performance-telemetry.md)
+
 Publishing a GitHub Release tagged `kvm-manager-<version>` builds the API image on GHCR and publishes the extension chart to GitHub Pages. Make the GHCR package public for community installs. Docker Hub publishing is an optional secondary target and requires the repository secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`.
 
 ## Contributing

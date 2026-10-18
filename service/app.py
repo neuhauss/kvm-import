@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import ipaddress
+import logging
 import os
 import re
 import sqlite3
@@ -47,7 +48,8 @@ if len(credential_key) < 32:
     raise RuntimeError("Configure KVM_CREDENTIAL_KEY with at least 32 random characters")
 FERNET_KEY = base64.urlsafe_b64encode(hashlib.sha256(credential_key.encode()).digest())
 cipher = Fernet(FERNET_KEY)
-app = FastAPI(title="Rancher KVM Host API", version="0.7.32")
+app = FastAPI(title="Rancher KVM Host API", version="0.7.42")
+performance_logger = logging.getLogger("kvm.performance")
 RANCHER_PUBLIC_ORIGIN = os.getenv("RANCHER_PUBLIC_ORIGIN", "https://rancher.example.com").rstrip("/")
 RANCHER_PUBLIC_HOST = urlsplit(RANCHER_PUBLIC_ORIGIN).netloc
 COCKPIT_PORT = 9090
@@ -55,11 +57,48 @@ try:
     AUDIT_RETENTION_DAYS = max(1, int(os.getenv("KVM_AUDIT_RETENTION_DAYS", "90")))
 except ValueError:
     AUDIT_RETENTION_DAYS = 90
+try:
+    SLOW_REQUEST_THRESHOLD_MS = max(0, int(os.getenv("KVM_SLOW_REQUEST_MS", "1000")))
+except ValueError:
+    SLOW_REQUEST_THRESHOLD_MS = 1000
 
 
 @app.middleware("http")
 async def disable_api_caching(request: Request, call_next):
-    response = await call_next(request)
+    started_at = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception:
+        elapsed_ms = (time.perf_counter() - started_at) * 1000
+        route = request.scope.get("route")
+        route_path = getattr(route, "path", "unmatched")
+        performance_logger.error(
+            "api_request_failed method=%s route=%s elapsed_ms=%.1f",
+            request.method,
+            route_path,
+            elapsed_ms,
+        )
+        raise
+
+    elapsed_ms = (time.perf_counter() - started_at) * 1000
+    if response.status_code >= 500:
+        route = request.scope.get("route")
+        performance_logger.error(
+            "api_request_failed method=%s route=%s status=%s elapsed_ms=%.1f",
+            request.method,
+            getattr(route, "path", "unmatched"),
+            response.status_code,
+            elapsed_ms,
+        )
+    elif elapsed_ms >= SLOW_REQUEST_THRESHOLD_MS:
+        route = request.scope.get("route")
+        performance_logger.warning(
+            "api_request_slow method=%s route=%s status=%s elapsed_ms=%.1f",
+            request.method,
+            getattr(route, "path", "unmatched"),
+            response.status_code,
+            elapsed_ms,
+        )
     if request.url.path.startswith("/kvm-api/"):
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
         response.headers["Pragma"] = "no-cache"
@@ -100,6 +139,45 @@ class VMAutostart(BaseModel):
     enabled: bool
 
 
+class VMConfig(BaseModel):
+    vcpus: int = Field(ge=1, le=512)
+    memory_mib: int = Field(ge=128, le=1048576)
+
+
+class VMDetailsConfig(BaseModel):
+    description: str = Field(default="", max_length=256)
+    cpu_mode: Literal["host-model", "host-passthrough", "custom"] = "host-model"
+    cpu_model: str | None = Field(default=None, max_length=100)
+    boot_order: list[Literal["hd", "cdrom", "network"]] = Field(min_length=1, max_length=3)
+    autostart: bool = False
+
+
+class VMCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=64)
+    pool: str = Field(min_length=1, max_length=128)
+    volume: str = Field(min_length=1, max_length=128)
+    network: str = Field(min_length=1, max_length=128)
+    vcpus: int = Field(ge=1, le=512)
+    memory_mib: int = Field(ge=128, le=1048576)
+    iso_path: str | None = Field(default=None, max_length=1024)
+    autostart: bool = False
+
+
+class VMSnapshotAction(BaseModel):
+    action: Literal["create", "delete", "revert"]
+    name: str = Field(min_length=1, max_length=64)
+    description: str | None = Field(default=None, max_length=256)
+
+
+class VMDeviceAction(BaseModel):
+    action: Literal["attach_disk", "detach_disk", "attach_network", "detach_network"]
+    pool: str | None = Field(default=None, max_length=128)
+    volume: str | None = Field(default=None, max_length=128)
+    target: str | None = Field(default=None, max_length=16)
+    network: str | None = Field(default=None, max_length=128)
+    mac: str | None = Field(default=None, max_length=32)
+
+
 class ServiceAction(BaseModel):
     action: Literal["start", "stop", "restart"]
 
@@ -116,19 +194,37 @@ class StoragePoolConfig(BaseModel):
 
 
 class StorageVolumeConfig(BaseModel):
-    action: Literal["create", "delete"]
+    action: Literal["create", "delete", "resize"]
     pool: str = Field(min_length=1, max_length=128)
     name: str = Field(min_length=1, max_length=128)
     capacity_bytes: int | None = Field(default=None, ge=1048576, le=10995116277760)
     format: Literal["qcow2", "raw"] = "qcow2"
+    vm_name: str | None = Field(default=None, min_length=1, max_length=128)
 
 
 class NetworkConnectionConfig(BaseModel):
     uuid: str = Field(min_length=16, max_length=64)
-    method: Literal["auto", "manual"]
+    method: Literal["auto", "manual", "shared", "link-local", "disabled"]
     addresses: list[str] = Field(default_factory=list, max_length=16)
     gateway: str | None = Field(default=None, max_length=64)
     dns: list[str] = Field(default_factory=list, max_length=8)
+    ipv6_method: Literal["auto", "manual", "disabled"] = "auto"
+    ipv6_addresses: list[str] = Field(default_factory=list, max_length=16)
+    ipv6_gateway: str | None = Field(default=None, max_length=64)
+    ipv6_dns: list[str] = Field(default_factory=list, max_length=8)
+    autoconnect: bool = True
+
+
+class LibvirtNetworkConfig(BaseModel):
+    action: Literal["create", "edit", "delete"]
+    name: str = Field(min_length=1, max_length=64)
+    forward_mode: Literal["nat", "route", "bridge", "none"] = "nat"
+    bridge: str | None = Field(default=None, max_length=15)
+    ipv4_address: str | None = Field(default=None, max_length=64)
+    dhcp_start: str | None = Field(default=None, max_length=45)
+    dhcp_end: str | None = Field(default=None, max_length=45)
+    autostart: bool = False
+    start_after_create: bool = True
 
 
 class RepositoryAction(BaseModel):
@@ -231,13 +327,14 @@ class AuthorizationContext:
 ROLE_CONFIG = {
     "viewer": {role.strip() for role in os.getenv("KVM_VIEWER_GLOBAL_ROLES", "").split(",") if role.strip()},
     "vm_operator": {role.strip() for role in os.getenv("KVM_VM_OPERATOR_GLOBAL_ROLES", "").split(",") if role.strip()},
+    "host_operator": {role.strip() for role in os.getenv("KVM_HOST_OPERATOR_GLOBAL_ROLES", "").split(",") if role.strip()},
     # Keep the original setting as the host-admin tier for existing installs.
     "host_admin": {role.strip() for role in os.getenv("KVM_ALLOWED_GLOBAL_ROLES", "admin").split(",") if role.strip()},
 }
 
 
-ROLE_RANK = {"viewer": 1, "vm_operator": 2, "host_admin": 3}
-PERMISSION_RANK = {"viewer": 1, "vm_operator": 2, "host_admin": 3}
+ROLE_RANK = {"viewer": 1, "vm_operator": 2, "host_operator": 3, "host_admin": 4}
+PERMISSION_RANK = {"viewer": 1, "vm_operator": 2, "host_resources": 3, "host_admin": 4}
 
 
 def authenticate_request(authorization: str | None = None, cookie: str | None = None) -> AuthorizationContext:
@@ -292,7 +389,8 @@ def require_permission(permission: str):
     ) -> AuthorizationContext:
         context = authenticate_request(authorization, cookie)
         if ROLE_RANK[context.access_level] < required_rank:
-            raise HTTPException(403, f"The {permission.replace('_', ' ')} role is required for this KVM operation")
+            role_name = "host operator" if permission == "host_resources" else permission.replace("_", " ")
+            raise HTTPException(403, f"The {role_name} role is required for this KVM operation")
         return context
 
     return dependency
@@ -964,7 +1062,13 @@ def probe(
             "(virsh -c qemu:///system nodeinfo >/dev/null 2>&1 && echo libvirt-ready) "
             "|| (systemctl is-active --quiet libvirtd && echo libvirt-ready) "
             "|| (systemctl is-active --quiet virtqemud && echo libvirt-ready) "
-            "|| echo libvirt-unavailable"
+            "|| echo libvirt-unavailable; "
+            "os_id=$(awk -F= '$1 == \"ID\" {gsub(/\"/, \"\", $2); print $2; exit}' /etc/os-release 2>/dev/null); "
+            "os_version=$(awk -F= '$1 == \"VERSION_ID\" {gsub(/\"/, \"\", $2); print $2; exit}' /etc/os-release 2>/dev/null); "
+            "printf 'KVM_OS=%s|%s\\n' \"${os_id:-unknown}\" \"${os_version:-unknown}\"; "
+            "if command -v virsh >/dev/null 2>&1; then "
+            "printf 'KVM_LIBVIRT=%s\\n' \"$(virsh --version 2>/dev/null | awk '{print $NF}')\"; "
+            "else printf 'KVM_LIBVIRT=unavailable\\n'; fi"
         )
         _stdin, stdout, stderr = client.exec_command(command, timeout=12)
         # The command separates fields with printf '\\n'; this produces empty
@@ -982,9 +1086,20 @@ def probe(
         libvirt_ready = lines[3] == "libvirt-ready"
         if not libvirt_ready:
             raise RuntimeError("SSH connected, but the libvirt service did not respond")
+        os_release = next((line.removeprefix("KVM_OS=") for line in lines if line.startswith("KVM_OS=")), "unknown|unknown")
+        os_id, _, os_version = os_release.partition("|")
+        libvirt_version = next((line.removeprefix("KVM_LIBVIRT=") for line in lines if line.startswith("KVM_LIBVIRT=")), "unavailable")
+        supported_releases = {
+            "15.3", "15.4", "15.5", "15.6", "15.7",
+            "15-SP3", "15-SP4", "15-SP5", "15-SP6", "15-SP7", "16.0",
+        }
+        compatibility_supported = os_id.lower() == "sles" and os_version in supported_releases and libvirt_version != "unavailable"
         return {
             "hostname": hostname, "cpu_count": cpu_count,
             "memory_total_bytes": memory_total_bytes, "status": "ready",
+            "os_id": os_id, "os_version": os_version,
+            "libvirt_version": libvirt_version,
+            "compatibility_supported": compatibility_supported,
             "last_checked_at": now(), "last_error": None, "ssh_host_key": ssh_host_key,
         }
     finally:
@@ -1088,6 +1203,7 @@ def get_permissions(access: AuthorizationContext = Depends(require_permission("v
         "accessLevel": access.access_level,
         "canView": True,
         "canOperateVms": rank >= PERMISSION_RANK["vm_operator"],
+        "canManageHostResources": rank >= PERMISSION_RANK["host_resources"],
         "canAdministerHost": rank >= PERMISSION_RANK["host_admin"],
     }
 
@@ -1132,6 +1248,20 @@ def probe_host(payload: HostInput, access: AuthorizationContext = Depends(requir
         checks.append({"id": "ssh_libvirt", "status": "success", "message": f"SSH identity verified; libvirt ready on {facts['hostname']}"})
     except Exception as exc:
         return {"ok": False, "checks": [{"id": "ssh_libvirt", "status": "failure", "message": str(exc)[:400]}], "facts": None}
+    compatibility_status = "success" if facts["compatibility_supported"] else "warning"
+    detected_os = f"{facts['os_id']} {facts['os_version']}".strip()
+    checks.append({
+        "id": "compatibility",
+        "status": compatibility_status,
+        "os_id": facts["os_id"],
+        "os_version": facts["os_version"],
+        "libvirt_version": facts["libvirt_version"],
+        "message": (
+            f"Supported host baseline: {detected_os}; libvirt {facts['libvirt_version']} detected"
+            if facts["compatibility_supported"]
+            else f"Compatibility is not confirmed for {detected_os} with libvirt {facts['libvirt_version']}; review the supported host matrix before importing"
+        ),
+    })
     try:
         client = paramiko.SSHClient()
         key_type, key_data = facts["ssh_host_key"].split(" ", 1)
@@ -1147,7 +1277,7 @@ def probe_host(payload: HostInput, access: AuthorizationContext = Depends(requir
             checks.append({"id": key.lower(), "status": status, "message": f"{label}: {'available' if status == 'success' else 'not detected (some management actions may be unavailable)'}"})
     except Exception as exc:
         checks.append({"id": "optional", "status": "warning", "message": f"Optional capability check unavailable: {str(exc)[:250]}"})
-    return {"ok": True, "checks": checks, "facts": {k: facts[k] for k in ("hostname", "cpu_count", "memory_total_bytes", "status")}}
+    return {"ok": True, "checks": checks, "facts": {k: facts[k] for k in ("hostname", "cpu_count", "memory_total_bytes", "status", "os_id", "os_version", "libvirt_version", "compatibility_supported")}}
 
 
 @app.put("/kvm-api/hosts/{host_id}")
@@ -1324,6 +1454,20 @@ def run(args):
 names = run(['virsh','-c','qemu:///system','list','--all','--name']).splitlines()
 if name not in [item.strip() for item in names]: raise SystemExit('Virtual machine not found')
 domain = ET.fromstring(run(['virsh','-c','qemu:///system','dumpxml',name]))
+try:
+    config_domain = ET.fromstring(run(['virsh','-c','qemu:///system','dumpxml','--inactive',name]))
+except Exception:
+    config_domain = domain
+def memory_kib(element):
+    node = element.find('./memory')
+    if node is None or not (node.text or '').strip(): return 0
+    value = int(node.text.strip())
+    unit = (node.get('unit') or 'KiB').lower()
+    factors = {'b':1/1024, 'bytes':1/1024, 'kib':1, 'kb':1, 'mib':1024, 'mb':1024, 'gib':1024*1024, 'gb':1024*1024, 'tib':1024*1024*1024, 'tb':1024*1024*1024}
+    return int(value * factors.get(unit, 1))
+config_vcpu = config_domain.find('./vcpu')
+config_vcpus = int(config_vcpu.get('current') or (config_vcpu.text or '0')) if config_vcpu is not None else 0
+config_memory_kib = memory_kib(config_domain)
 devices = domain.find('./devices')
 serial_console = bool(devices is not None and (devices.find('./serial') is not None or any(
     console.find('./target') is not None and console.find('./target').get('type') == 'serial'
@@ -1339,10 +1483,16 @@ for line in run(['virsh','-c','qemu:///system','vcpucount',name]).splitlines():
     if len(parts) >= 3:
         vcpu[f'{parts[0].lower()}_{parts[1].lower()}'] = parts[2]
 disks = []
+disk_formats = {}
+for disk in devices.findall('./disk') if devices is not None else []:
+    target = disk.find('./target')
+    driver = disk.find('./driver')
+    if target is not None and target.get('dev'):
+        disk_formats[target.get('dev')] = driver.get('type','unknown') if driver is not None else 'unknown'
 for line in run(['virsh','-c','qemu:///system','domblklist',name,'--details']).splitlines():
     parts = line.split(None,3)
     if len(parts) == 4 and parts[0] in ('file','block','dir','network','volume'):
-        disks.append({'type':parts[0], 'device':parts[1], 'target':parts[2], 'source':parts[3]})
+        disks.append({'type':parts[0], 'device':parts[1], 'target':parts[2], 'source':parts[3], 'format':disk_formats.get(parts[2],'unknown')})
 interfaces = []
 for line in run(['virsh','-c','qemu:///system','domiflist',name]).splitlines():
     parts = line.split(None,4)
@@ -1364,11 +1514,38 @@ for source in ('agent','lease','arp'):
                     iface['ip_addresses'].append(parts[-1])
     except Exception:
         continue
+snapshots = []
+try:
+    snapshot_names = run(['virsh','-c','qemu:///system','snapshot-list',name,'--name']).splitlines()
+except Exception:
+    snapshot_names = []
+for snapshot_name in filter(str.strip,snapshot_names):
+    try:
+        snapshot_xml = ET.fromstring(run(['virsh','-c','qemu:///system','snapshot-dumpxml',name,snapshot_name]))
+        snapshots.append({'name':snapshot_name.strip(),'state':snapshot_xml.findtext('./state','unknown'),
+            'created_at':snapshot_xml.findtext('./creationTime',''),'description':snapshot_xml.findtext('./description','')})
+    except Exception:
+        snapshots.append({'name':snapshot_name.strip(),'state':'unknown','created_at':'','description':''})
+snapshot_disks = [disk for disk in (config_domain.findall('./devices/disk')) if disk.get('device','disk') == 'disk' and disk.find('./readonly') is None]
+snapshot_supported = bool(snapshot_disks) and all((disk.find('./driver').get('type','').lower() == 'qcow2') if disk.find('./driver') is not None else False for disk in snapshot_disks)
+os_node=config_domain.find('./os')
+os_type=os_node.find('./type') if os_node is not None else None
+loader=os_node.find('./loader') if os_node is not None else None
+cpu=config_domain.find('./cpu')
+cpu_model=cpu.find('./model') if cpu is not None else None
+boot_order=[node.get('dev','') for node in os_node.findall('./boot')] if os_node is not None else []
 result = {'name':name, 'uuid':info.get('uuid',''), 'state':info.get('state') or run(['virsh','-c','qemu:///system','domstate',name]).strip(),
     'vcpus':int(info.get('cpu(s)','0') or '0'), 'current_vcpus':int(vcpu.get('current_live',vcpu.get('current_config','0')) or '0'),
-    'max_vcpus':int(vcpu.get('maximum_live',vcpu.get('maximum_config','0')) or '0'), 'memory_kib':int(info.get('max memory','0').split()[0] or '0'),
+    'max_vcpus':int(vcpu.get('maximum_live',vcpu.get('maximum_config','0')) or '0'), 'configured_vcpus':config_vcpus,
+    'configured_memory_kib':config_memory_kib, 'live_memory_kib':memory_kib(domain),
+    'live_vcpus':int(vcpu.get('current_live','0') or '0'), 'memory_kib':int(info.get('max memory','0').split()[0] or '0'),
     'used_memory_kib':int(info.get('used memory','0').split()[0] or '0'), 'persistent':info.get('persistent','unknown'),
-    'autostart':info.get('autostart','unknown'), 'serial_console':serial_console, 'disks':disks, 'interfaces':interfaces}
+    'autostart':'yes' if info.get('autostart','').lower() in ('enable','yes') else 'no', 'serial_console':serial_console, 'disks':disks, 'interfaces':interfaces,
+    'description':config_domain.findtext('./description',''), 'cpu_mode':cpu.get('mode','host-model') if cpu is not None else 'host-model',
+    'cpu_model':cpu_model.text.strip() if cpu_model is not None and cpu_model.text else '',
+    'architecture':os_type.get('arch','') if os_type is not None else '', 'machine':os_type.get('machine','') if os_type is not None else '',
+    'firmware':loader.text.strip() if loader is not None and loader.text else 'BIOS', 'boot_order':boot_order,
+    'snapshots':snapshots, 'snapshot_supported':snapshot_supported}
 print(json.dumps(result))
 '''
 
@@ -1461,7 +1638,21 @@ try:
     for line in run(['virsh','-c','qemu:///system','net-list','--all']).splitlines():
         parts=line.split()
         if len(parts)>=4 and parts[0].lower() not in ('name','-'):
-            libvirt_networks.append({'name':parts[0],'state':parts[1],'autostart':parts[2],'persistent':parts[3]})
+            item={'name':parts[0],'state':parts[1],'autostart':parts[2],'persistent':parts[3],
+                'forward_mode':'none','bridge':'','ipv4_address':'','ipv4_netmask':'','dhcp_start':'','dhcp_end':''}
+            try:
+                network_xml=ET.fromstring(run(['virsh','-c','qemu:///system','net-dumpxml',parts[0]]))
+                forward=network_xml.find('./forward')
+                if forward is not None: item['forward_mode']=forward.get('mode','none')
+                bridge=network_xml.find('./bridge')
+                if bridge is not None: item['bridge']=bridge.get('name','')
+                ip=network_xml.find('./ip')
+                if ip is not None:
+                    item['ipv4_address']=ip.get('address',''); item['ipv4_netmask']=ip.get('netmask','')
+                    dhcp=ip.find('./dhcp'); pool=dhcp.find('./range') if dhcp is not None else None
+                    if pool is not None: item['dhcp_start']=pool.get('start',''); item['dhcp_end']=pool.get('end','')
+            except Exception as network_error: errors.append('libvirt network '+parts[0]+': '+str(network_error))
+            libvirt_networks.append(item)
 except Exception as error: errors.append('libvirt networks: '+str(error))
 accounts=[]
 try:
@@ -1513,13 +1704,18 @@ try:
         for line in result.stdout.splitlines():
             parts=line.split(':',3)
             if len(parts)==4:
-                detail=subprocess.run(['nmcli','-g','ipv4.method,ipv4.addresses,ipv4.gateway,ipv4.dns','connection','show',parts[1]],capture_output=True,text=True,timeout=15)
+                detail=subprocess.run(['nmcli','-g','ipv4.method,ipv4.addresses,ipv4.gateway,ipv4.dns,ipv6.method,ipv6.addresses,ipv6.gateway,ipv6.dns,connection.autoconnect','connection','show',parts[1]],capture_output=True,text=True,timeout=15)
                 values=detail.stdout.splitlines() if detail.returncode==0 else []
                 network_connections.append({'name':parts[0],'uuid':parts[1],'type':parts[2],'device':parts[3],'active':parts[1] in active_uuids,
                     'ipv4_method':values[0] if len(values)>0 else 'auto',
                     'ipv4_addresses':[value for value in values[1].split(',') if value] if len(values)>1 else [],
                     'ipv4_gateway':values[2] if len(values)>2 else '',
-                    'ipv4_dns':[value for value in values[3].split(',') if value] if len(values)>3 else []})
+                    'ipv4_dns':[value for value in values[3].split(',') if value] if len(values)>3 else [],
+                    'ipv6_method':values[4] if len(values)>4 else 'auto',
+                    'ipv6_addresses':[value for value in values[5].split(',') if value] if len(values)>5 else [],
+                    'ipv6_gateway':values[6] if len(values)>6 else '',
+                    'ipv6_dns':[value for value in values[7].split(',') if value] if len(values)>7 else [],
+                    'autoconnect':values[8].lower() in ('yes','true','1') if len(values)>8 else True})
 except Exception as error: errors.append('network connections: '+str(error))
 release={}
 try:
@@ -1563,6 +1759,210 @@ def list_vms(host_id: str) -> list[dict[str, Any]]:
         return json.loads(output or "[]")
     except Exception as exc:
         raise HTTPException(502, f"Could not query virtual machines: {exc}") from exc
+
+
+@app.post("/kvm-api/hosts/{host_id}/vms/create")
+def create_vm(host_id: str, payload: VMCreate, access: AuthorizationContext = Depends(require_permission("vm_operator"))) -> dict[str, bool]:
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}", payload.name):
+        raise HTTPException(422, "Use a VM name with letters, numbers, dots, underscores, or hyphens")
+    if payload.iso_path and (not payload.iso_path.startswith("/") or not payload.iso_path.lower().endswith(".iso")):
+        raise HTTPException(422, "The installer ISO must be an absolute path ending in .iso on the KVM host")
+    host = cockpit_host_record(host_id)
+    creation_script = r'''import os,re,shutil,subprocess,sys,tempfile,xml.etree.ElementTree as ET
+name,pool,volume,network,vcpu_text,memory_text,iso_path,autostart=sys.argv[1:]
+if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,63}',name): raise SystemExit('Invalid VM name')
+vcpus=int(vcpu_text); memory_mib=int(memory_text)
+base=['virsh','-c','qemu:///system']
+def run(args):
+ r=subprocess.run(args,capture_output=True,text=True,timeout=40)
+ if r.returncode: raise SystemExit(r.stderr.strip() or r.stdout.strip() or 'Libvirt command failed')
+ return r.stdout
+if name in [line.strip() for line in run(base+['list','--all','--name']).splitlines()]: raise SystemExit('A VM with this name already exists')
+pool_names=[line.strip() for line in run(base+['pool-list','--all','--name']).splitlines() if line.strip()]
+if pool not in pool_names: raise SystemExit('The selected storage pool does not exist')
+volume_xml=ET.fromstring(run(base+['vol-dumpxml',volume,'--pool',pool]))
+volume_format=volume_xml.find('./target/format')
+disk_format=volume_format.get('type','') if volume_format is not None else ''
+if disk_format not in ('qcow2','raw'): raise SystemExit('The selected disk volume must use qcow2 or raw format')
+disk_path=run(base+['vol-path',volume,'--pool',pool]).strip()
+if not disk_path or not os.path.exists(disk_path): raise SystemExit('The selected disk volume path is not present on the host')
+network_names=[line.strip() for line in run(base+['net-list','--all','--name']).splitlines() if line.strip()]
+if network not in network_names: raise SystemExit('The selected virtual network does not exist')
+net_info=run(base+['net-info',network])
+if not any(line.strip().lower()=='active: yes' for line in net_info.splitlines()): raise SystemExit('Start the selected virtual network before creating this VM')
+if iso_path:
+ if not os.path.isabs(iso_path) or not iso_path.lower().endswith('.iso') or not os.path.isfile(iso_path): raise SystemExit('The installer ISO path is invalid or the file does not exist')
+domain=ET.Element('domain',{'type':'kvm'})
+ET.SubElement(domain,'name').text=name
+ET.SubElement(domain,'memory',{'unit':'MiB'}).text=str(memory_mib)
+ET.SubElement(domain,'currentMemory',{'unit':'MiB'}).text=str(memory_mib)
+ET.SubElement(domain,'vcpu').text=str(vcpus)
+os_node=ET.SubElement(domain,'os')
+ET.SubElement(os_node,'type',{'arch':'x86_64'}).text='hvm'
+ET.SubElement(os_node,'boot',{'dev':'cdrom' if iso_path else 'hd'})
+ET.SubElement(os_node,'boot',{'dev':'hd'})
+features=ET.SubElement(domain,'features')
+ET.SubElement(features,'acpi')
+ET.SubElement(features,'apic')
+ET.SubElement(domain,'on_poweroff').text='destroy'
+ET.SubElement(domain,'on_reboot').text='restart'
+ET.SubElement(domain,'on_crash').text='destroy'
+devices=ET.SubElement(domain,'devices')
+emulator=shutil.which('qemu-system-x86_64') or shutil.which('qemu-kvm')
+if emulator: ET.SubElement(devices,'emulator').text=emulator
+disk=ET.SubElement(devices,'disk',{'type':'file','device':'disk'})
+ET.SubElement(disk,'driver',{'name':'qemu','type':disk_format})
+ET.SubElement(disk,'source',{'file':disk_path})
+ET.SubElement(disk,'target',{'dev':'vda','bus':'virtio'})
+if iso_path:
+ cdrom=ET.SubElement(devices,'disk',{'type':'file','device':'cdrom'})
+ ET.SubElement(cdrom,'driver',{'name':'qemu','type':'raw'})
+ ET.SubElement(cdrom,'source',{'file':iso_path})
+ ET.SubElement(cdrom,'target',{'dev':'sda','bus':'sata'})
+ ET.SubElement(cdrom,'readonly')
+iface=ET.SubElement(devices,'interface',{'type':'network'})
+ET.SubElement(iface,'source',{'network':network})
+ET.SubElement(iface,'model',{'type':'virtio'})
+serial=ET.SubElement(devices,'serial',{'type':'pty'})
+ET.SubElement(serial,'target',{'port':'0'})
+console=ET.SubElement(devices,'console',{'type':'pty'})
+ET.SubElement(console,'target',{'type':'serial','port':'0'})
+fd,path=tempfile.mkstemp(prefix='kvm-vm-create-',suffix='.xml')
+try:
+ with os.fdopen(fd,'w',encoding='utf-8') as f: f.write(ET.tostring(domain,encoding='unicode'))
+ run(base+['define',path])
+ if autostart=='true': run(base+['autostart',name])
+ run(base+['start',name])
+finally:
+ try: os.unlink(path)
+ except FileNotFoundError: pass
+print('VM created and started')
+'''
+    try:
+        run_sudo_python(host, creation_script, [payload.name, payload.pool, payload.volume, payload.network, str(payload.vcpus), str(payload.memory_mib), payload.iso_path or "", str(payload.autostart).lower()], timeout=75)
+    except Exception as exc:
+        record_audit(access.user_id, "vm.create", f"{host_id}/{payload.name}", "failure", "Could not create VM with the selected resources")
+        raise HTTPException(502, "Could not create the VM. Confirm its disk, active virtual network, and optional ISO are available on the host.") from exc
+    record_audit(access.user_id, "vm.create", f"{host_id}/{payload.name}", detail=f"pool={payload.pool}; volume={payload.volume}; vcpus={payload.vcpus}; memory_mib={payload.memory_mib}")
+    return {"success": True}
+
+
+@app.post("/kvm-api/hosts/{host_id}/vms/devices")
+def configure_vm_devices(host_id: str, payload: VMDeviceAction, vm_name: str, access: AuthorizationContext = Depends(require_permission("vm_operator"))) -> dict[str, bool]:
+    host = cockpit_host_record(host_id)
+    encoded_name = base64.b64encode(vm_name.encode()).decode()
+    device_script = r'''import base64,os,re,subprocess,sys,tempfile,xml.etree.ElementTree as ET
+name=base64.b64decode(sys.argv[1]).decode(); action,pool,volume,target,network,mac=sys.argv[2:]
+base=['virsh','-c','qemu:///system']
+def run(args):
+ r=subprocess.run(args,capture_output=True,text=True,timeout=35)
+ if r.returncode: raise SystemExit(r.stderr.strip() or r.stdout.strip() or 'Libvirt command failed')
+ return r.stdout
+domain_names=[line.strip() for line in run(base+['list','--all','--name']).splitlines() if line.strip()]
+if name not in domain_names: raise SystemExit('Virtual machine not found')
+root=ET.fromstring(run(base+['dumpxml','--inactive',name]))
+devices=root.find('./devices')
+if devices is None: raise SystemExit('This VM has no editable device configuration')
+if action=='attach_disk':
+ if not pool or not volume: raise SystemExit('Choose a storage pool and volume')
+ pools=[line.strip() for line in run(base+['pool-list','--all','--name']).splitlines() if line.strip()]
+ if pool not in pools: raise SystemExit('The selected storage pool does not exist')
+ vxml=ET.fromstring(run(base+['vol-dumpxml',volume,'--pool',pool])); fmt=vxml.find('./target/format')
+ disk_format=fmt.get('type','') if fmt is not None else ''
+ if disk_format not in ('qcow2','raw'): raise SystemExit('Only qcow2 and raw volumes can be attached from the KVM interface')
+ disk_path=run(base+['vol-path',volume,'--pool',pool]).strip()
+ if not disk_path or not os.path.exists(disk_path): raise SystemExit('The storage volume path is unavailable')
+ for other_name in domain_names:
+  other=ET.fromstring(run(base+['dumpxml','--inactive',other_name]))
+  for source in other.findall('./devices/disk/source'):
+   if source.get('file')==disk_path or source.get('dev')==disk_path: raise SystemExit('This volume is already attached to a VM')
+ used={item.find('./target').get('dev','') for item in devices.findall('./disk') if item.find('./target') is not None}
+ candidates=['vd'+chr(letter) for letter in range(ord('b'),ord('z')+1)]
+ chosen=next((candidate for candidate in candidates if candidate not in used),None)
+ if not chosen: raise SystemExit('No free virtio disk target is available')
+ disk=ET.SubElement(devices,'disk',{'type':'file','device':'disk'})
+ ET.SubElement(disk,'driver',{'name':'qemu','type':disk_format})
+ ET.SubElement(disk,'source',{'file':disk_path})
+ ET.SubElement(disk,'target',{'dev':chosen,'bus':'virtio'})
+elif action=='detach_disk':
+ if not re.fullmatch(r'(?:vd|sd|hd|xvd)[a-z]+',target): raise SystemExit('Invalid disk target')
+ item=next((disk for disk in devices.findall('./disk') if disk.get('device','disk') in ('disk','cdrom') and disk.find('./target') is not None and disk.find('./target').get('dev')==target),None)
+ if item is None: raise SystemExit('The selected disk is not attached to this VM')
+ devices.remove(item)
+elif action=='attach_network':
+ if not network: raise SystemExit('Choose a libvirt network')
+ networks=[line.strip() for line in run(base+['net-list','--all','--name']).splitlines() if line.strip()]
+ if network not in networks: raise SystemExit('The selected libvirt network does not exist')
+ info=run(base+['net-info',network])
+ if not any(line.strip().lower()=='active: yes' for line in info.splitlines()): raise SystemExit('Start the selected libvirt network before attaching it')
+ iface=ET.SubElement(devices,'interface',{'type':'network'})
+ ET.SubElement(iface,'source',{'network':network})
+ ET.SubElement(iface,'model',{'type':'virtio'})
+elif action=='detach_network':
+ if not re.fullmatch(r'(?:[0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}',mac): raise SystemExit('Invalid network interface identity')
+ item=next((iface for iface in devices.findall('./interface') if iface.find('./mac') is not None and iface.find('./mac').get('address','').lower()==mac.lower()),None)
+ if item is None: raise SystemExit('The selected network interface is not attached to this VM')
+ devices.remove(item)
+else: raise SystemExit('Unsupported VM device action')
+fd,path=tempfile.mkstemp(prefix='kvm-vm-device-',suffix='.xml')
+try:
+ with os.fdopen(fd,'w',encoding='utf-8') as f: f.write(ET.tostring(root,encoding='unicode'))
+ run(base+['define',path])
+finally:
+ try: os.unlink(path)
+ except FileNotFoundError: pass
+print('Persistent VM device configuration updated')
+'''
+    args = [encoded_name, payload.action, payload.pool or "", payload.volume or "", payload.target or "", payload.network or "", payload.mac or ""]
+    try:
+        run_sudo_python(host, device_script, args, timeout=90)
+    except Exception as exc:
+        record_audit(access.user_id, f"vm.device.{payload.action}", f"{host_id}/{vm_name}", "failure", "Could not update persistent VM devices")
+        raise HTTPException(502, "Could not update the VM devices. Confirm the VM is persistent and the selected disk or network is available.") from exc
+    record_audit(access.user_id, f"vm.device.{payload.action}", f"{host_id}/{vm_name}", detail=f"pool={payload.pool or ''};volume={payload.volume or ''};target={payload.target or ''};network={payload.network or ''}")
+    return {"success": True}
+
+
+@app.post("/kvm-api/hosts/{host_id}/vms/snapshots")
+def control_vm_snapshot(host_id: str, payload: VMSnapshotAction, vm_name: str, access: AuthorizationContext = Depends(require_permission("vm_operator"))) -> dict[str, bool]:
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}", payload.name):
+        raise HTTPException(422, "Snapshot names may contain letters, numbers, dots, underscores, or hyphens")
+    host = cockpit_host_record(host_id)
+    encoded_name = base64.b64encode(vm_name.encode()).decode()
+    snapshot_script = r'''import base64,re,subprocess,sys,xml.etree.ElementTree as ET
+domain=base64.b64decode(sys.argv[1]).decode(); action,name,description=sys.argv[2:]
+base=['virsh','-c','qemu:///system']
+def run(args):
+ r=subprocess.run(args,capture_output=True,text=True,timeout=50)
+ if r.returncode: raise SystemExit(r.stderr.strip() or r.stdout.strip() or 'Libvirt command failed')
+ return r.stdout
+if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,63}',name): raise SystemExit('Invalid snapshot name')
+if domain not in [line.strip() for line in run(base+['list','--all','--name']).splitlines()]: raise SystemExit('Virtual machine not found')
+state=run(base+['domstate',domain]).strip().lower()
+if 'shut off' not in state and 'shutoff' not in state: raise SystemExit('Shut down the VM before changing snapshots')
+names=[line.strip() for line in run(base+['snapshot-list',domain,'--name']).splitlines() if line.strip()]
+if action=='create':
+ if name in names: raise SystemExit('A snapshot with this name already exists')
+ root=ET.fromstring(run(base+['dumpxml','--inactive',domain]))
+ disks=[disk for disk in root.findall('./devices/disk') if disk.get('device','disk')=='disk' and disk.find('./readonly') is None]
+ if not disks or any(disk.find('./driver') is None or disk.find('./driver').get('type','').lower()!='qcow2' for disk in disks): raise SystemExit('Internal snapshots require every writable VM disk to use qcow2 format')
+ run(base+['snapshot-create-as',domain,'--name',name,'--description',description or 'Created from Rancher KVM extension','--atomic'])
+elif action=='delete':
+ if name not in names: raise SystemExit('Snapshot not found')
+ run(base+['snapshot-delete',domain,name])
+elif action=='revert':
+ if name not in names: raise SystemExit('Snapshot not found')
+ run(base+['snapshot-revert',domain,name])
+else: raise SystemExit('Unsupported snapshot action')
+print('Snapshot action completed')
+'''
+    try:
+        run_sudo_python(host, snapshot_script, [encoded_name, payload.action, payload.name, payload.description or ""], timeout=90)
+    except Exception as exc:
+        record_audit(access.user_id, f"vm.snapshot.{payload.action}", f"{host_id}/{vm_name}/{payload.name}", "failure", "Could not complete VM snapshot action")
+        raise HTTPException(502, "Could not complete the snapshot action. Confirm the VM is shut down and its writable disks use qcow2 format.") from exc
+    record_audit(access.user_id, f"vm.snapshot.{payload.action}", f"{host_id}/{vm_name}/{payload.name}")
+    return {"success": True}
 
 
 @app.get("/kvm-api/hosts/{host_id}/services", dependencies=[Depends(require_permission("viewer"))])
@@ -1618,11 +2018,12 @@ def run(args):
  if p.returncode: raise RuntimeError(p.stderr.strip() or p.stdout.strip() or 'libvirt command failed')
  return p.stdout
 def info(pool,name):
- path=run(['virsh','-c','qemu:///system','vol-path',name,'--pool',pool]).strip()
  text=run(['virsh','-c','qemu:///system','vol-info',name,'--pool',pool,'--bytes'])
  values={line.split(':',1)[0].strip().lower():line.split(':',1)[1].strip() for line in text.splitlines() if ':' in line}
  xml=ET.fromstring(run(['virsh','-c','qemu:///system','vol-dumpxml',name,'--pool',pool]))
- return {'pool':pool,'name':name,'path':path,'format':(xml.findtext('./target/format') or values.get('type','unknown')),'capacity_bytes':int(values.get('capacity','0')),'allocation_bytes':int(values.get('allocation','0'))}
+ format_node=xml.find('./target/format')
+ path=xml.findtext('./target/path') or run(['virsh','-c','qemu:///system','vol-path',name,'--pool',pool]).strip()
+ return {'pool':pool,'name':name,'path':path,'format':(format_node.get('type') if format_node is not None else values.get('type','unknown')),'capacity_bytes':int(values.get('capacity','0')),'allocation_bytes':int(values.get('allocation','0'))}
 def names(pool):
  text=run(['virsh','-c','qemu:///system','vol-list','--pool',pool])
  result=[]
@@ -1641,7 +2042,8 @@ if sys.argv[1]=='list':
     try: volumes.append(info(pool,name))
     except Exception: continue
  print(json.dumps(volumes)); raise SystemExit
-action,pool,name,capacity,fmt=sys.argv[1:]
+action,pool,name,capacity,fmt=sys.argv[1:6]
+vm_name=sys.argv[6] if len(sys.argv)>6 else ''
 if not re.fullmatch(r'[A-Za-z0-9_.+-]{1,128}',name): raise SystemExit('Invalid volume name')
 if pool not in [x.strip() for x in run(['virsh','-c','qemu:///system','pool-list','--all','--name']).splitlines()]: raise SystemExit('Storage pool not found')
 if action=='create':
@@ -1663,6 +2065,27 @@ if action=='delete':
   for source in domain_xml.findall('./devices/disk/source'):
    if path in source.attrib.values(): raise SystemExit('Volume is attached to virtual machine '+domain)
  run(['virsh','-c','qemu:///system','vol-delete',name,'--pool',pool]); print(json.dumps({'deleted':True})); raise SystemExit
+if action=='resize':
+ volume=info(pool,name); current=volume['capacity_bytes']; requested=int(capacity) if capacity.isdigit() else 0
+ if volume['format'].lower() not in ('qcow2','raw'): raise SystemExit('Only qcow2 and raw volumes can be expanded')
+ if requested<=current: raise SystemExit('New capacity must be greater than the current volume capacity; shrinking is not supported')
+ root=ET.fromstring(run(['virsh','-c','qemu:///system','pool-dumpxml',pool]))
+ if root.get('type')!='dir': raise SystemExit('Only directory-based storage pools can be resized')
+ pool_info=run(['virsh','-c','qemu:///system','pool-info','--bytes',pool])
+ if not any(x.lower().startswith('state:') and 'running' in x.lower() for x in pool_info.splitlines()): raise SystemExit('Storage pool must be running')
+ free=next((int(x.split(':',1)[1].strip()) for x in pool_info.splitlines() if x.lower().startswith('available:')),0)
+ if requested-current>free: raise SystemExit('Requested expansion exceeds the storage pool free space')
+ domains=[x.strip() for x in run(['virsh','-c','qemu:///system','list','--all','--name']).splitlines() if x.strip()]
+ attached=[]
+ for domain in domains:
+  domain_xml=ET.fromstring(run(['virsh','-c','qemu:///system','dumpxml',domain]))
+  if any(volume['path'] in source.attrib.values() for source in domain_xml.findall('./devices/disk/source')):
+   state=run(['virsh','-c','qemu:///system','domstate',domain]).strip().lower()
+   attached.append((domain,state))
+ if vm_name and not any(domain==vm_name for domain,_ in attached): raise SystemExit('Selected virtual machine is not attached to this volume')
+ if any(state!='shut off' for _,state in attached): raise SystemExit('Stop every virtual machine using this volume before expanding it')
+ run(['virsh','-c','qemu:///system','vol-resize',name,str(requested),'--pool',pool])
+ print(json.dumps(info(pool,name))); raise SystemExit
 raise SystemExit('Unsupported storage volume action')
 '''
 
@@ -1676,12 +2099,12 @@ def list_storage_volumes(host_id: str) -> list[dict[str, Any]]:
 
 
 @app.post("/kvm-api/hosts/{host_id}/storage-volumes")
-def configure_storage_volume(host_id: str, payload: StorageVolumeConfig, access: AuthorizationContext = Depends(require_permission("host_admin"))) -> dict[str, Any]:
+def configure_storage_volume(host_id: str, payload: StorageVolumeConfig, access: AuthorizationContext = Depends(require_permission("host_resources"))) -> dict[str, Any]:
     if not re.fullmatch(r"[A-Za-z0-9_.+-]{1,128}", payload.name):
         raise HTTPException(422, "Volume name may contain letters, numbers, dot, underscore, plus, and hyphen")
     host = cockpit_host_record(host_id)
     try:
-        output = run_sudo_python(host, STORAGE_VOLUMES_SCRIPT, [payload.action, payload.pool, payload.name, str(payload.capacity_bytes or ""), payload.format], timeout=60)
+        output = run_sudo_python(host, STORAGE_VOLUMES_SCRIPT, [payload.action, payload.pool, payload.name, str(payload.capacity_bytes or ""), payload.format, payload.vm_name or ""], timeout=60)
     except Exception as exc:
         record_audit(access.user_id, f"storage-volume.{payload.action}", f"{host_id}/{payload.pool}/{payload.name}", "failure", str(exc)[:500])
         raise HTTPException(409, f"Could not {payload.action} storage volume: {exc}") from exc
@@ -1690,7 +2113,7 @@ def configure_storage_volume(host_id: str, payload: StorageVolumeConfig, access:
 
 
 @app.post("/kvm-api/hosts/{host_id}/repositories/actions")
-def control_repository(host_id: str, payload: RepositoryAction, access: AuthorizationContext = Depends(require_permission("host_admin"))) -> dict[str, bool]:
+def control_repository(host_id: str, payload: RepositoryAction, access: AuthorizationContext = Depends(require_permission("host_resources"))) -> dict[str, bool]:
     if payload.alias != "*" and not re.fullmatch(r"[A-Za-z0-9_.:-]+", payload.alias):
         raise HTTPException(422, "Invalid repository alias")
     host = cockpit_host_record(host_id)
@@ -1716,7 +2139,7 @@ def control_repository(host_id: str, payload: RepositoryAction, access: Authoriz
 
 
 @app.post("/kvm-api/hosts/{host_id}/subscriptions/actions")
-def control_subscription(host_id: str, payload: SubscriptionAction, access: AuthorizationContext = Depends(require_permission("host_admin"))) -> dict[str, bool]:
+def control_subscription(host_id: str, payload: SubscriptionAction, access: AuthorizationContext = Depends(require_permission("host_resources"))) -> dict[str, bool]:
     host = cockpit_host_record(host_id)
     if payload.action in ("activate_extension", "deactivate_extension"):
         if not payload.product or not re.fullmatch(r"[A-Za-z0-9_.+-]+/[A-Za-z0-9_.+-]+/[A-Za-z0-9_.+-]+", payload.product):
@@ -1757,7 +2180,7 @@ print(result.stdout.strip())
     # The registration code is sent only for this request and is not written to
     # the host database or the audit log.
     try:
-        subscription_input = json.dumps({"regcode": payload.regcode.strip(), "email": payload.email.strip()}) + "\n" if payload.action == "register" else None
+        subscription_input = json.dumps({"regcode": payload.regcode.strip(), "email": payload.email.strip()}) + "\n" if payload.action in ("register", "replace") else None
         run_sudo_python(host, script, args, timeout=210, stdin_data=subscription_input)
     except Exception as exc:
         record_audit(access.user_id, f"subscription.{payload.action}", host_id, "failure", "SUSEConnect operation failed")
@@ -1817,7 +2240,7 @@ def list_subscription_extensions(host_id: str) -> list[dict[str, Any]]:
 
 
 @app.post("/kvm-api/hosts/{host_id}/security/selinux")
-def set_selinux_mode(host_id: str, payload: SecurityModeAction, access: AuthorizationContext = Depends(require_permission("host_admin"))) -> dict[str, bool]:
+def set_selinux_mode(host_id: str, payload: SecurityModeAction, access: AuthorizationContext = Depends(require_permission("host_resources"))) -> dict[str, bool]:
     host = cockpit_host_record(host_id)
     script = r'''import shutil,subprocess,sys
 if not shutil.which('setenforce'): raise SystemExit('SELinux is not available on this host')
@@ -1834,7 +2257,7 @@ if r.returncode: raise SystemExit(r.stderr.strip() or r.stdout.strip() or 'Could
 
 
 @app.post("/kvm-api/hosts/{host_id}/libvirt/{resource}/actions")
-def control_libvirt_resource(host_id: str, resource: Literal["storage-pools", "networks"], payload: NamedAdminAction, access: AuthorizationContext = Depends(require_permission("host_admin"))) -> dict[str, bool]:
+def control_libvirt_resource(host_id: str, resource: Literal["storage-pools", "networks"], payload: NamedAdminAction, access: AuthorizationContext = Depends(require_permission("host_resources"))) -> dict[str, bool]:
     if not re.fullmatch(r"[A-Za-z0-9_.+-]+", payload.name):
         raise HTTPException(422, "Invalid libvirt resource name")
     host = cockpit_host_record(host_id)
@@ -1863,8 +2286,109 @@ if r.returncode: raise SystemExit(r.stderr.strip() or r.stdout.strip() or 'Libvi
     return {"success": True}
 
 
+@app.post("/kvm-api/hosts/{host_id}/libvirt/networks/config")
+def configure_libvirt_network(host_id: str, payload: LibvirtNetworkConfig, access: AuthorizationContext = Depends(require_permission("host_resources"))) -> dict[str, bool]:
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}", payload.name):
+        raise HTTPException(422, "Use a network name with letters, numbers, dots, underscores, or hyphens")
+    if payload.bridge and not re.fullmatch(r"[A-Za-z0-9_.-]{1,15}", payload.bridge):
+        raise HTTPException(422, "Enter a valid Linux bridge interface name")
+    if payload.forward_mode == "bridge" and not payload.bridge:
+        raise HTTPException(422, "A bridge device is required for bridged networks")
+    address = None
+    start = end = None
+    if payload.ipv4_address:
+        try:
+            address = ipaddress.ip_interface(payload.ipv4_address)
+            if address.version != 4:
+                raise ValueError("Only IPv4 network configuration is supported here")
+        except ValueError as exc:
+            raise HTTPException(422, f"Enter an IPv4 address with prefix, such as 192.0.2.1/24: {exc}") from exc
+    if payload.dhcp_start or payload.dhcp_end:
+        if not address or not payload.dhcp_start or not payload.dhcp_end:
+            raise HTTPException(422, "Enter the network address and both DHCP range addresses")
+        try:
+            start, end = ipaddress.ip_address(payload.dhcp_start), ipaddress.ip_address(payload.dhcp_end)
+            network = address.network
+            if start.version != 4 or end.version != 4 or start not in network or end not in network or int(start) > int(end):
+                raise ValueError("The DHCP range must be ordered and inside the configured subnet")
+            if start == address.ip or end == address.ip or start == network.network_address or end == network.broadcast_address:
+                raise ValueError("The DHCP range cannot contain the gateway, network, or broadcast address")
+        except ValueError as exc:
+            raise HTTPException(422, f"Invalid DHCP range: {exc}") from exc
+    if payload.forward_mode == "bridge" and (address or start or end):
+        raise HTTPException(422, "Configure the IP address on the host bridge, not in the libvirt bridged network")
+
+    host = cockpit_host_record(host_id)
+    network_script = r'''import ipaddress,os,re,subprocess,sys,tempfile,xml.etree.ElementTree as ET
+action,name,mode,bridge,address,dhcp_start,dhcp_end,autostart,start_after_create=sys.argv[1:]
+base=['virsh','-c','qemu:///system']
+def run(args,timeout=35):
+ r=subprocess.run(args,capture_output=True,text=True,timeout=timeout)
+ if r.returncode: raise SystemExit(r.stderr.strip() or r.stdout.strip() or 'Libvirt network operation failed')
+ return r.stdout
+if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,63}',name): raise SystemExit('Invalid libvirt network name')
+names=[item.strip() for item in run(base+['net-list','--all','--name']).splitlines() if item.strip()]
+exists=name in names
+if action=='create' and exists: raise SystemExit('A libvirt network with this name already exists')
+if action in ('edit','delete') and not exists: raise SystemExit('Libvirt network not found')
+if action=='delete':
+ info=run(base+['net-info',name]).lower()
+ if 'active: yes' in info: raise SystemExit('Stop the libvirt network before removing it')
+ for domain_name in filter(str.strip,run(base+['list','--all','--name']).splitlines()):
+  root=ET.fromstring(run(base+['dumpxml','--inactive',domain_name]))
+  for iface in root.findall('./devices/interface'):
+   source=iface.find('./source')
+   if source is not None and source.get('network')==name: raise SystemExit('A VM still references this network; detach it from the VM before deleting the network')
+ run(base+['net-undefine',name])
+ print('Libvirt network removed'); sys.exit(0)
+if action=='edit':
+ info=run(base+['net-info',name]).lower()
+ if 'active: yes' in info: raise SystemExit('Stop the network before editing its definition')
+ root=ET.fromstring(run(base+['net-dumpxml',name]))
+else:
+ root=ET.Element('network'); ET.SubElement(root,'name').text=name
+forward=root.find('./forward')
+if mode=='none':
+ if forward is not None: root.remove(forward)
+else:
+ if forward is None: forward=ET.Element('forward'); root.insert(1,forward)
+ forward.attrib.clear(); forward.set('mode',mode)
+bridge_node=root.find('./bridge')
+if mode=='bridge':
+ if bridge_node is None: bridge_node=ET.SubElement(root,'bridge')
+ bridge_node.set('name',bridge); bridge_node.set('stp','on'); bridge_node.set('delay','0')
+elif bridge_node is not None:
+ root.remove(bridge_node)
+for node in list(root.findall('./ip')):
+ root.remove(node)
+if address:
+ iface=ipaddress.ip_interface(address)
+ ip=ET.SubElement(root,'ip',{'address':str(iface.ip),'netmask':str(iface.network.netmask)})
+ if dhcp_start and dhcp_end:
+  dhcp=ET.SubElement(ip,'dhcp'); ET.SubElement(dhcp,'range',{'start':dhcp_start,'end':dhcp_end})
+fd,path=tempfile.mkstemp(prefix='kvm-libvirt-network-',suffix='.xml')
+try:
+ with os.fdopen(fd,'w',encoding='utf-8') as handle: handle.write(ET.tostring(root,encoding='unicode'))
+ run(base+['net-define',path])
+finally:
+ try: os.unlink(path)
+ except FileNotFoundError: pass
+run(base+['net-autostart']+(['--disable'] if autostart!='true' else [])+[name])
+if action=='create' and start_after_create=='true': run(base+['net-start',name],timeout=60)
+print('Libvirt network definition saved')
+'''
+    args = [payload.action, payload.name, payload.forward_mode, payload.bridge or "", str(address) if address else "", str(start) if start else "", str(end) if end else "", str(payload.autostart).lower(), str(payload.start_after_create).lower()]
+    try:
+        run_sudo_python(host, network_script, args, timeout=120)
+    except Exception as exc:
+        record_audit(access.user_id, f"libvirt.network.{payload.action}", f"{host_id}/{payload.name}", "failure", "Could not update libvirt network definition")
+        raise HTTPException(502, "Could not update the libvirt network. Check its state, bridge, address range, and VM references, then retry.") from exc
+    record_audit(access.user_id, f"libvirt.network.{payload.action}", f"{host_id}/{payload.name}", detail=f"mode={payload.forward_mode}; autostart={payload.autostart}")
+    return {"success": True}
+
+
 @app.post("/kvm-api/hosts/{host_id}/storage-pools/config")
-def configure_storage_pool(host_id: str, payload: StoragePoolConfig, access: AuthorizationContext = Depends(require_permission("host_admin"))) -> dict[str, bool]:
+def configure_storage_pool(host_id: str, payload: StoragePoolConfig, access: AuthorizationContext = Depends(require_permission("host_resources"))) -> dict[str, bool]:
     if not re.fullmatch(r"[A-Za-z0-9_.+-]+", payload.name):
         raise HTTPException(422, "Invalid storage pool name")
     if payload.action in ("create", "edit") and (not payload.target or not payload.target.startswith("/") or "\x00" in payload.target):
@@ -1937,7 +2461,7 @@ def run_terminal_command(host_id: str, payload: TerminalCommand, access: Authori
 
 
 @app.post("/kvm-api/hosts/{host_id}/network-connections/actions")
-def control_network_connection(host_id: str, payload: NetworkConnectionAction, access: AuthorizationContext = Depends(require_permission("host_admin"))) -> dict[str, bool]:
+def control_network_connection(host_id: str, payload: NetworkConnectionAction, access: AuthorizationContext = Depends(require_permission("host_resources"))) -> dict[str, bool]:
     if not re.fullmatch(r"[A-Fa-f0-9-]{16,64}", payload.uuid):
         raise HTTPException(422, "Invalid NetworkManager connection ID")
     host = cockpit_host_record(host_id)
@@ -1959,20 +2483,29 @@ if r.returncode: raise SystemExit(r.stderr.strip() or r.stdout.strip() or 'Netwo
 
 
 @app.post("/kvm-api/hosts/{host_id}/network-connections/config")
-def configure_network_connection(host_id: str, payload: NetworkConnectionConfig, access: AuthorizationContext = Depends(require_permission("host_admin"))) -> dict[str, bool]:
+def configure_network_connection(host_id: str, payload: NetworkConnectionConfig, access: AuthorizationContext = Depends(require_permission("host_resources"))) -> dict[str, bool]:
     if not re.fullmatch(r"[A-Fa-f0-9-]{16,64}", payload.uuid):
         raise HTTPException(422, "Invalid NetworkManager connection ID")
     try:
         addresses = [str(ipaddress.ip_interface(value)) for value in payload.addresses]
         gateway = str(ipaddress.ip_address(payload.gateway)) if payload.gateway else ""
         dns = [str(ipaddress.ip_address(value)) for value in payload.dns]
+        ipv6_addresses = [str(ipaddress.ip_interface(value)) for value in payload.ipv6_addresses]
+        ipv6_gateway = str(ipaddress.ip_address(payload.ipv6_gateway)) if payload.ipv6_gateway else ""
+        ipv6_dns = [str(ipaddress.ip_address(value)) for value in payload.ipv6_dns]
+        if any(ipaddress.ip_interface(value).version != 4 for value in addresses) or (gateway and ipaddress.ip_address(gateway).version != 4) or any(ipaddress.ip_address(value).version != 4 for value in dns):
+            raise ValueError("IPv4 fields must contain IPv4 addresses")
+        if any(ipaddress.ip_interface(value).version != 6 for value in ipv6_addresses) or (ipv6_gateway and ipaddress.ip_address(ipv6_gateway).version != 6) or any(ipaddress.ip_address(value).version != 6 for value in ipv6_dns):
+            raise ValueError("IPv6 fields must contain IPv6 addresses")
     except ValueError as exc:
         raise HTTPException(422, f"Invalid network address: {exc}") from exc
     if payload.method == "manual" and not addresses:
         raise HTTPException(422, "At least one IP address is required for manual IPv4 configuration")
+    if payload.ipv6_method == "manual" and not ipv6_addresses:
+        raise HTTPException(422, "At least one IPv6 address is required for manual IPv6 configuration")
     host = cockpit_host_record(host_id)
     try:
-        configure_network_with_checkpoint(host, payload.uuid, payload.method, ",".join(addresses), gateway, ",".join(dns))
+        configure_network_with_checkpoint(host, payload.uuid, payload.method, ",".join(addresses), gateway, ",".join(dns), payload.ipv6_method, ",".join(ipv6_addresses), ipv6_gateway, ",".join(ipv6_dns), payload.autoconnect)
     except Exception as exc:
         record_audit(access.user_id, "network-connection.configure", f"{host_id}/{payload.uuid}", "failure", str(exc)[:500])
         raise HTTPException(502, f"Could not update the network connection: {exc}") from exc
@@ -1980,17 +2513,17 @@ def configure_network_connection(host_id: str, payload: NetworkConnectionConfig,
     return {"success": True}
 
 
-def configure_network_with_checkpoint(host: dict[str, Any], connection_uuid: str, method: str, addresses: str, gateway: str, dns: str) -> None:
+def configure_network_with_checkpoint(host: dict[str, Any], connection_uuid: str, method: str, addresses: str, gateway: str, dns: str, ipv6_method: str, ipv6_addresses: str, ipv6_gateway: str, ipv6_dns: str, autoconnect: bool) -> None:
     """Use NetworkManager's built-in rollback timer and commit only after SSH recovers."""
     remote = r'''import os,select,subprocess,sys
-uuid,method,addresses,gateway,dns=sys.argv[1:]
+uuid,method,addresses,gateway,dns,ipv6_method,ipv6_addresses,ipv6_gateway,ipv6_dns,autoconnect=sys.argv[1:]
 check=subprocess.run(['nmcli','-t','-f','UUID','connection','show'],capture_output=True,text=True,timeout=20)
 if check.returncode or uuid not in check.stdout.splitlines(): raise SystemExit('Network connection not found')
 active=subprocess.run(['nmcli','-t','-f','UUID','connection','show','--active'],capture_output=True,text=True,timeout=20)
 if active.returncode: raise SystemExit(active.stderr.strip() or 'Could not inspect active connections')
 was_active=uuid in active.stdout.splitlines()
-inner="import subprocess,sys; u,m,a,g,d,wasflag=sys.argv[1:]; p=subprocess.run(['nmcli','connection','modify',u,'ipv4.method',m,'ipv4.addresses',a,'ipv4.gateway',g,'ipv4.dns',d],capture_output=True,text=True); p.returncode and sys.exit(p.stderr or p.stdout); wasflag=='1' and subprocess.run(['nmcli','connection','up',u],check=True,timeout=60)"
-cmd=['nmcli','device','checkpoint','--timeout','90','--','python3','-c',inner,uuid,method,addresses,gateway,dns,'1' if was_active else '0']
+inner="import subprocess,sys; u,m,a,g,d,m6,a6,g6,d6,ac,wasflag=sys.argv[1:]; args=['nmcli','connection','modify',u,'ipv4.method',m,'ipv4.addresses',a,'ipv4.gateway',g,'ipv4.dns',d,'ipv6.method',m6,'ipv6.addresses',a6,'ipv6.gateway',g6,'ipv6.dns',d6,'connection.autoconnect',ac]; p=subprocess.run(args,capture_output=True,text=True); p.returncode and sys.exit(p.stderr or p.stdout); wasflag=='1' and subprocess.run(['nmcli','connection','up',u],check=True,timeout=60)"
+cmd=['nmcli','device','checkpoint','--timeout','90','--','python3','-c',inner,uuid,method,addresses,gateway,dns,ipv6_method,ipv6_addresses,ipv6_gateway,ipv6_dns,autoconnect,'1' if was_active else '0']
 p=subprocess.Popen(cmd,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,bufsize=1)
 recent=''
 while p.poll() is None:
@@ -2009,7 +2542,7 @@ if out: print(out,end='')
 if p.returncode: raise SystemExit('NetworkManager did not commit the checkpoint')
 '''
     client = ssh_client_for_host(host)
-    command = f"sudo -S -p '' python3 -c {shlex.quote(remote)} " + " ".join(shlex.quote(v) for v in (connection_uuid, method, addresses, gateway, dns))
+    command = f"sudo -S -p '' python3 -c {shlex.quote(remote)} " + " ".join(shlex.quote(v) for v in (connection_uuid, method, addresses, gateway, dns, ipv6_method, ipv6_addresses, ipv6_gateway, ipv6_dns, "true" if autoconnect else "false"))
     try:
         stdin, stdout, stderr = client.exec_command(command, timeout=110)
         stdin.write(host["password"] + "\n"); stdin.flush()
@@ -2049,7 +2582,7 @@ if p.returncode: raise SystemExit('NetworkManager did not commit the checkpoint'
 
 
 @app.post("/kvm-api/hosts/{host_id}/accounts/actions")
-def control_account(host_id: str, payload: AccountAction, access: AuthorizationContext = Depends(require_permission("host_admin"))) -> dict[str, bool]:
+def control_account(host_id: str, payload: AccountAction, access: AuthorizationContext = Depends(require_permission("host_resources"))) -> dict[str, bool]:
     if not re.fullmatch(r"[a-z_][a-z0-9_-]{0,31}", payload.username):
         raise HTTPException(422, "Invalid account name")
     host = cockpit_host_record(host_id)
@@ -2125,7 +2658,7 @@ if result.returncode: raise SystemExit(result.stderr.strip() or result.stdout.st
 
 
 @app.post("/kvm-api/hosts/{host_id}/services/actions")
-def control_service(host_id: str, payload: ServiceAction, service_name: str, access: AuthorizationContext = Depends(require_permission("host_admin"))) -> dict[str, bool]:
+def control_service(host_id: str, payload: ServiceAction, service_name: str, access: AuthorizationContext = Depends(require_permission("host_resources"))) -> dict[str, bool]:
     if not re.fullmatch(r"[A-Za-z0-9_.@:-]+", service_name):
         raise HTTPException(422, "Invalid service name")
     host = cockpit_host_record(host_id)
@@ -2213,6 +2746,114 @@ if result.returncode: raise SystemExit(result.stderr.strip() or result.stdout.st
         record_audit(access.user_id, "vm.autostart", f"{host_id}/{vm_name}", "failure", str(exc))
         raise HTTPException(502, f"Could not change autostart: {exc}") from exc
     record_audit(access.user_id, "vm.autostart", f"{host_id}/{vm_name}", detail=f"enabled={payload.enabled}")
+    return {"success": True}
+
+
+@app.post("/kvm-api/hosts/{host_id}/vms/config")
+def configure_vm(host_id: str, payload: VMConfig, vm_name: str, access: AuthorizationContext = Depends(require_permission("vm_operator"))) -> dict[str, bool]:
+    """Update a persistent VM's CPU and memory settings; changes apply after restart."""
+    host = cockpit_host_record(host_id)
+    encoded_name = base64.b64encode(vm_name.encode()).decode()
+    config_script = r'''import base64, os, subprocess, sys, tempfile, xml.etree.ElementTree as ET
+name=base64.b64decode(sys.argv[1]).decode()
+vcpus=int(sys.argv[2]); memory_kib=int(sys.argv[3])
+base=['virsh','-c','qemu:///system']
+def run(args):
+ result=subprocess.run(args,capture_output=True,text=True,timeout=30)
+ if result.returncode: raise SystemExit(result.stderr.strip() or result.stdout.strip() or 'Libvirt command failed')
+ return result.stdout
+domains=run(base+['list','--all','--name']).splitlines()
+if name not in [item.strip() for item in domains]: raise SystemExit('Virtual machine not found')
+xml=run(base+['dumpxml','--inactive',name])
+root=ET.fromstring(xml)
+vcpu=root.find('./vcpu')
+memory=root.find('./memory')
+if vcpu is None or memory is None: raise SystemExit('This VM does not expose editable persistent CPU and memory settings')
+vcpu.text=str(vcpus)
+vcpu.attrib.pop('current',None)
+memory.text=str(memory_kib)
+memory.set('unit','KiB')
+current=root.find('./currentMemory')
+if current is None:
+ current=ET.Element('currentMemory')
+ memory_index=list(root).index(memory)
+ root.insert(memory_index+1,current)
+current.text=str(memory_kib)
+current.set('unit','KiB')
+fd,path=tempfile.mkstemp(prefix='kvm-vm-config-',suffix='.xml')
+try:
+ with os.fdopen(fd,'w',encoding='utf-8') as handle:
+  handle.write(ET.tostring(root,encoding='unicode'))
+ result=subprocess.run(base+['define',path],capture_output=True,text=True,timeout=30)
+ if result.returncode: raise SystemExit(result.stderr.strip() or result.stdout.strip() or 'Could not save VM configuration')
+finally:
+ try: os.unlink(path)
+ except FileNotFoundError: pass
+print('VM persistent CPU and memory configuration updated')
+'''
+    try:
+        run_sudo_python(host, config_script, [encoded_name, str(payload.vcpus), str(payload.memory_mib * 1024)], timeout=50)
+    except Exception as exc:
+        record_audit(access.user_id, "vm.configuration", f"{host_id}/{vm_name}", "failure", "Could not update persistent CPU and memory settings")
+        raise HTTPException(502, "Could not update the VM configuration. Confirm the VM is persistent and the host is reachable.") from exc
+    record_audit(access.user_id, "vm.configuration", f"{host_id}/{vm_name}", detail=f"vcpus={payload.vcpus}; memory_mib={payload.memory_mib}")
+    return {"success": True}
+
+
+@app.post("/kvm-api/hosts/{host_id}/vms/details-config")
+def configure_vm_details(host_id: str, payload: VMDetailsConfig, vm_name: str, access: AuthorizationContext = Depends(require_permission("vm_operator"))) -> dict[str, bool]:
+    if len(set(payload.boot_order)) != len(payload.boot_order):
+        raise HTTPException(422, "Each boot device can appear only once")
+    if payload.cpu_mode == "custom" and (not payload.cpu_model or not re.fullmatch(r"[A-Za-z0-9_.+-]{1,100}", payload.cpu_model)):
+        raise HTTPException(422, "Enter a valid libvirt CPU model when using custom CPU mode")
+    host = cockpit_host_record(host_id)
+    encoded_name = base64.b64encode(vm_name.encode()).decode()
+    config_script = r'''import base64,os,re,subprocess,sys,tempfile,xml.etree.ElementTree as ET
+name=base64.b64decode(sys.argv[1]).decode(); description,mode,cpu_model,boot_text,autostart=sys.argv[2:]
+boot=boot_text.split(',') if boot_text else []
+if not re.fullmatch(r'[A-Za-z0-9_.+-]{1,100}',cpu_model) and mode=='custom': raise SystemExit('Invalid custom CPU model')
+if not boot or len(boot)>3 or len(set(boot))!=len(boot) or any(item not in ('hd','cdrom','network') for item in boot): raise SystemExit('Invalid boot device order')
+base=['virsh','-c','qemu:///system']
+def run(args):
+ r=subprocess.run(args,capture_output=True,text=True,timeout=35)
+ if r.returncode: raise SystemExit(r.stderr.strip() or r.stdout.strip() or 'Libvirt configuration failed')
+ return r.stdout
+if name not in [x.strip() for x in run(base+['list','--all','--name']).splitlines()]: raise SystemExit('Virtual machine not found')
+root=ET.fromstring(run(base+['dumpxml','--inactive',name]))
+description_node=root.find('./description')
+if description:
+ if description_node is None: description_node=ET.Element('description'); root.insert(1,description_node)
+ description_node.text=description
+elif description_node is not None: root.remove(description_node)
+cpu=root.find('./cpu')
+if cpu is None: cpu=ET.Element('cpu'); root.insert(list(root).index(root.find('./devices')) if root.find('./devices') is not None else len(root),cpu)
+cpu.set('mode',mode)
+model=cpu.find('./model')
+if mode=='custom':
+ if model is None: model=ET.SubElement(cpu,'model')
+ model.attrib.clear(); model.text=cpu_model
+elif model is not None:
+ cpu.remove(model)
+os_node=root.find('./os')
+if os_node is None: raise SystemExit('VM has no editable boot configuration')
+for item in list(os_node.findall('./boot')): os_node.remove(item)
+for device in boot: ET.SubElement(os_node,'boot',{'dev':device})
+fd,path=tempfile.mkstemp(prefix='kvm-vm-details-',suffix='.xml')
+try:
+ with os.fdopen(fd,'w',encoding='utf-8') as handle: handle.write(ET.tostring(root,encoding='unicode'))
+ run(base+['define',path])
+finally:
+ try: os.unlink(path)
+ except FileNotFoundError: pass
+run(base+(['autostart',name] if autostart=='true' else ['autostart','--disable',name]))
+print('Persistent VM details updated')
+'''
+    try:
+        run_sudo_python(host, config_script, [encoded_name, payload.description.strip(), payload.cpu_mode, payload.cpu_model or "", ",".join(payload.boot_order), str(payload.autostart).lower()], timeout=60)
+    except Exception as exc:
+        record_audit(access.user_id, "vm.details.configuration", f"{host_id}/{vm_name}", "failure", "Could not update persistent VM detail settings")
+        raise HTTPException(502, "Could not update VM details. Confirm the VM is persistent and the selected CPU mode and boot devices are supported.") from exc
+    record_audit(access.user_id, "vm.details.configuration", f"{host_id}/{vm_name}", detail=f"cpu_mode={payload.cpu_mode}; boot_order={','.join(payload.boot_order)}; autostart={payload.autostart}")
     return {"success": True}
 
 

@@ -13,6 +13,17 @@ kvmManager:
     cpu: CPU
     memory: Memory
     lastCheck: Last check
+    dataStale: Desatualizado · verificando a conexão do host...
+    backgroundRefreshFailed: "Falha ao atualizar o host. O estado exibido é da última consulta salva; verifique o SSH e atualize novamente."
+    preflightFailed: "A validação SSH/libvirt falhou. Confira o endereço, as credenciais SSH, a confiança da chave do host, o firewall e se o libvirt está ativo."
+    optionalCheckUnavailable: "As verificações opcionais não foram concluídas; algumas ações administrativas podem não estar disponíveis."
+    hostUnreachableHelp: "Não foi possível acessar SSH/libvirt. Confira as credenciais, a confiança da chave do host, a rede e o serviço libvirt."
+    errorSessionExpired: "Sua sessão do Rancher expirou. Entre novamente e tente outra vez."
+    errorPermissionDenied: "Seu papel do Rancher não permite esta operação no host. Peça a um administrador para revisar o RBAC do KVM."
+    errorValidation: "As configurações do host ou os dados da conexão são inválidos. Revise os campos e execute novamente a verificação."
+    errorHostConnection: "A operação no host não foi concluída. Verifique o SSH, a confiança da chave e se o libvirt está ativo."
+    errorExtensionApi: "A API do KVM não conseguiu concluir a solicitação. Verifique a saúde da API e tente novamente."
+    errorRequest: "Não foi possível concluir a solicitação. Atualize a lista de hosts e tente novamente."
     manage: Manage
     uiMenu: UI
     refresh: Refresh
@@ -65,6 +76,9 @@ kvmManager:
     preflightHelp: Execute verificações somente de leitura antes da importação. As credenciais não são salvas por esta verificação.
     testConnection: Testar conexão
     probing: Testando conexão...
+    compatibilityOk: "Base compatível detectada: {os}; libvirt {libvirt} disponível."
+    compatibilityWarning: "A compatibilidade não foi confirmada para {os} com libvirt {libvirt}. Consulte a matriz suportada antes de importar."
+    compatibilityMatrix: "Alvos: SLES 15 SP3–SP7 ou SLES 16.0 com virsh/libvirt dos repositórios oficiais SUSE. Outros hosts exibem um aviso."
     auditSearch: Buscar eventos recentes
     allHosts: Todos os hosts
     allResults: Todos os resultados
@@ -86,16 +100,104 @@ kvmManager:
     title: Virtualization administration
     subtitle: Operational overview and tools for this KVM host.
     openCockpit: Open Cockpit
+    accessLevelLabel: "Acesso KVM: {level}"
+    role_viewer: Visualizador
+    role_vm_operator: Operador de VMs
+    role_host_operator: Operador do host
+    role_host_admin: Administrador de hosts
+    operationInProgress: "Uma operação está em andamento em {host}. Mantenha esta página aberta; o estado será atualizado ao terminar."
     updateData: Refresh data
     updating: Refreshing...
     lastUpdatedAt: "Métricas do host atualizadas: {time} · atualização automática a cada 30 segundos"
     updateFailedAt: "A atualização falhou. Exibindo dados de {time}."
+    updateStaleAt: "Os dados podem estar desatualizados. Última atualização bem-sucedida: {time}."
+    errorSessionExpired: "A sessão do Rancher expirou. Entre novamente no Rancher e tente outra vez."
+    errorPermissionDenied: "Seu papel do Rancher não pode executar {operation} em {host}. Peça a um administrador do Rancher para conferir o mapeamento RBAC do KVM."
+    errorInvalidInput: "Revise os dados de {operation} para {host}, corrija os campos inválidos e tente novamente."
+    errorHostOperation: "{operation} falhou em {host}. Verifique a conexão SSH e o serviço correspondente no host e tente novamente."
+    errorServiceUnavailable: "A API da extensão KVM não conseguiu concluir {operation} em {host}. Verifique a saúde da API e tente novamente."
+    errorRequest: "Não foi possível concluir {operation} em {host}. Atualize os dados e tente novamente."
+    confirmNetworkEditSummary: "Aplicar alterações de rede em {name}? IPv4: {method}; endereços: {addresses}; gateway: {gateway}; DNS: {dns}. IPv6: {ipv6}. O acesso ao host pode ser interrompido."
     filterVmState: Filtrar máquinas virtuais por estado
     allVmStates: Todos os estados
     stopped: Parada
     noVmMatch: Nenhuma máquina virtual corresponde aos filtros.
     connected: Connected
     vms: Virtual machines
+    vmConfiguration: Recursos da VM
+    vmConfigurationHelp: Edite as configurações persistentes de CPU e memória gerenciadas pelo libvirt.
+    vmHardwareDetails: Hardware e inicialização da VM
+    vmDetailsSections: Seções de detalhes da máquina virtual
+    vmOverview: Visão geral
+    vmDevices: Dispositivos
+    runtimeVcpus: vCPUs aplicadas enquanto está ligada
+    runtimeMemory: Limite de memória em execução
+    savedConfiguration: Configuração salva
+    noVmDescription: Nenhuma descrição definida.
+    vmIdentifier: UUID
+    expandDisk: Expandir disco
+    currentDiskSize: Tamanho virtual atual
+    newDiskSizeGiB: Novo tamanho virtual (GiB)
+    expandDiskHelp: "A VM precisa estar desligada. O host verifica o espaço livre e expande apenas o disco virtual; redimensione a partição e o sistema de arquivos dentro da VM separadamente."
+    diskResizeUnsupported: Este disco não é um volume qcow2 ou raw gerenciado.
+    invalidDiskCapacity: Informe um tamanho válido, maior que o disco atual e de até 10 TiB.
+    stopVmBeforeDiskResize: Desligue a máquina virtual antes de expandir o disco.
+    confirmDiskResize: "Expandir {name} para {size}? Somente o tamanho do disco virtual será alterado; partições e sistemas de arquivos da VM não serão modificados."
+    machineType: Tipo de máquina
+    firmware: Firmware
+    cpuMode: Modo de CPU
+    cpuModel: Modelo de CPU
+    customCpuModel: Modelo de CPU personalizado
+    bootOrder: Ordem de inicialização
+    bootOrderHelp: "Ordem separada por vírgulas usando hd, cdrom e network. Exemplo: hd,cdrom,network."
+    vmDescription: Descrição da VM
+    vmDetailsRestartNote: O modo de CPU e a ordem de inicialização são salvos no libvirt e entram em vigor após reiniciar a VM. Host-passthrough pode limitar a migração a CPUs compatíveis.
+    confirmVmDetailsConfig: "Salvar o modo de CPU {mode} e a ordem de inicialização {boot} para {name}? As configurações entram em vigor após reiniciar."
+    invalidBootOrder: "Use um ou mais dispositivos de inicialização sem repetir: hd, cdrom ou network."
+    customCpuModelRequired: Informe um modelo de CPU no modo personalizado.
+    vmConfigurationRestartNote: As configurações são salvas na definição da VM e entram em vigor após a próxima reinicialização. Elas não alteram a VM em execução.
+    vcpuCount: CPUs virtuais
+    memoryMiB: Memória (MiB)
+    saving: Salvando...
+    invalidVmConfiguration: Informe de 1 a 512 vCPUs e de 128 a 1048576 MiB de memória.
+    confirmVmConfiguration: "Salvar configurações de {name}: {vcpus} vCPUs e {memory} de memória? As alterações entram em vigor após reiniciar."
+    createVm: Criar máquina virtual
+    creatingVm: Criando VM...
+    createVmHelp: Crie e inicie uma VM usando um volume de disco existente do libvirt. Opcionalmente, anexe uma ISO armazenada no host KVM.
+    vmName: Nome da máquina virtual
+    storagePool: Pool de armazenamento
+    bootDisk: Volume do disco de inicialização
+    virtualNetwork: Rede virtual
+    installerIsoPath: Caminho da ISO de instalação no host
+    installerIsoOptional: Caminho absoluto opcional, por exemplo /var/lib/libvirt/images/instalador.iso
+    installerIsoHelp: Só é possível anexar uma ISO já armazenada no host. Use um instalador compatível com console serial para concluir a instalação nesta interface.
+    selectVolume: Selecione um volume de disco
+    selectNetwork: Selecione uma rede virtual
+    invalidVmCreate: Informe o nome da VM, CPU, memória, um volume disponível e uma rede virtual ativa.
+    confirmVmCreate: "Criar e iniciar {name} com {vcpus} vCPUs, {memory} de memória, disco {disk} e rede {network}?"
+    vmDisks: Discos virtuais e mídia de instalação
+    vmNetworks: Interfaces de rede virtual
+    volume: Volume
+    vmDeviceRestartNote: As alterações são salvas no libvirt e passam a valer após reiniciar a VM. Remover um disco mantém o volume de armazenamento.
+    attachDisk: Anexar disco
+    detachDisk: Remover disco
+    ejectInstaller: Ejetar mídia de instalação
+    attachNetwork: Anexar rede
+    detachNetwork: Remover interface
+    confirmVmDeviceChange: "Aplicar {action}: {detail}? A alteração passa a valer após reiniciar; o volume removido será mantido."
+    snapshots: Snapshots
+    snapshotHelp: Snapshots internos registram uma VM desligada e seus discos qcow2 graváveis. Mantenha a VM desligada durante as operações.
+    snapshotUnsupported: Snapshots indisponíveis porque a VM não possui disco gravável ou usa um formato diferente de qcow2.
+    snapshotRequiresStopped: Desligue a VM antes de criar, restaurar ou excluir snapshots.
+    snapshotName: Nome do snapshot
+    createSnapshot: Criar snapshot
+    revertSnapshot: Restaurar
+    deleteSnapshot: Excluir snapshot
+    noSnapshots: Não há snapshots definidos para esta VM.
+    invalidSnapshotName: Informe um nome de snapshot válido.
+    confirmSnapshotCreate: "Criar o snapshot {name} para {vm}? A VM precisa estar desligada."
+    confirmSnapshotDelete: "Excluir o snapshot {name} de {vm}? Esta ação não pode ser desfeita."
+    confirmSnapshotRevert: "Restaurar {vm} para o snapshot {name}? O estado atual do disco após esse snapshot será descartado."
     runningStopped: "{running} running · {stopped} stopped"
     hostCpu: Host CPU
     cores: cores
@@ -123,6 +225,25 @@ kvmManager:
     confirmPoolEdit: Alterar o diretório de destino do pool {name} para {path}? O pool precisa estar parado. Os arquivos existentes não serão movidos.
     confirmPoolDelete: Remover o pool {name}? Se estiver ativo, ele será parado e sua configuração será removida, mas os arquivos serão mantidos. VMs que usam o pool podem ser afetadas.
     networkEditable: Edite configurações IPv4 das conexões NetworkManager e controle as redes libvirt.
+    createVirtualNetwork: Criar rede virtual
+    editVirtualNetwork: Editar rede virtual
+    virtualNetworkFormHelp: Configure uma rede libvirt persistente em modo NAT, roteado, bridge ou isolado, incluindo gateway IPv4 e faixa DHCP.
+    networkName: Nome da rede
+    forwardMode: Modo de encaminhamento
+    routeMode: Roteado
+    bridgeMode: Bridge
+    isolatedMode: Isolado
+    hostBridge: Bridge do host
+    virtualNetworkGateway: Gateway e prefixo IPv4
+    dhcpStart: Início da faixa DHCP
+    dhcpEnd: Fim da faixa DHCP
+    startAfterCreate: Iniciar a rede após criar
+    libvirtNetworkWarning: Para editar, pare a rede. A exclusão é bloqueada enquanto alguma VM ainda a utiliza. Configure o IP da bridge no host.
+    confirmVirtualNetworkCreate: "Criar a rede libvirt {name} no modo {mode} com gateway {address}?"
+    confirmVirtualNetworkEdit: "Salvar as alterações da rede libvirt {name} no modo {mode} com gateway {address}?"
+    confirmVirtualNetworkDelete: "Excluir a rede libvirt {name}? Ela precisa estar parada e sem uso por VMs."
+    bridgeRequired: Selecione uma bridge do host para o modo bridge.
+    invalidDhcpRange: Informe o endereço da rede e os dois endereços da faixa DHCP, ou deixe os campos DHCP vazios.
     searchNetworkItems: Buscar interfaces, conexões e rotas
     allNetworkItems: Todos os estados de rede
     activeInterfaces: "{count} ativas"
@@ -137,6 +258,13 @@ kvmManager:
     noNetworkMatch: Nenhum item de rede corresponde à busca e ao filtro de estado.
     dnsServers: Servidores DNS
     ipv4Configuration: Configuração IPv4
+    ipv6Configuration: Configuração IPv6
+    ipv6Method: Método IPv6
+    automatic: Automático
+    autoconnect: Conectar automaticamente
+    invalidIpv6Configuration: Informe pelo menos um endereço IPv6 para usar configuração manual.
+    shared: Compartilhado
+    linkLocal: Link-local
     persistence: Configuração
     editNetwork: Editar conexão de rede
     ipMethod: Método IPv4
@@ -152,6 +280,9 @@ kvmManager:
     confirmRepositoryRemove: Remover o repositório {alias} do host?
     registerSubscription: Registrar assinatura
     changeSubscription: Trocar assinatura
+    subscriptionFormTitle: Dados de registro SUSE
+    subscriptionFormHelp: Registre este host ou substitua o registro atual no SUSE Customer Center nesta tela.
+    addonRegistrationCodeHelp: Informe o código de registro deste complemento se o SUSE solicitar.
     deregisterSubscription: Desregistrar sistema
     registrationEmail: E-mail da conta SUSE
     registrationCode: Código de registro
@@ -393,7 +524,6 @@ kvmManager:
     noAccountMatch: Nenhuma conta corresponde à busca.
     searchRepositories: Buscar repositórios, aliases e URLs
     noRepositoryMatch: Nenhum repositório corresponde à busca.
-    storagePool: Pool de armazenamento
     uuid: UUID
     load: Estado de carregamento
     uid: UID

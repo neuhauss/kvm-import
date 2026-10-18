@@ -13,6 +13,17 @@ kvmManager:
     cpu: CPU
     memory: Memory
     lastCheck: Last check
+    dataStale: Stale · checking host connectivity...
+    backgroundRefreshFailed: "Host refresh failed. The displayed state is the last saved check; verify SSH connectivity and refresh again."
+    preflightFailed: "SSH/libvirt validation failed. Check the host address, SSH credentials, host key choice, firewall access, and whether libvirt is running."
+    optionalCheckUnavailable: "Optional capability checks could not complete; some host administration actions may be unavailable."
+    hostUnreachableHelp: "SSH/libvirt could not be reached. Verify credentials, host-key trust, network access, and the libvirt service."
+    errorSessionExpired: "Your Rancher session expired. Sign in again and retry."
+    errorPermissionDenied: "Your Rancher role does not allow this host operation. Ask an administrator to review the KVM RBAC mapping."
+    errorValidation: "The host settings or connection details are invalid. Review the highlighted fields and run the connection check again."
+    errorHostConnection: "The host operation could not complete. Verify SSH access, host-key trust, and that libvirt is running."
+    errorExtensionApi: "The KVM API could not complete the request. Check extension API health, then retry."
+    errorRequest: "The request could not be completed. Refresh the host list and retry."
     manage: Manage
     uiMenu: UI
     refresh: Refresh
@@ -65,6 +76,9 @@ kvmManager:
     preflightHelp: Run read-only checks before importing. Credentials are not saved by this check.
     testConnection: Test connection
     probing: Testing connection...
+    compatibilityOk: "Supported baseline detected: {os}; libvirt {libvirt} is available."
+    compatibilityWarning: "Compatibility is unconfirmed for {os} with libvirt {libvirt}. Review the supported matrix before importing."
+    compatibilityMatrix: "Targets: SLES 15 SP3–SP7 or SLES 16.0 with virsh/libvirt from official SUSE repositories. Other hosts show a warning."
     auditSearch: Search recent events
     allHosts: All hosts
     allResults: All results
@@ -86,16 +100,104 @@ kvmManager:
     title: Virtualization administration
     subtitle: Operational overview and tools for this KVM host.
     openCockpit: Open Cockpit
+    accessLevelLabel: "KVM access: {level}"
+    role_viewer: Viewer
+    role_vm_operator: VM operator
+    role_host_operator: Host operator
+    role_host_admin: Host administrator
+    operationInProgress: "An operation is in progress on {host}. Keep this page open; the state refreshes when it finishes."
     updateData: Refresh data
     updating: Refreshing...
     lastUpdatedAt: "Host metrics updated: {time} · auto-refresh every 30 seconds"
     updateFailedAt: "Refresh failed. Showing data from {time}."
+    updateStaleAt: "Data may be stale. Last successful refresh: {time}."
+    errorSessionExpired: "The Rancher session expired. Sign in to Rancher again, then retry."
+    errorPermissionDenied: "Your Rancher role cannot perform {operation} on {host}. Ask a Rancher administrator to check the KVM role mapping."
+    errorInvalidInput: "Review the {operation} values for {host}, correct any invalid fields, and retry."
+    errorHostOperation: "{operation} failed on {host}. Check SSH connectivity and the related host service, then retry."
+    errorServiceUnavailable: "The KVM extension API could not complete {operation} for {host}. Check extension API health, then retry."
+    errorRequest: "Could not complete {operation} for {host}. Refresh the data and retry."
+    confirmNetworkEditSummary: "Apply network changes to {name}? IPv4: {method}; addresses: {addresses}; gateway: {gateway}; DNS: {dns}. IPv6: {ipv6}. This may interrupt host access."
     filterVmState: Filter virtual machines by state
     allVmStates: All VM states
     stopped: Stopped
     noVmMatch: No virtual machines match these filters.
     connected: Connected
     vms: Virtual machines
+    vmConfiguration: VM resources
+    vmConfigurationHelp: Edit the persistent CPU and memory settings managed by libvirt.
+    vmHardwareDetails: VM hardware and boot
+    vmDetailsSections: Virtual machine detail sections
+    vmOverview: Overview
+    vmDevices: Devices
+    runtimeVcpus: Applied vCPUs while running
+    runtimeMemory: Live memory limit
+    savedConfiguration: Saved configuration
+    noVmDescription: No description has been set.
+    vmIdentifier: UUID
+    expandDisk: Expand disk
+    currentDiskSize: Current virtual size
+    newDiskSizeGiB: New virtual size (GiB)
+    expandDiskHelp: "The VM must be stopped. The host checks free space and expands only the virtual disk; resize the guest partition and filesystem separately inside the VM."
+    diskResizeUnsupported: This disk is not a managed qcow2 or raw storage volume.
+    invalidDiskCapacity: Enter a valid size larger than the current disk size and no greater than 10 TiB.
+    stopVmBeforeDiskResize: Stop the virtual machine before expanding its disk.
+    confirmDiskResize: "Expand {name} to {size}? This changes the virtual disk size only; guest partitions and filesystems are unchanged."
+    machineType: Machine type
+    firmware: Firmware
+    cpuMode: CPU mode
+    cpuModel: CPU model
+    customCpuModel: Custom CPU model
+    bootOrder: Boot order
+    bootOrderHelp: "Comma-separated order using hd, cdrom, and network. Example: hd,cdrom,network."
+    vmDescription: VM description
+    vmDetailsRestartNote: CPU mode and boot order are saved to libvirt and take effect after the next VM restart. Host-passthrough can limit migration to compatible CPUs.
+    confirmVmDetailsConfig: "Save CPU mode {mode} and boot order {boot} for {name}? These settings take effect after restart."
+    invalidBootOrder: "Use one or more unique boot devices: hd, cdrom, or network."
+    customCpuModelRequired: Enter a CPU model for custom CPU mode.
+    vmConfigurationRestartNote: These settings are saved to the VM definition and take effect after its next restart. They do not alter the running guest.
+    vcpuCount: Virtual CPUs
+    memoryMiB: Memory (MiB)
+    saving: Saving...
+    invalidVmConfiguration: Enter 1–512 vCPUs and 128–1048576 MiB of memory.
+    confirmVmConfiguration: "Save settings for {name}: {vcpus} vCPUs and {memory} memory? Changes take effect after restart."
+    createVm: Create virtual machine
+    creatingVm: Creating VM...
+    createVmHelp: Create and start a VM from an existing libvirt disk volume. Optionally attach an installer ISO stored on the KVM host.
+    vmName: Virtual machine name
+    storagePool: Storage pool
+    bootDisk: Boot disk volume
+    virtualNetwork: Virtual network
+    installerIsoPath: Installer ISO path on host
+    installerIsoOptional: Optional absolute path, for example /var/lib/libvirt/images/installer.iso
+    installerIsoHelp: Only an ISO already stored on the host can be attached. Use a serial-console-compatible installer to complete setup from this interface.
+    selectVolume: Select a disk volume
+    selectNetwork: Select a virtual network
+    invalidVmCreate: Enter a VM name, CPU and memory values, an available disk volume, and an active virtual network.
+    confirmVmCreate: "Create and start {name} with {vcpus} vCPUs, {memory} memory, disk {disk}, and network {network}?"
+    vmDisks: Virtual disks and installer media
+    vmNetworks: Virtual network interfaces
+    volume: Volume
+    vmDeviceRestartNote: Device changes are saved in libvirt and take effect after the next VM restart. Detaching a disk keeps its storage volume.
+    attachDisk: Attach disk
+    detachDisk: Detach disk
+    ejectInstaller: Eject installer media
+    attachNetwork: Attach network
+    detachNetwork: Detach interface
+    confirmVmDeviceChange: "Apply {action}: {detail}? The change takes effect after restart; detached storage is retained."
+    snapshots: Snapshots
+    snapshotHelp: Internal snapshots capture a stopped VM and its writable qcow2 disks. The VM must remain shut down for snapshot actions.
+    snapshotUnsupported: Snapshots are unavailable because this VM has no writable disk or includes a disk format other than qcow2.
+    snapshotRequiresStopped: Shut down the VM before creating, reverting, or deleting snapshots.
+    snapshotName: Snapshot name
+    createSnapshot: Create snapshot
+    revertSnapshot: Revert
+    deleteSnapshot: Delete snapshot
+    noSnapshots: No snapshots are defined for this VM.
+    invalidSnapshotName: Enter a valid snapshot name.
+    confirmSnapshotCreate: "Create snapshot {name} for {vm}? The VM must be shut down."
+    confirmSnapshotDelete: "Delete snapshot {name} from {vm}? This cannot be undone."
+    confirmSnapshotRevert: "Restore {vm} to snapshot {name}? Current disk state after the snapshot will be discarded."
     runningStopped: "{running} running · {stopped} stopped"
     hostCpu: Host CPU
     cores: cores
@@ -123,6 +225,25 @@ kvmManager:
     confirmPoolEdit: Change the target directory for storage pool {name} to {path}? The pool must be stopped. Existing files will not be moved.
     confirmPoolDelete: Remove storage pool {name}? This stops the pool if active and removes its configuration, but keeps files in its directory. VMs using the pool may be affected.
     networkEditable: Edit IPv4 settings for NetworkManager connections, and control libvirt networks.
+    createVirtualNetwork: Create virtual network
+    editVirtualNetwork: Edit virtual network
+    virtualNetworkFormHelp: Configure a persistent libvirt NAT, routed, bridged, or isolated network, including its IPv4 gateway and DHCP range.
+    networkName: Network name
+    forwardMode: Forwarding mode
+    routeMode: Routed
+    bridgeMode: Bridged
+    isolatedMode: Isolated
+    hostBridge: Host bridge
+    virtualNetworkGateway: IPv4 gateway and prefix
+    dhcpStart: DHCP range start
+    dhcpEnd: DHCP range end
+    startAfterCreate: Start network after creation
+    libvirtNetworkWarning: Editing requires the network to be stopped. Deletion is blocked while VMs still reference the network. Bridge IP configuration belongs on the host bridge.
+    confirmVirtualNetworkCreate: "Create libvirt network {name} in {mode} mode with gateway {address}?"
+    confirmVirtualNetworkEdit: "Save changes to libvirt network {name} in {mode} mode with gateway {address}?"
+    confirmVirtualNetworkDelete: "Delete libvirt network {name}? It must be stopped and unused by all VMs."
+    bridgeRequired: Select a host bridge for bridged mode.
+    invalidDhcpRange: Enter a network address and both DHCP range addresses, or leave the DHCP fields empty.
     searchNetworkItems: Search interfaces, connections, routes
     allNetworkItems: All network states
     activeInterfaces: "{count} active"
@@ -137,6 +258,13 @@ kvmManager:
     noNetworkMatch: No network items match this search and state filter.
     dnsServers: DNS servers
     ipv4Configuration: IPv4 configuration
+    ipv6Configuration: IPv6 configuration
+    ipv6Method: IPv6 method
+    automatic: Automatic
+    autoconnect: Connect automatically
+    invalidIpv6Configuration: Enter at least one IPv6 address for manual IPv6 configuration.
+    shared: Shared
+    linkLocal: Link-local
     persistence: Configuration
     editNetwork: Edit network connection
     ipMethod: IPv4 method
@@ -152,6 +280,9 @@ kvmManager:
     confirmRepositoryRemove: Remove repository {alias} from the host?
     registerSubscription: Register subscription
     changeSubscription: Change subscription
+    subscriptionFormTitle: SUSE registration details
+    subscriptionFormHelp: Register this host or replace its current SUSE Customer Center registration from this page.
+    addonRegistrationCodeHelp: Enter the registration code for this add-on if SUSE requires one.
     deregisterSubscription: Deregister system
     registrationEmail: SUSE account email
     registrationCode: Registration code
@@ -393,7 +524,6 @@ kvmManager:
     noAccountMatch: No accounts match this search.
     searchRepositories: Search repositories, aliases, and URLs
     noRepositoryMatch: No repositories match this search.
-    storagePool: Storage pool
     uuid: UUID
     load: Load state
     uid: UID
