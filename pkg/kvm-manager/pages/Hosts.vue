@@ -9,6 +9,7 @@
       <form class="host-editor-form" @submit.prevent="save">
         <div class="host-editor-content">
           <div class="host-editor-callout" role="note">{{ t('hosts.editorIntro') }}</div>
+          <div v-if="deployPrefill" class="banner warning" role="note">{{ t('hosts.deployPrefill') }}</div>
 
           <section class="host-form-section" aria-labelledby="host-details-heading">
             <header class="host-form-section-heading">
@@ -146,6 +147,7 @@
 
 <script lang="ts">
 import { defineComponent } from 'vue';
+import { apiErrorDetail } from '../utils/api-errors';
 
 type Host = {
   id: string; name: string; address: string; port: number; username: string; hostname?: string;
@@ -164,12 +166,13 @@ export default defineComponent({
       hosts: [] as Host[], permissions: { canOperateVms: false, canAdministerHost: false } as Permissions, loading: false, refreshing: '' as string, dialog: false, editing: '' as string,
       saving: false, error: '', refreshWarning: '', formError: '', openMenu: '' as string, hostMenuStyle: {} as Record<string, string>,
       form: { name: '', address: '', port: 22, username: '', password: '', ssh_private_key: '', ssh_key_passphrase: '', remove_ssh_key: false, accept_new_host_key: false },
-      showingAudit: false, auditEvents: [] as AuditEvent[], auditLoading: false, auditError: '',
+      showingAudit: false, auditEvents: [] as AuditEvent[], auditLoading: false, auditError: '', deployPrefill: false,
       probeChecks: [] as { id: string; status: string; message: string; os_id?: string; os_version?: string; libvirt_version?: string }[], probeLoading: false, probeOk: false, probeSignature: '', auditSearch: '', auditHost: '', auditOutcome: '', refreshTimer: 0 as number, refreshingStale: false,
     };
   },
-  mounted() {
+    mounted() {
     this.load();
+    this.applyDeployPrefill();
     this.refreshTimer = window.setInterval(() => { if (document.visibilityState === 'visible' && !this.dialog && !this.showingAudit) this.refreshStale(); }, 60000);
     document.addEventListener('click', this.closeMenu);
     document.addEventListener('keydown', this.onMenuKeydown);
@@ -186,18 +189,29 @@ export default defineComponent({
   methods: {
     t(key: string, args?: Record<string, unknown>): string { const translate = (this as any).$store?.getters?.['i18n/t']; return translate ? translate(`kvmManager.${key}`, args) : key; },
     async request(path: string, options: RequestInit = {}) {
-      const response = await fetch(`${apiBase}${path}`, {
-        ...options,
-        headers: { 'Content-Type': 'application/json', ...options.headers },
-        credentials: 'include',
-        cache: 'no-store',
-      });
+      let response: Response;
+      try {
+        response = await fetch(`${apiBase}${path}`, {
+          ...options,
+          headers: { 'Content-Type': 'application/json', ...options.headers },
+          credentials: 'include',
+          cache: 'no-store',
+        });
+      } catch { throw new Error(this.t('hosts.errorNetwork')); }
       if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        const detail = apiErrorDetail(body, options.body);
         const key = response.status === 401 ? 'hosts.errorSessionExpired'
           : response.status === 403 ? 'hosts.errorPermissionDenied'
             : response.status === 422 ? 'hosts.errorValidation'
               : response.status === 502 ? 'hosts.errorHostConnection'
                 : response.status >= 500 ? 'hosts.errorExtensionApi' : 'hosts.errorRequest';
+        if (detail && response.status !== 401 && response.status !== 403) {
+          const detailKey = response.status === 422 ? 'hosts.errorValidationDetail'
+            : response.status === 502 ? 'hosts.errorHostConnectionDetail'
+              : response.status >= 500 ? 'hosts.errorExtensionApiDetail' : 'hosts.errorRequestDetail';
+          throw new Error(this.t(detailKey, { detail }));
+        }
         throw new Error(this.t(key));
       }
       return response.status === 204 ? null : response.json();
@@ -232,7 +246,19 @@ export default defineComponent({
     isHostStale(host: Host): boolean { return !host.last_checked_at || Date.now() - Date.parse(host.last_checked_at) > 180000; },
     openAdd() {
       this.editing = ''; this.formError = '';
-      this.form = { name: '', address: '', port: 22, username: '', password: '', ssh_private_key: '', ssh_key_passphrase: '', remove_ssh_key: false, accept_new_host_key: false }; this.dialog = true;
+      this.form = { name: '', address: '', port: 22, username: '', password: '', ssh_private_key: '', ssh_key_passphrase: '', remove_ssh_key: false, accept_new_host_key: false }; this.dialog = true; this.deployPrefill = false;
+    },
+    applyDeployPrefill() {
+      const query = (this as any).$route?.query || {};
+      const address = typeof query.deployAddress === 'string' ? query.deployAddress : '';
+      if (!address) return;
+      this.openAdd();
+      this.form.address = address;
+      this.form.username = typeof query.deployUsername === 'string' ? query.deployUsername : 'sles';
+      this.form.name = typeof query.deployName === 'string' ? query.deployName : '';
+      this.deployPrefill = true;
+      const cleanQuery = { ...query }; delete cleanQuery.deployAddress; delete cleanQuery.deployUsername; delete cleanQuery.deployName;
+      (this as any).$router.replace({ query: cleanQuery });
     },
     closeForm() {
       this.dialog = false; this.editing = ''; this.formError = '';
@@ -300,7 +326,6 @@ export default defineComponent({
     },
     vmStateClass(state: string) { return state.toLowerCase().includes('running') ? 'ready' : 'unreachable'; },
     async remove(host: Host) {
-      if (!window.confirm(this.t('hosts.removeConfirm', { name: host.name }))) return;
       try { await this.request(`/hosts/${host.id}`, { method: 'DELETE' }); this.hosts = this.hosts.filter((item) => item.id !== host.id); }
       catch (e) { this.error = `${this.t('hosts.removeError', { name: host.name })}: ${(e as Error).message}`; }
     },

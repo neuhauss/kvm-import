@@ -3,6 +3,7 @@ import { IPlugin } from '@shell/core/types';
 import Hosts from './pages/Hosts.vue';
 import Clusters from './pages/Clusters.vue';
 import CloudNative from './pages/CloudNative.vue';
+import Deploy from './pages/Deploy.vue';
 import './assets/kvm.css';
 
 // Init the package
@@ -26,6 +27,10 @@ export default function(plugin: IPlugin): void {
     name: 'clusters',
     label: 'Clusters',
     component: Clusters,
+  }, {
+    name: 'deploy',
+    label: 'Deploy',
+    component: Deploy,
   }]);
 
   // Keep the Cloud Native page routable for the per-host administration menu,

@@ -21,9 +21,14 @@ kvmManager:
     errorSessionExpired: "Your Rancher session expired. Sign in again and retry."
     errorPermissionDenied: "Your Rancher role does not allow this host operation. Ask an administrator to review the KVM RBAC mapping."
     errorValidation: "The host settings or connection details are invalid. Review the highlighted fields and run the connection check again."
+    errorValidationDetail: "The host request was rejected by validation: {detail}"
     errorHostConnection: "The host operation could not complete. Verify SSH access, host-key trust, and that libvirt is running."
+    errorHostConnectionDetail: "The host operation failed: {detail} Check SSH access, host-key trust, and the related host service."
     errorExtensionApi: "The KVM API could not complete the request. Check extension API health, then retry."
+    errorExtensionApiDetail: "The KVM API reported: {detail}"
     errorRequest: "The request could not be completed. Refresh the host list and retry."
+    errorRequestDetail: "The request was rejected: {detail}"
+    errorNetwork: "Could not reach the KVM extension API. Check the Rancher connection and extension API health, then retry."
     manage: Manage
     uiMenu: UI
     refresh: Refresh
@@ -37,6 +42,7 @@ kvmManager:
     editTitle: Edit host
     hostDescription: Enter an existing host. The extension does not install or change packages on the host.
     editorIntro: Connect an existing KVM host to Rancher. The extension checks SSH and libvirt access before adding it.
+    deployPrefill: This SUSE Virtualization VM is ready for host import. Use the initial password you set during deployment; the SSH public key is already installed in the guest.
     hostDetails: Host details
     hostDetailsDescription: Enter the host name and SSH endpoint used to manage this KVM server.
     sshCredentials: SSH credentials
@@ -85,6 +91,11 @@ kvmManager:
     exportCsv: Export CSV
     detail: Details
   cloudNative:
+    actions: Actions
+    consoleRequiresRunning: Start the virtual machine to open its terminal.
+    readOnly: Read-only
+    updateData: Update data
+    updating: Updating...
     storagePoolType: Directory storage pool
     storagePoolFormHelp: This libvirt pool uses a directory on the host. The extension creates the directory when needed; existing files are not moved.
     poolNameHelp: Use letters, numbers, dots, underscores, plus signs, or hyphens.
@@ -105,18 +116,40 @@ kvmManager:
     role_vm_operator: VM operator
     role_host_operator: Host operator
     role_host_admin: Host administrator
-    operationInProgress: "An operation is in progress on {host}. Keep this page open; the state refreshes when it finishes."
-    updateData: Refresh data
-    updating: Refreshing...
+    operationInProgress: "{operation} is running on {host}. Keep this page open; the view refreshes when it finishes."
+    operationInProgressTitle: Operation in progress
+    operationVm: Virtual machine operation
+    operationNetwork: Network operation
+    operationStorage: Storage operation
+    operationAccount: Account operation
+    operationSubscription: Subscription operation
+    operationRepository: Repository operation
+    operationService: Service operation
+    operationHost: Host operation
     lastUpdatedAt: "Host metrics updated: {time} · auto-refresh every 30 seconds"
-    updateFailedAt: "Refresh failed. Showing data from {time}."
+    updateFailedAt: "A refresh failed. Some displayed data may be outdated."
     updateStaleAt: "Data may be stale. Last successful refresh: {time}."
+    inventoryUpdatedAt: "Host inventory updated: {time}"
+    inventoryUpdateFailed: "Inventory refresh failed. Showing the last successful inventory from {time}."
+    inventoryStale: "Inventory may be stale. Last successful refresh: {time}."
+    metricsUpdatedAt: "Host metrics updated: {time} · auto-refresh every 30 seconds"
+    metricsUpdateFailed: "Metrics refresh failed. Last successful metrics: {time}."
+    metricsStale: "Metrics may be stale. Last successful refresh: {time}."
     errorSessionExpired: "The Rancher session expired. Sign in to Rancher again, then retry."
     errorPermissionDenied: "Your Rancher role cannot perform {operation} on {host}. Ask a Rancher administrator to check the KVM role mapping."
     errorInvalidInput: "Review the {operation} values for {host}, correct any invalid fields, and retry."
+    errorInvalidInputDetail: "The {operation} request for {host} was rejected: {detail}"
     errorHostOperation: "{operation} failed on {host}. Check SSH connectivity and the related host service, then retry."
+    errorHostOperationDetail: "{operation} failed on {host}: {detail} Check SSH connectivity and the related host service."
+    errorNonJsonApiResponse: "The KVM API returned an unreadable HTTP {status} response. Check the Rancher proxy and KVM API route; this response does not confirm an SSH failure."
+    errorMissingSubscriptionDiagnostic: "Subscriptions failed on {host} (HTTP {status}), but the API returned no SUSEConnect diagnostic. Check the KVM API route and host record; this response does not confirm an SSH failure."
+    errorSubscriptionEntitlement: "SUSE Customer Center rejected the registration code for {host}: it does not include the requested add-on. Use a code with SLE High Availability entitlement for this product and version, or ask your SUSE subscription administrator to verify entitlement. SSH connectivity is working."
+    errorSubscriptionOperationDetail: "The SUSEConnect operation failed on {host} (HTTP {status}): {detail} Review this host's SUSEConnect diagnostic. This error does not by itself indicate an SSH failure."
     errorServiceUnavailable: "The KVM extension API could not complete {operation} for {host}. Check extension API health, then retry."
+    errorServiceUnavailableDetail: "The KVM extension API could not complete {operation} for {host}: {detail}"
     errorRequest: "Could not complete {operation} for {host}. Refresh the data and retry."
+    errorRequestDetail: "Could not complete {operation} for {host}: {detail}"
+    errorNetwork: "Could not reach the KVM extension API while trying to {operation} on {host}. Check the Rancher connection and extension API health."
     confirmNetworkEditSummary: "Apply network changes to {name}? IPv4: {method}; addresses: {addresses}; gateway: {gateway}; DNS: {dns}. IPv6: {ipv6}. This may interrupt host access."
     filterVmState: Filter virtual machines by state
     allVmStates: All VM states
@@ -276,14 +309,17 @@ kvmManager:
     confirmAccountEdit: Update local account {username}?
     confirmAccountDelete: Delete local account {username}? The account home directory is kept.
     addRepository: Add repository
+    editRepository: Edit repository
+    repositoryUriEditHelp: The source URL is read-only here. Add a replacement repository with the new URL, verify it, then remove the old entry.
     confirmRepositoryAdd: Add repository {alias} to the host?
+    confirmRepositoryEdit: Change the display name of repository {alias} to “{name}”?
     confirmRepositoryRemove: Remove repository {alias} from the host?
     registerSubscription: Register subscription
-    changeSubscription: Change subscription
+    changeSubscription: Change
     subscriptionFormTitle: SUSE registration details
     subscriptionFormHelp: Register this host or replace its current SUSE Customer Center registration from this page.
     addonRegistrationCodeHelp: Enter the registration code for this add-on if SUSE requires one.
-    deregisterSubscription: Deregister system
+    deregisterSubscription: Deregister
     registrationEmail: SUSE account email
     registrationCode: Registration code
     registrationCodeHelp: The code is sent to SUSEConnect for this operation and is not stored by the extension.
@@ -336,11 +372,30 @@ kvmManager:
     client: Client
     notInstalled: Not installed
     registrationStatus: Registration status
+    subscriptionProducts: Registered products and subscription details
+    subscription: Subscription
+    registrationDate: Registered
+    expirationDate: Expires
+    subscriptionActions: Subscription actions
+    subscriptionActive: Active
+    subscriptionInactive: Inactive
+    subscriptionNameUnknown: Subscription name unavailable
+    subscriptionDetailsUnavailable: No additional subscription details were returned.
+    noSubscriptionProducts: SUSEConnect did not return any registered products.
+    expiresAt: Expires
     noSubscriptionData: No registration status was returned by the host.
     refreshStatus: Refresh status
     subscriptionWarning: Registration codes are sent only to SUSEConnect for the requested operation and are not stored by the extension. Deregistration removes this host's SUSEConnect registration.
     extensionsTitle: Modules and extensions
-    extensionsDescription: Activate or deactivate add-ons available for this host, including High Availability when offered by its subscription.
+    extensionsDescription: Available SUSE modules and extensions reported by SUSEConnect on this host. Activate or deactivate them here.
+    activeCapabilities: "{count} active"
+    availableCapabilities: "{count} available"
+    addExtension: Add extension
+    addExtensionHelp: Enter the SUSEConnect product identifier from SUSE documentation or your subscription portal. Activation registers the product and enables its repositories; it does not install packages.
+    productIdHelp: Use the format name/version/architecture, for example sle-ha/16.0/x86_64. SUSEConnect will verify availability and entitlement on the host.
+    registrationCodeOptional: Registration code (optional)
+    confirmManualExtension: "Activate {product} on this host? SUSEConnect will validate the product and subscription, then enable its repositories."
+    activatingExtension: Activating...
     haAddon: High Availability (SLE HA)
     haAddonActive: The SLE HA product is registered and its repositories are enabled on this host.
     haAddonAvailable: This host can activate SLE HA with its current subscription.
@@ -357,13 +412,18 @@ kvmManager:
     coreExtensionProtected: Required system module
     confirmExtensionAction: "{action} {name}? SUSEConnect changes registration and repositories; it does not install or remove packages."
     extensionChangesWarning: Add-on changes may require a separate registration code. SUSEConnect enables or disables repositories but does not install or remove packages. Deactivated add-on packages may stop receiving updates.
-    terminalDescription: Commands run on the host as SSH user {user}. Use only commands you are authorized to run.
+    terminalDescription: Interactive SSH shell on this host as user {user}.
     command: Command
     commandPlaceholder: "uname -a"
     runCommand: Run command
     runningCommand: Running...
     terminalWarning: Commands run as the imported SSH user. This terminal is audited, but command text is not stored.
     vmConsole: Virtual machine terminal
+    hostTerminal: KVM host terminal
+    sshTerminal: SSH session
+    hostTerminalWarning: Commands run on this host as the imported SSH user. Use sudo only when your host account is authorized. Terminal input is not stored.
+    hostTerminalStarting: Connecting to the KVM host over SSH...
+    hostTerminalConnectionError: Could not connect to the KVM host SSH terminal.
     serialConsole: serial console
     consoleWarning: The VM must be running with a serial console and login prompt (for example, serial-getty on ttyS0). Sign in with the guest OS account; Rancher and host SSH credentials do not sign in to the VM. Terminal input is not stored.
     serialConsoleMissing: No serial console is configured in this VM. Add a serial console in its libvirt definition and enable a guest login prompt such as serial-getty@ttyS0.
@@ -379,7 +439,7 @@ kvmManager:
     consoleConnectionError: Could not connect to the VM serial console.
     resizeTerminal: Drag to resize the terminal
     consoleSessionExpired: Your Rancher session has expired. Refresh the page and try again.
-    consolePermissionDenied: Your user is not allowed to open this VM terminal.
+    consolePermissionDenied: Your user is not allowed to open this terminal.
     consoleHostNotFound: This host is no longer registered in the extension API. Refresh the list and import the host again.
     consoleInvalidVm: The virtual machine name is invalid. Close and reopen its details.
     commandResult: Command result
@@ -409,6 +469,14 @@ kvmManager:
     fullInventory: View full inventory
     filterVms: Filter virtual machines
     vmLifecycle: Lifecycle, disk and network details, and autostart.
+    physicalNetworkLayer: Physical interfaces
+    routingLayer: Routing table
+    loadAverage: Load average
+    cpu: CPU
+    dhcp: DHCP
+    ipv6: IPv6
+    linkUp: Up
+    linkDown: Down
     adminAreas: Administration areas
     storageDescription: Create and remove libvirt directory pools, and review host block devices and mounted filesystems.
     noVm: No virtual machines found.
@@ -533,6 +601,16 @@ kvmManager:
   clusters:
     title: Clusters
     subtitle: Check SLE HA readiness on registered KVM hosts and prepare cluster administration.
+    section_clusters: Clusters
+    inventoryTitle: Existing clusters
+    inventoryDescription: This area lists only clusters whose membership and identity have been verified from the SUSE HA stack.
+    startPlanning: Plan a cluster
+    noClusters: No verified clusters yet
+    noClustersHelp: Hosts remain in the planning and readiness areas until SUSE HA confirms cluster membership. Creating a plan here does not create a cluster.
+    planFirstCluster: Start planning
+    clusterMembersDetected: "HA is active on {count} host(s) reporting cluster activity"
+    identityPending: Cluster identity and membership have not yet been verified, so these hosts are intentionally not shown as a created cluster.
+    inventorySeparation: Host records and cluster records are kept separate. A cluster will appear here only after successful membership verification.
     refresh: Refresh HA status
     refreshing: Refreshing...
     loading: Checking HA status on registered hosts...
@@ -540,8 +618,16 @@ kvmManager:
     registeredHosts: Registered hosts
     haEnabledHosts: Hosts with SLE HA
     haEnabledHostsHelp: Add-on is registered on the host
-    activeClusters: Detected clusters
-    activeClustersHelp: Pacemaker responds to crm_mon
+    clusterHosts: Hosts reporting a cluster
+    clusterHostsHelp: Host-level check; one cluster can include multiple hosts
+    navigation: Cluster administration sections
+    section_overview: Host readiness
+    section_plan: Plan cluster
+    section_nodes: Nodes
+    section_resources: Resources
+    section_constraints: Constraints
+    section_activity: Activity
+    section_fencing: Fencing and quorum
     readiness: READ-ONLY HOST CHECKS
     hostsTitle: SLE HA readiness
     hostsDescription: The extension checks SUSEConnect, the SLE HA add-on, Pacemaker and Corosync services, and whether Pacemaker reports a cluster. It does not change host configuration.
@@ -574,22 +660,260 @@ kvmManager:
     notApplicable: Not ready
     readOnlyNote: HA detection is read-only. An active SLE HA add-on does not by itself mean the host is ready to join a cluster; network, time synchronization, quorum, and fencing still need validation.
     hawkTitle: Cluster administration workspace
-    hawkDescription: The next stages follow SUSE Hawk concepts and SLE HA workflows. Sections stay inactive until a cluster API and its safety checks are implemented.
+    hawkDescription: Manage nodes, resources, quorum, and fencing through supported SUSE HA tools and crmsh commands.
     planned: Planned
     availableAfterCluster: After cluster setup
-    hawkRoadmapSafety: No cluster actions are available yet. Future changes will use SUSE-supported SLE HA tools such as crmsh, Pacemaker, Corosync, Hawk, and supported fencing and quorum components.
+    hawkRoadmapSafety: Available operations run crmsh on the selected host and are recorded in the extension audit log.
+    guidedSetup: GUIDED SETUP
+    planTitle: Plan a cluster
+    planDescription: Review the topology and safety prerequisites in plain language before any host changes are enabled.
+    preparationOnly: Preparation only
+    afterHostActivation: After host activation
+    currentStep: Current step
+    setup_nodes: Select hosts
+    setup_nodes_help: Choose reachable hosts with the SLE HA add-on active.
+    setup_preflight: Check prerequisites
+    setup_preflight_help: Validate release, network, time, access, and fencing readiness.
+    setup_topology: Plan quorum
+    setup_topology_help: Review node count, QDevice/QNetd, and failure scenarios.
+    setup_review: Review changes
+    setup_review_help: See each host operation and its expected effect before confirming.
+    setup_configure: Configure cluster
+    setup_configure_help: After installing ha_sles and checking topology, use the extension terminal to run crm cluster init on the first node and crm cluster join on the others. SUSE bootstrap is interactive so you can review networking, fencing, virtual IP, and quorum choices.
+    selectNodes: Choose cluster nodes
+    selectNodesHelp: Only reachable hosts with SLE HA active and no detected cluster are listed. This selection is a planning aid and does not change hosts.
+    noEligibleHosts: No hosts are ready for planning yet
+    noEligibleHostsHelp: Import a KVM host and activate the SLE HA add-on first. The page will refresh its read-only status automatically.
+    openNodes: Review host status
+    readyForPlanning: Available for planning
+    twoNodeTitle: "Two-node topology: plan an independent quorum witness"
+    twoNodeHelp: SUSE recommends QDevice with QNetd for even-sized clusters, especially two-node clusters. Without an independent vote, a network split can leave neither side with a majority.
+    qnetdPlacement: Place the QNetd server outside the cluster and, where possible, on a separate network or failure domain from Corosync.
+    evenNodeTitle: "Even node count: review quorum behavior"
+    evenNodeHelp: SUSE recommends QDevice/QNetd for even-sized clusters. The final plan should show which failures each partition can tolerate.
+    oddNodeTitle: Odd node count selected
+    oddNodeHelp: A majority can be calculated from node votes, but fencing, network redundancy, and the expected failure scenario still need validation.
+    selectAtLeastTwo: Select at least two hosts
+    selectAtLeastTwoHelp: The supported cluster setup requires multiple compatible nodes. Add more registered hosts if needed.
+    topologySummary: TOPOLOGY SUMMARY
+    selectedNodes: nodes selected
+    summaryQuorum: Quorum · must be validated in preflight
+    summaryFencing: Fencing · required safety check
+    summaryNetworks: Corosync links · inspect before setup
+    activationPending: Waiting for HA host activation
+    practiceFailureDomains: Separate failure domains
+    practiceFailureDomainsHelp: Avoid placing every node, witness, and network path in one power or network failure domain.
+    practiceFencing: Confirm fencing early
+    practiceFencingHelp: Plan a supported fencing device or SBD/watchdog before workloads depend on the cluster.
+    practiceNetwork: Use reliable cluster links
+    practiceNetworkHelp: Check stable addressing, time synchronization, latency, and redundant Corosync paths.
+    planSafety: The ha_sles pattern is installed only after review and confirmation. The extension does not yet automate the interactive crm cluster init/join bootstrap.
+    runPreflight: Run read-only preflight
+    preflightRunning: Checking selected hosts...
+    preflightReadOnly: Connects to selected hosts and reads system state; it makes no changes.
+    preflightError: Preflight could not complete
+    preflightResults: Preflight results by host
+    checked: Checked
+    checkFailed: Check failed
+    operatingSystem: Operating system
+    architecture: Architecture
+    hostname: Hostname
+    haCheckOk: SLE HA extension is active
+    haCheckMissing: SLE HA extension is not confirmed active
+    timeCheckOk: Time synchronization reports healthy
+    timeCheckUnknown: Time synchronization needs review
+    toolsCheckOk: Core HA command-line tools are present
+    toolsCheckMissing: One or more core HA tools are missing
+    networkCheckManual: "{count} active network interface(s) found; Corosync reachability and stable addressing still need validation"
+    fencingCheckManual: "{count} watchdog device(s) found; fencing is not configured or validated by this check"
+    compatibilityWarning: Compatibility needs review
+    architectureMismatch: Selected hosts report different CPU architectures.
+    releaseMismatch: Selected hosts report different operating system releases.
+    clusterAdministration: CLUSTER ADMINISTRATION
+    sectionPreviewTitle: Available after an active cluster is detected
+    sectionPreviewHelp: Connect to a host that belongs to an active SLE HA cluster to view status and enable the matching operations.
+    fencingRequiredTitle: Fencing is part of cluster safety
+    fencingRequiredHelp: Before production use, validate a supported fencing method for every node. A healthy connection or quorum result alone does not prove a node can be safely isolated.
+    nodesPreviewTitle: No active cluster detected
+    nodesPreviewHelp: Node membership actions are available only after Pacemaker reports an initialized cluster.
+    viewHostChecks: View host checks
     area_overview: Overview
     area_overview_description: Cluster health, quorum, designated coordinator, and recent activity.
     area_nodes: Nodes
     area_nodes_description: Membership, node state, standby, maintenance, and node-level operations.
     area_resources: Resources
     area_resources_description: Resource agents, primitives, groups, clones, and their current placement.
+    reportedBy: Reported by {host}
+    openCluster: Open cluster
+    clusterLoading: Querying Pacemaker and Corosync...
+    clusterStatusError: Could not read cluster status
+    liveStatus: LIVE STATUS
+    unnamedCluster: SLE HA cluster
+    statusSource: Queried through {host}
+    nodes: Nodes
+    onlineNodes: Online
+    managedResources: Pacemaker-managed resources
+    quorum: Quorum
+    quorumUnknown: Not confirmed
+    fencing: Fencing
+    fencingUnknown: Not confirmed
+    manageNodes: Manage nodes
+    manageResources: Manage resources
+    reviewQuorumFencing: Review quorum and fencing
+    noLiveCluster: No cluster status available
+    noLiveClusterHelp: Initialize an SLE HA cluster and check that crmsh, Pacemaker, and Corosync are active on the hosts.
+    viewClusters: View clusters
+    node: Node
+    nodeStatus: Status
+    nodeId: Node ID
+    standby: Standby
+    maintenance: Maintenance
+    operations: Operations
+    online: Online
+    offline: Offline
+    unclean: Unclean
+    enabledState: On
+    disabledState: Off
+    standbyNode: Put in standby
+    bringOnline: Bring online
+    enterMaintenance: Enter maintenance
+    leaveMaintenance: Leave maintenance
+    resource: Resource
+    resourceType: Agent
+    resourceStatus: Status
+    location: Location
+    failed: Failed
+    running: Running
+    stopped: Stopped
+    unmanaged: Not managed by Pacemaker
+    noResources: The cluster reports no configured resources.
+    stopResource: Stop
+    startResource: Start
+    cleanupResource: Clean up failure
+    confirmActionTitle: Review operation
+    review_node_standby: Put node {target} in standby. Resources may move or stop if they cannot be relocated.
+    review_node_online: Take node {target} out of standby. Pacemaker may place resources on it.
+    review_node_maintenance: Put node {target} in maintenance. Pacemaker will stop managing its resources.
+    review_node_ready: Take node {target} out of maintenance and return its resources to Pacemaker management.
+    review_resource_start: Start resource {target} through Pacemaker.
+    review_resource_stop: Stop resource {target}. Dependent services may become unavailable.
+    review_resource_cleanup: Clear the failure state for resource {target} so Pacemaker can manage it again.
+    actionRiskNote: This operation changes the cluster and may move or interrupt workloads. Confirm that you have reviewed the impact.
+    confirmAction: Run operation
+    cancelAction: Cancel
+    actionRunning: Running...
+    actionFailed: Operation failed
+    actionSucceeded: Operation sent
+    nodeActionSafety: Standby and maintenance actions change resource placement and management. Check quorum and remaining capacity before continuing.
+    fencingDetailDescription: Quorum and STONITH device information reported by the host's SUSE HA tools.
+    quorumReadable: Quorum output available
+    fencingReadable: Fencing output available
+    quorate: Quorate
+    notQuorate: No quorum
+    fencingConfigured: Fencing device detected
+    fencingNotConfigured: No fencing device detected
+    quorumHelp: The quorum tool returned no data. Review Corosync and quorum status on the host.
+    fencingHelp: The fencing tool returned no data. This does not prove that fencing is configured or working.
+    fencingBestPractice: For two-node clusters, SUSE recommends QDevice/QNetd for an independent vote. Validate STONITH/SBD before workloads depend on the cluster; reading configuration does not prove fencing works.
+    installHaStackTitle: Install SUSE HA cluster tools
+    installHaStackHelp: Installs the official ha_sles pattern with zypper on selected hosts. The SLE HA extension must be active and repositories reachable.
+    installHaStack: Install HA tools
+    stackInstallRunning: Installing HA tools...
+    installReviewTitle: Review installation
+    installReviewText: The extension will run zypper install -t pattern ha_sles on {hosts}.
+    installReviewWarning: This installs packages and may take several minutes. It does not initialize a cluster or change Corosync configuration.
+    stackInstallResults: Installation result by host
+    stackInstalled: Installed
+    stackInstallFailed: Failed
+    operatorRoleRequired: Requires the Rancher Host Operator role
+    readOnly: Read only
+    area_fencing: Fencing and quorum
+    area_fencing_description: Quorum status and visibility into the cluster's fencing devices.
     area_constraints: Constraints
     area_constraints_description: Location, ordering, and colocation rules with readable summaries.
     area_activity: Activity and events
     area_activity_description: Pacemaker actions, failures, history, and filtered cluster logs.
-    area_fencing: Fencing and quorum
-    area_fencing_description: STONITH devices, watchdog/SBD, QDevice, and quorum configuration.
+  deploy:
+    eyebrow: SUSE VIRTUALIZATION
+    title: Deploy KVM host
+    subtitle: Create a SUSE Linux VM on SUSE Virtualization, prepare KVM and Cockpit, then import it into this extension.
+    sessionTitle: Uses your Rancher session
+    sessionHelp: The extension uses your signed-in Rancher identity for SUSE Virtualization API requests. Your Rancher role controls which clusters, namespaces, images, networks, and operations are available. No Harvester password or kubeconfig is stored.
+    nestedTitle: Check nested virtualization support
+    nestedHelp: The VM uses host-passthrough CPU so KVM can access virtualization features. Nested KVM may require configuration on SUSE Virtualization nodes; SUSE documents nested KVM in SLES as a technology preview and unsupported for production.
+    stepOne: STEP 1
+    targetTitle: SUSE Virtualization target
+    targetHelp: Select a Rancher-managed cluster where SUSE Virtualization APIs and your role permit VM creation.
+    cluster: Cluster
+    selectCluster: Select a cluster
+    namespace: Namespace
+    selectNamespace: Select a namespace
+    image: SUSE Linux image
+    selectImage: Select an imported image
+    imageHelp: Only successfully imported images with a storage class are listed.
+    network: VM network
+    selectNetwork: Select a network
+    networkHelp: Choose a network attachment in this namespace that can provide guest IP connectivity.
+    connected: API available
+    targetNotReady: Check required
+    stepTwo: STEP 2
+    vmTitle: VM configuration and access
+    vmHelp: Configure resources and initial SSH/Cockpit access. The password and public key are kept in a Kubernetes Secret in the selected namespace; the private SSH key stays on your workstation.
+    vmName: VM name
+    cpu: vCPU
+    memory: Memory
+    disk: Boot disk size
+    diskHelp: Minimum {min} GiB based on the selected image.
+    sshUser: SSH user
+    initialPassword: Initial SSH / Cockpit password
+    initialPasswordHelp: Use at least 12 characters. You will need this password when importing the host and signing in to Cockpit.
+    sshPublicKey: SSH public key
+    sshPublicKeyHelp: Paste an OpenSSH public key. The extension does not receive or store the corresponding private key.
+    installKvm: Install KVM tools and Cockpit during first boot
+    installKvmHelp: Uses SUSE zypper patterns kvm_server and kvm_tools, then installs cockpit packages and enables libvirt/Cockpit. The SLES image must have working SUSE repositories and cloud-init.
+    stepThree: STEP 3
+    reviewTitle: Review and deploy
+    reviewHelp: Review the VM, network, and resource changes. The VM is created only after you select Deploy VM.
+    preview: Review deployment
+    validationSummary: Fields to review before preview
+    validationCluster: Select an active Rancher cluster.
+    validationTarget: Resolve the cluster access or SUSE Virtualization API check before continuing.
+    validationNamespace: Select an active namespace.
+    validationImage: Select a successfully imported SUSE Linux image with a storage class.
+    validationNetwork: Select a network attachment in the chosen namespace.
+    validationVmName: Enter a VM name using lowercase letters, numbers, and internal hyphens; start and end with a letter or number.
+    validationCpu: Set vCPU to a whole number from 2 to 128.
+    validationMemory: Set memory to a whole number from 4 to 512 GiB.
+    validationDisk: Set the boot disk to a whole number from {min} to 2048 GiB.
+    validationSshUser: Use a Linux account name starting with a letter or underscore and containing at most 32 lowercase letters, numbers, underscores, or hyphens.
+    validationPassword: Enter an initial password between 12 and 128 characters.
+    validationSshKey: Paste a valid OpenSSH public key (for example, ssh-ed25519 or ssh-rsa).
+    back: Edit configuration
+    create: Deploy VM
+    creating: Creating VM...
+    resources: Resources
+    guestSetup: First-boot setup
+    guestSetupKvm: Install KVM + Cockpit with SUSE packages
+    guestSetupKeyOnly: Inject SSH access only
+    createdHosts: DEPLOYED KVM HOSTS
+    vmListTitle: Deployment status
+    state: State
+    address: Guest IP
+    actions: Actions
+    importHost: Continue to import
+    importHelp: When the VM reports an IP address, continue to Add Host. Enter the matching SSH private key and complete the existing host checks before importing.
+    refresh: Refresh
+    loading: Loading...
+    creatingSecret: Preparing first-boot configuration...
+    creatingVm: Creating VM and storage...
+    linkingSecret: Securing cloud-init lifecycle...
+    secretCleanupWarning: The VM was created, but this role could not link the cloud-init Secret for automatic cleanup. Review namespace Secret permissions and remove the Secret manually if you later delete this VM.
+    running: Running
+    pending: Pending
+    noClusters: No active Rancher-managed clusters are available to your account.
+    loadError: Could not load SUSE Virtualization resources
+    createError: VM deployment failed
+    genericError: Request failed. Check the Rancher session and cluster permissions.
   common:
     yes: Yes
     no: No
@@ -605,6 +929,7 @@ kvmManager:
     enabled: Enabled
     disabled: Disabled
     details: Details
+    configure: Configure
     console: Terminal
     consoleRequiresRunning: Start the virtual machine to open its terminal.
     resume: Resume

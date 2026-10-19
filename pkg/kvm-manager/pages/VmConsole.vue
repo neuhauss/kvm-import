@@ -1,10 +1,10 @@
 <template>
-    <section class="console-dock" role="region" :aria-label="t('cloudNative.vmConsole')" :class="{ expanded, resizing }" :style="dockStyle">
+      <section class="console-dock" role="region" :aria-label="t(hostTerminal ? 'cloudNative.hostTerminal' : 'cloudNative.vmConsole')" :class="{ expanded, resizing }" :style="dockStyle">
       <button class="dock-grip" type="button" :aria-label="t('cloudNative.resizeTerminal')" @pointerdown="beginResize"></button>
       <header class="console-header">
         <div>
-          <span class="eyebrow">{{ t('cloudNative.vmConsole') }} · {{ t('cloudNative.serialConsole') }}</span>
-          <h2>{{ vmName }}</h2>
+          <span class="eyebrow">{{ t(hostTerminal ? 'cloudNative.hostTerminal' : 'cloudNative.vmConsole') }} · {{ t(hostTerminal ? 'cloudNative.sshTerminal' : 'cloudNative.serialConsole') }}</span>
+        <h2>{{ vmName }}</h2>
         </div>
         <div class="console-controls">
           <span class="console-status" :class="status"><i></i>{{ t(`cloudNative.console_${status}`) }}</span>
@@ -13,7 +13,7 @@
           <button class="btn role-secondary btn-sm" @click="$emit('close')">{{ t('cloudNative.close') }}</button>
         </div>
       </header>
-      <p class="console-note">{{ t('cloudNative.consoleWarning') }}</p>
+      <p class="console-note">{{ t(hostTerminal ? 'cloudNative.hostTerminalWarning' : 'cloudNative.consoleWarning') }}</p>
       <div ref="terminalElement" class="terminal-surface" @click="terminal?.focus()"></div>
       <p v-if="error" class="console-error">{{ error }}</p>
   </section>
@@ -31,7 +31,8 @@ export default defineComponent({
   name: 'KvmVmConsole',
   props: {
     hostId: { type: String, required: true },
-    vmName: { type: String, required: true },
+    vmName: { type: String, default: '' },
+    hostTerminal: { type: Boolean, default: false },
   },
   emits: ['close'],
   data() {
@@ -109,10 +110,12 @@ export default defineComponent({
       this.error = '';
       this.status = 'connecting';
       this.terminal?.reset();
-      this.terminal?.writeln(this.t('cloudNative.consoleStarting'));
+      this.terminal?.writeln(this.t(this.hostTerminal ? 'cloudNative.hostTerminalStarting' : 'cloudNative.consoleStarting'));
       this.terminal?.focus();
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const endpoint = `${protocol}//${window.location.host}${apiBase}/hosts/${encodeURIComponent(this.hostId)}/vms/console?vm_name=${encodeURIComponent(this.vmName)}`;
+      const endpoint = this.hostTerminal
+        ? `${protocol}//${window.location.host}${apiBase}/hosts/${encodeURIComponent(this.hostId)}/terminal`
+        : `${protocol}//${window.location.host}${apiBase}/hosts/${encodeURIComponent(this.hostId)}/vms/console?vm_name=${encodeURIComponent(this.vmName)}`;
       const socket = new WebSocket(endpoint);
       socket.binaryType = 'arraybuffer';
       this.socket = socket;
@@ -140,7 +143,7 @@ export default defineComponent({
         else if (event.code === 4400) { this.status = 'error'; this.error = this.t('cloudNative.consoleInvalidVm'); }
         else if (this.status !== 'error') {
           this.status = event.code === 1000 || event.code === 1005 ? 'disconnected' : 'error';
-          if (event.code !== 1000 && event.code !== 1005) this.error = this.t('cloudNative.consoleConnectionError');
+          if (event.code !== 1000 && event.code !== 1005) this.error = this.t(this.hostTerminal ? 'cloudNative.hostTerminalConnectionError' : 'cloudNative.consoleConnectionError');
         }
       };
       socket.onerror = () => { /* onclose carries the useful auth or transport code */ };
