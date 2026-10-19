@@ -833,6 +833,53 @@ kvmManager:
     area_constraints_description: Location, ordering, and colocation rules with readable summaries.
     area_activity: Activity and events
     area_activity_description: Pacemaker actions, failures, history, and filtered cluster logs.
+    topologyChoices: Topology and safety choices
+    topologyChoicesHelp: Record an initial design to discuss with the SUSE bootstrap workflow. These choices are not applied to hosts by this plan.
+    clusterName: Cluster name
+    clusterNamePlaceholder: For example, production-ha
+    quorumPlan: Quorum witness
+    fencingPlan: Fencing approach
+    chooseAfterPreflight: Decide after preflight
+    qdevicePlan: QDevice/QNetd witness
+    standardQuorum: Node votes only
+    sbdPlan: SBD (validate shared storage or watchdog)
+    externalFencingPlan: Supported external fencing device
+    fencingPlanLater: Not decided yet
+    notChosen: Not set
+    quorum_pending: Not decided
+    quorum_qdevice: QDevice/QNetd planned
+    quorum_standard: Node votes only
+    fencing_pending: Not decided
+    fencing_sbd: SBD planned; requirements need validation
+    fencing_hardware: External fencing planned
+    fencing_manual: Not decided
+    planOnlyLabel: Plan only · no cluster changes applied
+    selectClusterForDetails: Open a verified cluster first to load its SUSE HA data.
+    diagnosticsLoading: Reading cluster diagnostics...
+    diagnosticsError: Could not load all diagnostics
+    diagnosticsUnavailable: Diagnostic data is not available from this host.
+    diagnosticsCheckedAt: Diagnostics checked
+    constraint_location: Location rules
+    constraint_ordering: Start/stop ordering
+    constraint_colocation: Colocation rules
+    noConstraints: No rules of this type were reported.
+    corosyncLinks: Corosync links
+    recentServiceEvents: Recent Pacemaker and Corosync events
+    diagnosticsWindow: Showing up to 80 events from the last 24 hours
+    noActivity: No recent Pacemaker or Corosync events were returned.
+    openHawk: Open Hawk
+    bootstrapGuide: SUSE CRM SHELL WORKFLOW
+    bootstrapTitle: Initialize and join with crmsh
+    bootstrapHelp: Open the extension terminal on each selected host and run the matching SUSE command. crmsh will prompt for network, fencing, QDevice, and service setup choices.
+    clusterNameInvalid: Use 1–64 letters, numbers, dots, underscores, or hyphens; start with a letter or number.
+    initializeFirstNode: Initialize the first node ({host})
+    joinAdditionalNode: Join this host ({host}) to the first node
+    copyCommand: Copy command
+    openHostTerminal: Open host terminal
+    commandCopied: Command copied
+    copyFailed: Clipboard access was blocked; select and copy the command manually.
+    bootstrapSafety: Run preflight first. The terminal opens a real SSH shell; each crmsh command changes host or cluster state and should be reviewed before execution. SUSE cluster bootstrap is interactive.
+    preflightRequiredForBootstrap: Complete a successful preflight on every selected host first. Also manually confirm stable addressing, Corosync reachability, fencing, and quorum placement.
   deploy:
     eyebrow: SUSE VIRTUALIZATION
     title: Deploy KVM host

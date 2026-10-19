@@ -833,6 +833,53 @@ kvmManager:
     area_constraints_description: Regras de localização, ordem e colocação com resumos claros.
     area_activity: Atividade e eventos
     area_activity_description: Ações do Pacemaker, falhas, histórico e logs filtrados do cluster.
+    topologyChoices: Topologia e decisões de segurança
+    topologyChoicesHelp: Registre uma proposta inicial para revisar no fluxo de bootstrap SUSE. Estas escolhas não são aplicadas aos hosts por este plano.
+    clusterName: Nome do cluster
+    clusterNamePlaceholder: Por exemplo, producao-ha
+    quorumPlan: Testemunha de quorum
+    fencingPlan: Estratégia de fencing
+    chooseAfterPreflight: Decidir após a pré-verificação
+    qdevicePlan: Testemunha QDevice/QNetd
+    standardQuorum: Somente votos dos nós
+    sbdPlan: SBD (validar armazenamento compartilhado ou watchdog)
+    externalFencingPlan: Dispositivo externo de fencing suportado
+    fencingPlanLater: Ainda não decidido
+    notChosen: Não definido
+    quorum_pending: Não decidido
+    quorum_qdevice: QDevice/QNetd planejado
+    quorum_standard: Somente votos dos nós
+    fencing_pending: Não decidido
+    fencing_sbd: SBD planejado; requisitos precisam ser validados
+    fencing_hardware: Fencing externo planejado
+    fencing_manual: Não decidido
+    planOnlyLabel: Somente plano · nenhuma alteração aplicada ao cluster
+    selectClusterForDetails: Abra primeiro um cluster confirmado para consultar os dados SUSE HA.
+    diagnosticsLoading: Consultando diagnósticos do cluster...
+    diagnosticsError: Não foi possível carregar todos os diagnósticos
+    diagnosticsUnavailable: Os dados de diagnóstico não estão disponíveis neste host.
+    diagnosticsCheckedAt: Diagnósticos consultados
+    constraint_location: Regras de localização
+    constraint_ordering: Ordem de inicialização e parada
+    constraint_colocation: Regras de colocação conjunta
+    noConstraints: Nenhuma regra deste tipo foi reportada.
+    corosyncLinks: Links Corosync
+    recentServiceEvents: Eventos recentes do Pacemaker e Corosync
+    diagnosticsWindow: Até 80 eventos das últimas 24 horas
+    noActivity: Nenhum evento recente do Pacemaker ou Corosync foi retornado.
+    openHawk: Abrir Hawk
+    bootstrapGuide: FLUXO CRM SHELL SUSE
+    bootstrapTitle: Inicializar e adicionar nós com crmsh
+    bootstrapHelp: Abra o terminal da extensão em cada host selecionado e execute o comando correspondente. O crmsh solicitará as opções de rede, fencing, QDevice e serviços.
+    clusterNameInvalid: Use de 1 a 64 letras, números, pontos, sublinhados ou hífens; comece com letra ou número.
+    initializeFirstNode: Inicializar o primeiro nó ({host})
+    joinAdditionalNode: Adicionar este host ({host}) ao primeiro nó
+    copyCommand: Copiar comando
+    openHostTerminal: Abrir terminal do host
+    commandCopied: Comando copiado
+    copyFailed: O navegador bloqueou a área de transferência; selecione e copie o comando manualmente.
+    bootstrapSafety: Execute a pré-verificação primeiro. O terminal abre um shell SSH real; cada comando crmsh altera o host ou cluster e deve ser revisado antes de executar. O bootstrap SUSE é interativo.
+    preflightRequiredForBootstrap: Conclua uma pré-verificação bem-sucedida em todos os hosts selecionados. Confirme manualmente os endereços estáveis, conectividade Corosync, fencing e posicionamento do quorum.
   deploy:
     eyebrow: SUSE VIRTUALIZATION
     title: Implantar host KVM
