@@ -1,4 +1,5 @@
 <template>
+  <div class="hosts-layout-frame">
   <div class="kvm-page">
     <section v-if="dialog" class="host-editor" :aria-label="editing ? t('hosts.editTitle') : t('hosts.addTitle')">
       <header class="host-editor-header">
@@ -112,36 +113,36 @@
       <p>{{ t('hosts.emptyDescription') }}</p>
       <button v-if="permissions.canAdministerHost" class="btn role-primary" @click="openAdd">{{ t('hosts.add') }}</button>
     </div>
-    <div v-else class="table-wrap">
+    <div v-else class="table-wrap host-table-wrap">
       <table class="table">
         <thead>
-          <tr><th>{{ t('hosts.hostname') }}</th><th>{{ t('hosts.address') }}</th><th>{{ t('hosts.state') }}</th><th>{{ t('hosts.cpu') }}</th><th>{{ t('hosts.memory') }}</th><th>{{ t('hosts.lastCheck') }}</th><th>{{ t('hosts.manage') }}</th></tr>
+          <tr><th>{{ t('hosts.hostname') }}</th><th>{{ t('hosts.address') }}</th><th>{{ t('hosts.state') }}</th><th>{{ t('hosts.cpu') }}</th><th>{{ t('hosts.memory') }}</th><th>{{ t('hosts.lastCheck') }}</th></tr>
         </thead>
         <tbody>
           <tr v-for="host in hosts" :key="host.id">
-            <td><strong>{{ host.hostname || host.name }}</strong><small>{{ host.name }}</small></td>
-            <td>{{ host.address }}:{{ host.port }}</td>
-            <td><span class="state" :class="host.status">{{ statusLabel(host.status) }}</span><small v-if="host.last_error">{{ t('hosts.hostUnreachableHelp') }}</small></td>
-            <td>{{ host.cpu_count ? `${host.cpu_count} vCPU` : '—' }}</td>
-            <td>{{ memoryLabel(host.memory_total_bytes) }}</td>
-            <td><span :class="{ stale: isHostStale(host) }">{{ dateLabel(host.last_checked_at) }}</span><small v-if="isHostStale(host)" class="stale-text">{{ t('hosts.dataStale') }}</small></td>
-            <td class="actions">
-              <div class="host-menu-wrap">
-                <button :id="`host-ui-${host.id}`" class="btn role-secondary btn-sm host-menu-trigger" :aria-expanded="openMenu === host.id" :aria-controls="`host-ui-menu-${host.id}`" :aria-label="`${t('hosts.uiMenu')} ${host.hostname || host.name}`" @click.stop="toggleMenu(host, $event)"><span aria-hidden="true">☰</span><span>{{ t('hosts.uiMenu') }}</span></button>
-                <div v-if="openMenu === host.id" :id="`host-ui-menu-${host.id}`" class="host-menu" :style="hostMenuStyle" role="menu">
-                  <button class="host-menu-item" role="menuitem" @click="openCloudNative(host)">{{ t('hosts.uiMenu') }}</button>
+            <td :data-label="t('hosts.hostname')"><div class="host-identity"><div><strong>{{ host.hostname || host.name }}</strong><small>{{ host.name }}</small></div><div class="host-actions">
+              <button class="btn role-secondary btn-sm host-ui-button" @click="openCloudNative(host)">{{ t('hosts.uiMenu') }}</button>
+              <div v-if="permissions.canOperateVms || permissions.canAdministerHost" class="host-menu-wrap">
+                <button :id="`host-actions-${host.id}`" class="btn role-link btn-sm host-menu-trigger" :aria-expanded="openMenu === host.id" aria-haspopup="menu" :aria-controls="`host-actions-menu-${host.id}`" :aria-label="`${t('hosts.moreActions')} ${host.hostname || host.name}`" @click.stop="toggleMenu(host, $event)"><span aria-hidden="true">⋮</span></button>
+                <div v-if="openMenu === host.id" :id="`host-actions-menu-${host.id}`" class="host-menu" :style="hostMenuStyle" role="menu" :aria-label="`${t('hosts.moreActions')} ${host.hostname || host.name}`">
+                  <button v-if="permissions.canOperateVms" class="host-menu-item" role="menuitem" :disabled="refreshing === host.id" @click="closeMenu(); refresh(host)">{{ refreshing === host.id ? t('hosts.refreshing') : t('hosts.refresh') }}</button>
+                  <button v-if="permissions.canAdministerHost" class="host-menu-item" role="menuitem" @click="closeMenu(); edit(host)">{{ t('hosts.edit') }}</button>
+                  <button v-if="permissions.canAdministerHost" class="host-menu-item danger-text" role="menuitem" @click="closeMenu(); remove(host)">{{ t('hosts.remove') }}</button>
                 </div>
               </div>
-              <button v-if="permissions.canOperateVms" class="btn role-link btn-sm" :disabled="refreshing === host.id" @click="refresh(host)">{{ refreshing === host.id ? t('hosts.refreshing') : t('hosts.refresh') }}</button>
-              <button v-if="permissions.canAdministerHost" class="btn role-link btn-sm" @click="edit(host)">{{ t('hosts.edit') }}</button>
-              <button v-if="permissions.canAdministerHost" class="btn role-link btn-sm danger-text" @click="remove(host)">{{ t('hosts.remove') }}</button>
-            </td>
+            </div></div></td>
+            <td :data-label="t('hosts.address')">{{ host.address }}:{{ host.port }}</td>
+            <td :data-label="t('hosts.state')"><span class="state" :class="host.status">{{ statusLabel(host.status) }}</span><small v-if="host.last_error">{{ t('hosts.hostUnreachableHelp') }}</small></td>
+            <td :data-label="t('hosts.cpu')">{{ host.cpu_count ? `${host.cpu_count} vCPU` : '—' }}</td>
+            <td :data-label="t('hosts.memory')">{{ memoryLabel(host.memory_total_bytes) }}</td>
+            <td :data-label="t('hosts.lastCheck')"><span :class="{ stale: isHostStale(host) }">{{ dateLabel(host.last_checked_at) }}</span><small v-if="isHostStale(host)" class="stale-text">{{ t('hosts.dataStale') }}</small></td>
           </tr>
         </tbody>
       </table>
     </div>
 
     </template>
+  </div>
   </div>
 </template>
 
@@ -301,15 +302,16 @@ export default defineComponent({
     toggleMenu(host: Host, event: MouseEvent) {
       if (this.openMenu === host.id) { this.openMenu = ''; return; }
       const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-      const menuHeight = 48;
+      const menuHeight = 144;
       const top = rect.bottom + menuHeight <= window.innerHeight - 12 ? rect.bottom + 4 : Math.max(12, rect.top - menuHeight - 4);
-      const width = 210;
+      const width = 190;
       const left = Math.min(Math.max(12, rect.right - width), window.innerWidth - width - 12);
       this.hostMenuStyle = { top: `${top}px`, left: `${left}px` };
       this.openMenu = host.id;
+      this.$nextTick(() => document.querySelector<HTMLElement>(`#host-actions-menu-${CSS.escape(host.id)} [role=menuitem]`)?.focus());
     },
     closeMenu() { this.openMenu = ''; },
-    onMenuKeydown(event: KeyboardEvent) { if (event.key === 'Escape') this.openMenu = ''; },
+    onMenuKeydown(event: KeyboardEvent) { if (event.key === 'Escape' && this.openMenu) { const hostId = this.openMenu; this.openMenu = ''; this.$nextTick(() => document.getElementById(`host-actions-${CSS.escape(hostId)}`)?.focus()); return; } if (!this.openMenu || !['ArrowDown','ArrowUp','Home','End'].includes(event.key)) return; const items = Array.from(document.querySelectorAll<HTMLElement>(`#host-actions-menu-${CSS.escape(this.openMenu)} [role=menuitem]:not(:disabled)`)); if (!items.length) return; event.preventDefault(); const current = items.indexOf(document.activeElement as HTMLElement); const next = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1 : event.key === 'ArrowDown' ? (current + 1) % items.length : (current - 1 + items.length) % items.length; items[next].focus(); },
     async toggleAudit() {
       this.showingAudit = !this.showingAudit;
       if (!this.showingAudit) return;
@@ -343,7 +345,7 @@ export default defineComponent({
 </script>
 
 <style scoped>
-.kvm-page { min-height: calc(100vh - 100px); padding: 24px; box-sizing: border-box; }
+.kvm-page { container-type:inline-size; container-name:hosts-layout; width:100%; min-width:0; max-width:100%; min-height:calc(100vh - 100px); padding:24px; box-sizing:border-box; }
 .header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 24px; }
 .header-actions { display: flex; gap: 8px; }
 h1 { margin: 0 0 6px; }
@@ -357,12 +359,16 @@ small { display: block; font-size: 12px; margin-top: 4px; }
 .state.unreachable { background: #fde8e7; color: #a52822; }
 .stale,.stale-text { color:var(--warning-text,var(--body-text)); font-weight:600; }
 .actions { text-align: right !important; }
-.host-menu-wrap { display:inline-block; margin-right:5px; }
-.host-menu-trigger { display:inline-flex; align-items:center; gap:8px; }
-.host-menu { position:fixed; z-index:2000; width:210px; padding:6px; border:1px solid var(--border, #d8dde6); border-radius:var(--border-radius, 6px); background:var(--input-bg, var(--body-bg, #fff)); box-shadow:0 8px 24px #0003; text-align:left; }
+.host-menu-wrap { position:relative; display:inline-flex; }
+.host-menu-trigger { display:inline-flex; align-items:center; justify-content:center; min-width:36px; font-size:18px; line-height:1; }
+.host-menu { position:fixed; z-index:2000; width:190px; padding:6px; border:1px solid var(--border, #d8dde6); border-radius:var(--border-radius, 6px); background:var(--input-bg, var(--body-bg, #fff)); box-shadow:0 8px 24px #0003; text-align:left; }
 .host-menu-item { display:block; width:100%; border:0; border-radius:var(--border-radius); padding:9px 11px; color:var(--body-text); background:transparent; cursor:pointer; text-align:left; font:inherit; }
-.host-menu-item:hover,.host-menu-item:focus-visible { background:var(--hover-bg, rgba(120,135,160,.12)); outline:none; }
-.btn-sm { margin-left: 4px; }
+.host-menu-item:hover,.host-menu-item:focus-visible { background:var(--hover-bg, rgba(120,135,160,.12)); outline:2px solid var(--primary,#4b91e2); outline-offset:-2px; }
+.host-menu-item:disabled { cursor:wait; opacity:.7; }
+.host-identity { display:flex; align-items:center; justify-content:space-between; gap:12px; min-width:220px; }
+.host-identity strong { display:block; }
+.host-actions { display:inline-flex; align-items:center; justify-content:flex-end; gap:6px; flex:0 0 auto; }
+.host-actions .btn-sm { margin:0; }
 .danger-text { color: #b42318; }
 .banner { padding: 12px; border-radius: 4px; margin: 12px 0; }
 .error { background: color-mix(in srgb,#d45b52 16%,var(--body-bg,#252b33)); color:var(--body-text); }
@@ -404,4 +410,9 @@ small { display: block; font-size: 12px; margin-top: 4px; }
 .error { background: color-mix(in srgb,#d45b52 16%,var(--body-bg,#252b33)); color:var(--body-text); }
 .warning { background:color-mix(in srgb,#d99c30 18%,var(--body-bg,#252b33)); color:var(--body-text); }
 @media (max-width: 700px) { .kvm-page { padding: 16px; }.header { flex-direction: column; }.header-actions { width: 100%; flex-wrap: wrap; }.host-editor { min-height: calc(100vh - 120px); }.host-editor-header h1 { font-size: 21px; }.field-wide,.field-name,.field-address,.field-port { grid-column: 1 / -1; }.host-editor-footer { margin: auto -16px -16px; padding: 12px 16px; } }
+@container hosts-layout (max-width: 700px) { .kvm-page { padding:16px; }.header { align-items:flex-start; flex-direction:column; }.header-actions { width:100%; flex-wrap:wrap; }.host-editor { min-height:calc(100vh - 120px); }.host-editor-header h1 { font-size:21px; }.field-wide,.field-name,.field-address,.field-port { grid-column:1/-1; }.host-editor-footer { margin:auto -16px -16px; padding:12px 16px; }.host-editor-form,.host-editor-content { min-width:0; }.table-wrap { max-width:100%; min-width:0; overflow-x:auto; overscroll-behavior-x:contain; } }
+@container hosts-layout (max-width: 460px) { .header-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }.header-actions .btn { min-width:0; white-space:normal; }.host-form-section { padding:14px 12px; }.host-editor-footer { gap:8px; }.host-editor-footer .btn { flex:1 1 auto; }.audit-filters { display:grid; grid-template-columns:minmax(0,1fr); }.audit-filters .search-input { min-width:0; width:100%; box-sizing:border-box; } }
+@container hosts-layout (max-width: 920px) { .host-table-wrap { overflow:visible; border:0; background:transparent; }.host-table-wrap :deep(.table) { display:block; width:100%; border-collapse:separate; background:transparent; }.host-table-wrap :deep(.table thead) { position:absolute; width:1px; height:1px; padding:0; overflow:hidden; clip:rect(0,0,0,0); clip-path:inset(50%); white-space:nowrap; }.host-table-wrap :deep(.table tbody) { display:grid; gap:10px; }.host-table-wrap :deep(.table tbody tr) { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); min-width:0; overflow:hidden; border:1px solid var(--border,#394452); border-radius:8px; background:var(--body-bg,#252b33); }.host-table-wrap :deep(.table tbody td) { display:grid; align-content:start; gap:4px; min-width:0; padding:10px 12px; border:0; white-space:normal; overflow-wrap:anywhere; }.host-table-wrap :deep(.table tbody td::before) { content:attr(data-label); color:var(--muted,#8b95a5); font-size:10px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; }.host-table-wrap :deep(.table tbody td:first-child) { grid-column:1/-1; border-bottom:1px solid var(--border,#394452); }.host-table-wrap :deep(.host-identity) { min-width:0; flex-wrap:wrap; }.host-table-wrap :deep(.host-actions) { justify-content:flex-start; flex-wrap:wrap; }.host-table-wrap :deep(.host-actions .btn) { margin:0; }.host-ui-button { margin:0; }.host-menu { text-align:left; } }
+@container hosts-layout (max-width: 460px) { .host-table-wrap :deep(.table tbody tr) { grid-template-columns:minmax(0,1fr); }.host-table-wrap :deep(.table tbody td:first-child) { grid-column:1; } }
+.hosts-layout-frame { container-type:inline-size; container-name:hosts-layout; width:100%; min-width:0; max-width:100%; }.kvm-page { container-type:normal; container-name:none; }
 </style>

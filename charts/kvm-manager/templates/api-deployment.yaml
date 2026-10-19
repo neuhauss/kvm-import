@@ -59,6 +59,20 @@ spec:
               value: {{ join "," .Values.rancher.vmOperatorGlobalRoles | quote }}
             - name: KVM_HOST_OPERATOR_GLOBAL_ROLES
               value: {{ join "," .Values.rancher.hostOperatorGlobalRoles | quote }}
+            - name: KVM_NETWORK_OPERATOR_GLOBAL_ROLES
+              value: {{ join "," .Values.rancher.networkOperatorGlobalRoles | quote }}
+            - name: KVM_STORAGE_OPERATOR_GLOBAL_ROLES
+              value: {{ join "," .Values.rancher.storageOperatorGlobalRoles | quote }}
+            - name: KVM_SOFTWARE_OPERATOR_GLOBAL_ROLES
+              value: {{ join "," .Values.rancher.softwareOperatorGlobalRoles | quote }}
+            - name: KVM_SUBSCRIPTION_OPERATOR_GLOBAL_ROLES
+              value: {{ join "," .Values.rancher.subscriptionOperatorGlobalRoles | quote }}
+            - name: KVM_ACCOUNT_OPERATOR_GLOBAL_ROLES
+              value: {{ join "," .Values.rancher.accountOperatorGlobalRoles | quote }}
+            - name: KVM_SERVICE_OPERATOR_GLOBAL_ROLES
+              value: {{ join "," .Values.rancher.serviceOperatorGlobalRoles | quote }}
+            - name: KVM_CLUSTER_OPERATOR_GLOBAL_ROLES
+              value: {{ join "," .Values.rancher.clusterOperatorGlobalRoles | quote }}
             - name: KVM_AUDIT_RETENTION_DAYS
               value: {{ .Values.rancher.auditRetentionDays | default 90 | quote }}
             - name: KVM_SLOW_REQUEST_MS

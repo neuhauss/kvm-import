@@ -70,6 +70,7 @@ jspm_packages/
 # dotenv environment variables file
 .env
 .secrets/
+.kube/
 *.key
 *.p12
 *.pfx

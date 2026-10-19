@@ -1,18 +1,18 @@
 kvmManager:
   hosts:
-    title: KVM Hosts
-    description: Import and monitor existing SUSE Linux hosts with KVM.
-    audit: Audit
-    add: Add host
-    loading: Loading hosts...
-    emptyTitle: No hosts registered
-    emptyDescription: Add an existing KVM host to inspect its status and resources.
-    hostname: Hostname
-    address: Address
-    state: State
-    cpu: CPU
-    memory: Memory
-    lastCheck: Last check
+    title: "Hosts KVM"
+    description: "Importe e monitore hosts SUSE Linux existentes com KVM."
+    audit: "Auditoria"
+    add: "Adicionar host"
+    loading: "Carregando hosts..."
+    emptyTitle: "Nenhum host registrado"
+    emptyDescription: "Adicione um host KVM existente para consultar o estado e os recursos."
+    hostname: "Nome do host"
+    address: "Endereço"
+    state: "Estado"
+    cpu: "CPU"
+    memory: "Memória"
+    lastCheck: "Última verificação"
     dataStale: Desatualizado · verificando a conexão do host...
     backgroundRefreshFailed: "Falha ao atualizar o host. O estado exibido é da última consulta salva; verifique o SSH e atualize novamente."
     preflightFailed: "A validação SSH/libvirt falhou. Confira o endereço, as credenciais SSH, a confiança da chave do host, o firewall e se o libvirt está ativo."
@@ -29,55 +29,55 @@ kvmManager:
     errorRequest: "Não foi possível concluir a solicitação. Atualize a lista de hosts e tente novamente."
     errorRequestDetail: "A solicitação foi rejeitada: {detail}"
     errorNetwork: "Não foi possível acessar a API da extensão KVM. Verifique a conexão com o Rancher e a saúde da API da extensão."
-    manage: Manage
-    uiMenu: UI
-    refresh: Refresh
-    refreshing: Checking...
-    edit: Edit
-    remove: Remove
-    ready: Ready
-    unreachable: Unreachable
-    unknown: Unknown
-    addTitle: Add KVM host
-    editTitle: Edit host
-    hostDescription: Enter an existing host. The extension does not install or change packages on the host.
+    manage: "Administrar"
+    uiMenu: "UI"
+    refresh: "Atualizar"
+    refreshing: "Verificando..."
+    edit: "Editar"
+    remove: "Remover"
+    ready: "Pronto"
+    unreachable: "Inacessível"
+    unknown: "Desconhecido"
+    addTitle: "Adicionar host KVM"
+    editTitle: "Editar host"
+    hostDescription: "Informe um host existente. A extensão não instala nem altera pacotes no host."
     editorIntro: Conecte um host KVM existente ao Rancher. A extensão valida o acesso SSH e libvirt antes de adicioná-lo.
     deployPrefill: Esta VM do SUSE Virtualization está pronta para ser importada como host. Use a senha inicial definida durante a implantação; a chave pública SSH já foi instalada no convidado.
     hostDetails: Detalhes do host
     hostDetailsDescription: Informe o nome do host e o endereço SSH usado para administrar este servidor KVM.
     sshCredentials: Credenciais SSH
     sshCredentialsDescription: As credenciais são criptografadas quando armazenadas. A senha continua necessária para o login automático no Cockpit.
-    displayName: Display name
-    ipDns: IP address or DNS name
-    sshPort: SSH port
-    sshUser: SSH username
-    password: Host / Cockpit password
-    keepPassword: Leave blank to keep the current password
-    passwordHelp: Used for Cockpit and as an SSH fallback. It is stored encrypted.
-    sshKey: Private SSH key (optional)
-    sshKeyHelp: The key is used for SSH; the password above is still used for Cockpit. The key is encrypted and is never shown after saving.
-    keyPassphrase: SSH key passphrase
-    removeSavedKey: Remove the saved SSH key and use password-only SSH
-    acceptHostKey: Automatically trust the SSH host key
-    trustKeyHelp: The received key is pinned to this host entry. Use when importing for the first time or after an intentional host key change.
-    cancel: Cancel
-    validating: Validating...
-    save: Save and check
-    import: Import host
-    cannotLoad: Could not load hosts
-    verifyService: Check that the KVM service is installed and reachable.
-    removeConfirm: Remove registration for {name}? This does not change the KVM host.
-    removeError: Could not remove {name}
-    refreshError: Could not check {name}
-    noAudit: No actions have been recorded yet.
-    auditTitle: Audit log
-    auditDescription: Administrative actions recorded by the extension, without passwords or private keys.
-    date: Date
-    rancherUser: Rancher user
-    action: Action
-    target: Target
-    result: Result
-    noHosts: No registered hosts
+    displayName: "Nome de exibição"
+    ipDns: "Endereço IP ou nome DNS"
+    sshPort: "Porta SSH"
+    sshUser: "Usuário SSH"
+    password: "Senha do host / Cockpit"
+    keepPassword: "Deixe vazio para manter a senha atual"
+    passwordHelp: "Usada no Cockpit e como alternativa para SSH. A senha é armazenada criptografada."
+    sshKey: "Chave privada SSH (opcional)"
+    sshKeyHelp: "A chave é usada para SSH; a senha acima continua sendo usada para o Cockpit. A chave é criptografada e não será exibida após salvar."
+    keyPassphrase: "Frase secreta da chave SSH"
+    removeSavedKey: "Remover a chave SSH salva e usar somente senha no SSH"
+    acceptHostKey: "Confiar automaticamente na chave SSH do host"
+    trustKeyHelp: "A chave recebida fica vinculada a este registro. Use na primeira importação ou após uma troca intencional da chave do host."
+    cancel: "Cancelar"
+    validating: "Validando..."
+    save: "Salvar e verificar"
+    import: "Importar host"
+    cannotLoad: "Não foi possível carregar os hosts"
+    verifyService: "Verifique se o serviço KVM está instalado e acessível."
+    removeConfirm: "Remover o registro de {name}? Isso não altera o host KVM."
+    removeError: "Não foi possível remover {name}"
+    refreshError: "Não foi possível verificar {name}"
+    noAudit: "Nenhuma ação foi registrada ainda."
+    auditTitle: "Log de auditoria"
+    auditDescription: "Ações administrativas registradas pela extensão, sem senhas ou chaves privadas."
+    date: "Data"
+    rancherUser: "Usuário do Rancher"
+    action: "Ação"
+    target: "Alvo"
+    result: "Resultado"
+    noHosts: "Nenhum host registrado"
     preflightTitle: Diagnóstico de conexão
     preflightHelp: Execute verificações somente de leitura antes da importação. As credenciais não são salvas por esta verificação.
     testConnection: Testar conexão
@@ -90,6 +90,7 @@ kvmManager:
     allResults: Todos os resultados
     exportCsv: Exportar CSV
     detail: Detalhes
+    moreActions: "Mais ações"
   cloudNative:
     actions: Ações
     consoleRequiresRunning: Inicie a máquina virtual para abrir o terminal.
@@ -98,6 +99,10 @@ kvmManager:
     updating: Atualizando...
     storagePoolType: Pool de armazenamento do tipo diretório
     storagePoolFormHelp: Este pool do libvirt usa um diretório no host. A extensão cria o diretório quando necessário; arquivos existentes não são movidos.
+    moreActions: "Mais ações"
+    systemMounts: "Montagens do sistema ({count})"
+    systemMountsHelp: Sistemas de arquivos virtuais e temporários do sistema. Eles ficam recolhidos para destacar os volumes persistentes e as informações de capacidade.
+    noPersistentMounts: Nenhuma montagem de sistema de arquivos persistente corresponde a este filtro.
     poolNameHelp: Use letras, números, pontos, sublinhados, sinais de mais ou hífens.
     poolPathHelp: Informe um caminho absoluto no host KVM. Verifique o espaço livre e as permissões adequadas.
     accountSettings: Configurações da conta
@@ -108,11 +113,12 @@ kvmManager:
     groupsEditHelp: Grupos suplementares separados por vírgulas. Ao salvar, a lista de grupos suplementares da conta será substituída.
     passwordPolicyHelp: Use pelo menos 8 caracteres. Dois-pontos e quebras de linha não são permitidos.
     accountFormWarning: Não remova o acesso do usuário SSH aos grupos necessários para administrar o host. Alterar grupos substitui a lista suplementar.
-    title: Virtualization administration
-    subtitle: Operational overview and tools for this KVM host.
-    openCockpit: Open Cockpit
+    title: "Administração de virtualização"
+    subtitle: "Visão operacional e ferramentas deste host KVM."
+    openCockpit: "Abrir Cockpit"
     accessLevelLabel: "Acesso KVM: {level}"
     role_viewer: Visualizador
+    role_scoped_operator: Operador com permissões específicas
     role_vm_operator: Operador de VMs
     role_host_operator: Operador do host
     role_host_admin: Administrador de hosts
@@ -126,6 +132,73 @@ kvmManager:
     operationRepository: Operação em repositório
     operationService: Operação em serviço
     operationHost: Operação no host
+    operationElapsed: "Tempo decorrido: {time}"
+    operationPhase_applying: Aplicando a alteração no host KVM...
+    operationPhase_verifying: Verificando o estado atualizado do host...
+    operationPhase_running: Aguardando resposta do host KVM...
+    recentActivity: Atividade recente
+    recentActivityHelp: Ações administrativas recentes registradas pela extensão. Detalhes sensíveis de comandos não são exibidos.
+    vmActivityHelp: Ações recentes da extensão direcionadas a esta máquina virtual.
+    loadingActivity: Carregando atividade...
+    refreshActivity: Atualizar atividade
+    noRecentActivity: Nenhuma ação do host foi registrada ainda.
+    noVmActivity: Nenhuma ação foi registrada para esta VM ainda.
+    activitySucceeded: Concluída
+    activityFailed: Falhou
+    activityVmStart: Iniciar máquina virtual
+    activityVmShutdown: Desligar máquina virtual
+    activityVmReboot: Reiniciar máquina virtual
+    activityVmPause: Pausar máquina virtual
+    activitySnapshotCreate: Criar snapshot da VM
+    activitySnapshotDelete: Excluir snapshot da VM
+    activitySnapshotRevert: Restaurar snapshot da VM
+    activityVmConfigure: Alterar configuração da VM
+    activityHostImport: Importar host
+    activityHostUpdate: Editar host
+    activityHostRefresh: Atualizar host
+    activityNetworkUpdate: Alterar configuração de rede
+    activityNetworkCreate: Criar rede virtual
+    activityNetworkDelete: Excluir rede virtual
+    activityVolumeCreate: Criar volume de armazenamento
+    activityVolumeDelete: Excluir volume de armazenamento
+    topologyEyebrow: MAPA DE CONEXÕES
+    networkTopology: Topologia de rede
+    networkTopologyHelp: Consulte interfaces do host, conexões do NetworkManager, redes libvirt e VMs conectadas em um só lugar.
+    hostNetworkLayer: Interfaces e conexões do host
+    libvirtNetworkLayer: Redes libvirt e VMs
+    bridgeMaster: bridge mestre
+    attachedVms: "VMs conectadas: {count}"
+    networkTopologyNote: As conexões das VMs são associadas pelas fontes das interfaces libvirt. Conexões do host e nomes de bridges vêm do inventário atual; o mapa não infere rotas nem garante conectividade da VM.
+    reviewChangeTitle: Revise a alteração
+    reviewChangeEyebrow: REVISÃO DE IMPACTO
+    confirmChange: Confirmar alteração
+    reviewNetworkTitle: Revisar alteração de rede
+    reviewNetworkWarning: Aplicar mudanças de rede pode interromper a conexão com o host. Confirme que a interface escolhida não é o único caminho de administração.
+    reviewLibvirtNetwork: "{action}: {name}; modo {mode}; bridge {bridge}; endereço {address}; DHCP {dhcp}."
+    reviewDisconnectConnection: "Desativar a conexão NetworkManager {name} em {device}."
+    reviewStopNetwork: "Parar a rede libvirt {name}."
+    reviewStopNetworkWarning: As VMs conectadas podem perder o acesso à rede até que ela seja iniciada novamente ou sejam movidas para outra rede.
+    reviewStopPool: "Parar o pool de armazenamento {name}."
+    reviewPoolActionTitle: Revisar ação no pool de armazenamento
+    reviewStopPoolWarning: Parar este pool pode deixar os volumes indisponíveis para as máquinas virtuais. Confira as dependências de armazenamento das VMs antes de continuar.
+    reviewDeleteNetworkTitle: Revisar remoção da rede virtual
+    reviewDeleteNetwork: "Remover a definição da rede libvirt {name}."
+    reviewDeleteNetworkWarning: A rede precisa estar parada. VMs configuradas para usá-la perderão a conexão até serem ligadas a outra rede.
+    reviewDeletePoolTitle: Revisar remoção do pool de armazenamento
+    reviewDeletePool: "Remover a definição do pool libvirt {pool} em {path}."
+    reviewDeletePoolWarning: Se estiver ativo, o pool será parado antes da remoção da definição. Os arquivos não são excluídos; confira dependências e disponibilidade das VMs antes de continuar.
+    reviewDeleteVolumeTitle: Revisar exclusão do volume
+    reviewDeleteVolume: "Excluir permanentemente o volume {volume} do pool {pool} em {path}."
+    reviewDeleteVolumeWarning: Isso exclui os dados do disco virtual e não pode ser desfeito. Confirme que ele não é necessário para uma VM ou plano de recuperação.
+    reviewVmDeviceTitle: Revisar alteração de dispositivo da VM
+    reviewDetachDisk: "Desconectar o disco {item} da máquina virtual {vm}."
+    reviewDetachNetwork: "Desconectar a interface de rede {item} da máquina virtual {vm}."
+    reviewVmDeviceWarning: O sistema convidado perderá acesso a este dispositivo. Confira o impacto nas aplicações e se a VM pode ser reconfigurada com segurança.
+    reviewDeleteSnapshotTitle: Revisar exclusão do snapshot
+    reviewDeleteSnapshot: "Excluir o snapshot {snapshot} da máquina virtual {vm}."
+    reviewRevertSnapshotTitle: Revisar restauração do snapshot
+    reviewRevertSnapshot: "Restaurar a máquina virtual {vm} para o snapshot {snapshot}."
+    reviewSnapshotWarning: Restaurar altera o estado da VM e pode descartar mudanças feitas após o snapshot. Excluir remove este ponto de recuperação.
     lastUpdatedAt: "Métricas do host atualizadas: {time} · atualização automática a cada 30 segundos"
     updateFailedAt: "A atualização falhou. Alguns dados exibidos podem estar desatualizados."
     updateStaleAt: "Os dados podem estar desatualizados. Última atualização bem-sucedida: {time}."
@@ -155,8 +228,8 @@ kvmManager:
     allVmStates: Todos os estados
     stopped: Parada
     noVmMatch: Nenhuma máquina virtual corresponde aos filtros.
-    connected: Connected
-    vms: Virtual machines
+    connected: "Conectado"
+    vms: "Máquinas virtuais"
     vmConfiguration: Recursos da VM
     vmConfigurationHelp: Edite as configurações persistentes de CPU e memória gerenciadas pelo libvirt.
     vmHardwareDetails: Hardware e inicialização da VM
@@ -167,7 +240,7 @@ kvmManager:
     runtimeMemory: Limite de memória em execução
     savedConfiguration: Configuração salva
     noVmDescription: Nenhuma descrição definida.
-    vmIdentifier: UUID
+    vmIdentifier: "UUID da máquina virtual"
     expandDisk: Expandir disco
     currentDiskSize: Tamanho virtual atual
     newDiskSizeGiB: Novo tamanho virtual (GiB)
@@ -177,7 +250,7 @@ kvmManager:
     stopVmBeforeDiskResize: Desligue a máquina virtual antes de expandir o disco.
     confirmDiskResize: "Expandir {name} para {size}? Somente o tamanho do disco virtual será alterado; partições e sistemas de arquivos da VM não serão modificados."
     machineType: Tipo de máquina
-    firmware: Firmware
+    firmware: "Firmware"
     cpuMode: Modo de CPU
     cpuModel: Modelo de CPU
     customCpuModel: Modelo de CPU personalizado
@@ -210,7 +283,7 @@ kvmManager:
     confirmVmCreate: "Criar e iniciar {name} com {vcpus} vCPUs, {memory} de memória, disco {disk} e rede {network}?"
     vmDisks: Discos virtuais e mídia de instalação
     vmNetworks: Interfaces de rede virtual
-    volume: Volume
+    volume: "Volume"
     vmDeviceRestartNote: As alterações são salvas no libvirt e passam a valer após reiniciar a VM. Remover um disco mantém o volume de armazenamento.
     attachDisk: Anexar disco
     detachDisk: Remover disco
@@ -218,7 +291,25 @@ kvmManager:
     attachNetwork: Anexar rede
     detachNetwork: Remover interface
     confirmVmDeviceChange: "Aplicar {action}: {detail}? A alteração passa a valer após reiniciar; o volume removido será mantido."
-    snapshots: Snapshots
+    snapshots: "Snapshots"
+    snapshotsLibraryHelp: Consulte o histórico dos snapshots das VMs, restaure uma versão ou baixe suas imagens de disco.
+    snapshotRetention: Revisão de retenção de snapshots
+    snapshotRetentionHelp: Confira snapshots antigos de VMs desligadas. Nada é removido até você selecionar os snapshots e confirmar.
+    keepLatest: Manter os mais recentes por VM
+    reviewCleanup: Revisar {count} candidatos
+    cleanupReviewTitle: Revise a exclusão de {count} snapshots
+    cleanupReviewHelp: A lista inclui apenas snapshots de VMs desligadas. Selecione o que remover e confirme.
+    continueCleanup: Revisar exclusão
+    confirmCleanup: Excluir {count} snapshots selecionados
+    cleanupPartialFailure: "Não foi possível excluir {count} snapshot(s): {details}"
+    snapshotVersion: Versão
+    snapshotCreated: Criado em
+    selectVm: Selecione uma máquina virtual
+    downloadSnapshot: Baixar snapshot
+    refreshSnapshots: Atualizar snapshots
+    loadingSnapshots: Carregando snapshots das VMs…
+    legacySnapshot: Snapshot existente
+    snapshotExportHelp: O download contém uma imagem qcow2 independente para cada disco gravável, em um arquivo compactado. Desligue a VM antes de exportar; memória e estado dos dispositivos não são incluídos.
     snapshotHelp: Snapshots internos registram uma VM desligada e seus discos qcow2 graváveis. Mantenha a VM desligada durante as operações.
     snapshotUnsupported: Snapshots indisponíveis porque a VM não possui disco gravável ou usa um formato diferente de qcow2.
     snapshotRequiresStopped: Desligue a VM antes de criar, restaurar ou excluir snapshots.
@@ -231,23 +322,24 @@ kvmManager:
     confirmSnapshotCreate: "Criar o snapshot {name} para {vm}? A VM precisa estar desligada."
     confirmSnapshotDelete: "Excluir o snapshot {name} de {vm}? Esta ação não pode ser desfeita."
     confirmSnapshotRevert: "Restaurar {vm} para o snapshot {name}? O estado atual do disco após esse snapshot será descartado."
-    runningStopped: "{running} running · {stopped} stopped"
-    hostCpu: Host CPU
-    cores: cores
-    memory: Memory
-    inUse: in use
-    overview: Overview
-    storage: Storage
-    network: Network
-    services: Services
-    logs: Logs
+    runningStopped: "{running} em execução · {stopped} paradas"
+    hostCpu: "CPU do host"
+    cores: "núcleos"
+    memory: "Memória"
+    inUse: "em uso"
+    overview: "Visão geral"
+    storage: "Armazenamento"
+    network: "Rede"
+    services: "Serviços"
+    logs: "Logs"
     accounts: Contas
     repositories: Repositórios
-    selinux: SELinux
+    selinux: "SELinux"
     subscriptions: Assinaturas
-    terminal: Terminal
+    terminal: "Terminal"
     edit: Editar
     delete: Excluir
+    confirmDeleteAction: Confirmar exclusão
     cancel: Cancelar
     saveChanges: Salvar alterações
     addPool: Adicionar pool de armazenamento
@@ -297,11 +389,11 @@ kvmManager:
     autoconnect: Conectar automaticamente
     invalidIpv6Configuration: Informe pelo menos um endereço IPv6 para usar configuração manual.
     shared: Compartilhado
-    linkLocal: Link-local
+    linkLocal: "Link local"
     persistence: Configuração
     editNetwork: Editar conexão de rede
     ipMethod: Método IPv4
-    manual: Manual
+    manual: "Manual"
     confirmNetworkEdit: Salvar as configurações IPv4 de {name}? A aplicação pode desconectar a administração do host.
     addAccount: Adicionar conta
     editAccount: Editar conta
@@ -335,7 +427,7 @@ kvmManager:
     accountsDescription: Usuários locais, grupos, diretórios pessoais e shells de login.
     account: Conta
     homeDirectory: Diretório pessoal
-    shell: Shell
+    shell: "Shell"
     groups: Grupos
     noAccounts: O host não retornou contas locais.
     locked: Bloqueada
@@ -457,31 +549,31 @@ kvmManager:
     confirmLibvirtAction: "{action} {name}? Isso pode afetar as máquinas virtuais que usam esse recurso."
     enableAutostart: Ativar inicialização automática
     disableAutostart: Desativar inicialização automática
-    systemSummary: System summary
-    uptime: Uptime
-    system: System
-    hostIdentity: Host identification and version
-    resources: Resources
-    currentUsage: Current system usage
-    availableMemory: Available memory
-    devices: Devices
-    libvirt: Libvirt
-    fullInventory: View full inventory
-    filterVms: Filter virtual machines
-    vmLifecycle: Lifecycle, disk and network details, and autostart.
+    systemSummary: "Resumo do sistema"
+    uptime: "Tempo ligado"
+    system: "Sistema"
+    hostIdentity: "Identificação e versão do host"
+    resources: "Recursos"
+    currentUsage: "Uso atual do sistema"
+    availableMemory: "Memória disponível"
+    devices: "Dispositivos"
+    libvirt: "Libvirt"
+    fullInventory: "Ver inventário completo"
+    filterVms: "Filtrar máquinas virtuais"
+    vmLifecycle: "Ciclo de vida, discos, rede e inicialização automática."
     physicalNetworkLayer: Interfaces físicas
     routingLayer: Tabela de rotas
     loadAverage: Média de carga
-    cpu: CPU
-    dhcp: DHCP
-    ipv6: IPv6
+    cpu: "CPU"
+    dhcp: "DHCP"
+    ipv6: "IPv6"
     linkUp: Ativa
     linkDown: Inativa
     adminAreas: Áreas administrativas
     storageDescription: Crie e remova pools de diretório libvirt e consulte dispositivos de bloco e sistemas de arquivos montados.
-    noVm: No virtual machines found.
-    storagePools: Libvirt storage pools
-    noPool: No libvirt storage pools found.
+    noVm: "Nenhuma máquina virtual encontrada."
+    storagePools: "Pools de armazenamento do libvirt"
+    noPool: "Nenhum pool de armazenamento do libvirt encontrado."
     storageVolumes: Volumes de armazenamento
     storageVolumesHelp: Crie e remova volumes libvirt em pools de diretório ativos. Volumes conectados a uma VM não podem ser removidos.
     createVolume: Criar volume
@@ -492,91 +584,91 @@ kvmManager:
     volumeFormat: Formato
     selectPool: Selecione um pool de diretório ativo
     confirmDeleteVolume: Excluir o volume {name}? Esta operação não pode ser desfeita.
-    capacity: Capacity
-    allocated: Allocated
-    available: Available
-    devicesTitle: Devices
-    filesystem: Filesystem
-    mount: Mount point
-    mountedFilesystems: Mounted filesystems
-    used: Used
-    usage: Usage
+    capacity: "Capacidade"
+    allocated: "Alocado"
+    available: "Disponível"
+    devicesTitle: "Dispositivos"
+    filesystem: "Sistema de arquivos"
+    mount: "Ponto de montagem"
+    mountedFilesystems: "Sistemas de arquivos montados"
+    used: "Usado"
+    usage: "Uso"
     networkReadOnly: Gerencie redes libvirt e conexões do NetworkManager; consulte interfaces e rotas do host.
-    virtualNetworks: Libvirt virtual networks
-    noNetwork: No libvirt virtual networks found.
-    persistent: Persistent
-    temporary: Temporary
-    autostart: Autostart enabled
-    noAutostart: Autostart disabled
-    interfaces: Network interfaces
-    interface: Interface
-    state: State
-    mac: MAC address
-    addresses: Addresses
-    routes: Routes
-    destination: Destination
-    gateway: Gateway
-    protocol: Protocol
-    systemServices: System services
-    failedServices: "{count} failed · administrative actions are audited."
-    searchService: Search services
-    allStates: All states
-    active: Active
-    failed: Failed
-    inactive: Inactive
-    service: Service
-    substate: Substate
-    description: Description
-    start: Start
-    restart: Restart
-    stop: Stop
-    noServiceMatch: No services match this filter.
-    showingServices: "Showing {shown} of {total} services"
-    showMore: Show more
-    serviceWarning: Actions on network or SSH services can interrupt access to the host.
-    systemLogs: System logs
-    lastJournal: "Latest {count} journal entries."
-    filterLogs: Filter logs
-    noLogMatch: No logs match this filter.
-    systemInfo: Host identification and version
-    os: Operating system
-    kernel: Kernel
-    architecture: Architecture
-    devicesCount: Devices
-    disk: Disks
-    noDisk: No disks reported.
-    noInterface: No interfaces reported.
-    noDevice: No devices returned by the host.
-    filterState: Filter services by state
-    type: Type
-    size: Size
-    model: Model
-    device: Device
-    vmDetails: Virtual machine details
+    virtualNetworks: "Redes virtuais do libvirt"
+    noNetwork: "Nenhuma rede virtual do libvirt encontrada."
+    persistent: "Persistente"
+    temporary: "Temporária"
+    autostart: "Inicialização automática ativada"
+    noAutostart: "Inicialização automática desativada"
+    interfaces: "Interfaces de rede"
+    interface: "Interface"
+    state: "Estado"
+    mac: "Endereço MAC"
+    addresses: "Endereços"
+    routes: "Rotas"
+    destination: "Destino"
+    gateway: "Gateway"
+    protocol: "Protocolo"
+    systemServices: "Serviços do sistema"
+    failedServices: "{count} com falha · ações administrativas são auditadas."
+    searchService: "Buscar serviços"
+    allStates: "Todos os estados"
+    active: "Ativo"
+    failed: "Falhou"
+    inactive: "Inativo"
+    service: "Serviço"
+    substate: "Subestado"
+    description: "Descrição"
+    start: "Iniciar"
+    restart: "Reiniciar"
+    stop: "Parar"
+    noServiceMatch: "Nenhum serviço corresponde a este filtro."
+    showingServices: "Exibindo {shown} de {total} serviços"
+    showMore: "Mostrar mais"
+    serviceWarning: "Ações em serviços de rede ou SSH podem interromper o acesso ao host."
+    systemLogs: "Logs do sistema"
+    lastJournal: "Últimas {count} entradas do journal."
+    filterLogs: "Filtrar logs"
+    noLogMatch: "Nenhum log corresponde a este filtro."
+    systemInfo: "Identificação e versão do host"
+    os: "Sistema operacional"
+    kernel: "Kernel"
+    architecture: "Arquitetura"
+    devicesCount: "Dispositivos"
+    disk: "Discos"
+    noDisk: "Nenhum disco informado."
+    noInterface: "Nenhuma interface informada."
+    noDevice: "O host não retornou dispositivos."
+    filterState: "Filtrar serviços por estado"
+    type: "Tipo"
+    size: "Tamanho"
+    model: "Modelo"
+    device: "Dispositivo"
+    vmDetails: "Detalhes da máquina virtual"
     actionSucceeded: Ação concluída com sucesso. Inventário atualizado.
     noIpAddresses: Nenhum IP informado (agente do guest ou lease DHCP pode estar indisponível).
-    close: Close details
-    loadingVmDetails: Loading virtual machine details...
-    hostRemoved: This host is no longer imported in Rancher.
-    confirmAutostart: "{action} autostart for {name}?"
-    stateLabel: State
-    maxMemory: Maximum memory
-    running: Running
-    paused: Paused
-    startVm: Start
-    pauseVm: Pause
-    resumeVm: Resume
-    shutdownVm: Shut down
-    rebootVm: Restart
-    autostartOn: Enabled
-    autostartOff: Disabled
-    queryHost: Querying host and libvirt...
-    hostRequired: Host not specified. Return to the list and choose Cloud Native interface from a host.
-    loadError: Some data could not be retrieved
-    actionFailed: Action failed
-    confirmAction: "{action} virtual machine {name}?"
-    confirmService: "{action} service {name}? This can affect the host."
-    host: Host
+    close: "Fechar detalhes"
+    loadingVmDetails: "Carregando detalhes da máquina virtual..."
+    hostRemoved: "Este host não está mais importado no Rancher."
+    confirmAutostart: "{action} a inicialização automática de {name}?"
+    stateLabel: "Estado"
+    maxMemory: "Memória máxima"
+    running: "Em execução"
+    paused: "Pausada"
+    startVm: "Iniciar"
+    pauseVm: "Pausar"
+    resumeVm: "Retomar"
+    shutdownVm: "Desligar"
+    rebootVm: "Reiniciar"
+    autostartOn: "Ativado"
+    autostartOff: "Desativado"
+    queryHost: "Consultando o host e o libvirt..."
+    hostRequired: "Nenhum host especificado. Volte à lista e escolha a interface Cloud Native de um host."
+    loadError: "Não foi possível obter alguns dados"
+    actionFailed: "A ação falhou"
+    confirmAction: "{action} a máquina virtual {name}?"
+    confirmService: "{action} o serviço {name}? Isso pode afetar o host."
+    host: "Host"
     details: Detalhes
     hostHealthy: O host está saudável
     attentionRequired: Requer atenção
@@ -592,18 +684,27 @@ kvmManager:
     noAccountMatch: Nenhuma conta corresponde à busca.
     searchRepositories: Buscar repositórios, aliases e URLs
     noRepositoryMatch: Nenhum repositório corresponde à busca.
-    uuid: UUID
+    uuid: "UUID"
     load: Estado de carregamento
-    uid: UID
-    gid: GID
+    uid: "UID"
+    gid: "GID"
     autorefresh: Atualização automática
-    mtu: MTU
+    mtu: "MTU"
   clusters:
     title: Clusters
     subtitle: Verifique a prontidão do SLE HA nos hosts KVM e prepare a administração dos clusters.
-    section_clusters: Clusters
+    section_clusters: "Clusters"
+    managedKvmClusters: Grupos de virtualização KVM
+    readinessSequenceTitle: Prepare o host para um cluster
+    readinessAddon: Ative o complemento SLE HA
+    readinessTools: Instale as ferramentas do cluster
+    readinessConfigure: Configure o cluster com o crmsh
+    readinessVerify: Verifique serviços, quorum e fencing
     inventoryTitle: Clusters existentes
     inventoryDescription: Esta área lista somente clusters cuja identidade e associação de nós foram confirmadas pela pilha SUSE HA.
+    haToolsPanelTitle: Ferramentas HA dos hosts
+    haToolsPanelHelp: Instale o padrão SUSE HA nos hosts elegíveis de uma só vez. Até três hosts são processados em paralelo, com um resultado separado para cada host.
+    viewHostReadiness: Prontidão detalhada
     startPlanning: Planejar cluster
     noClusters: Nenhum cluster confirmado ainda
     noClustersHelp: Os hosts permanecem nas áreas de planejamento e prontidão até que o SUSE HA confirme a associação ao cluster. Criar um plano não cria um cluster.
@@ -618,11 +719,155 @@ kvmManager:
     registeredHosts: Hosts registrados
     haEnabledHosts: Hosts com SLE HA
     haEnabledHostsHelp: Complemento registrado no host
-    clusterHosts: Hosts que reportam um cluster
-    clusterHostsHelp: Verificação por host; um cluster pode incluir vários hosts
+    clusterHosts: Clusters confirmados
+    clusterHostsHelp: Identificadores distintos dos membros Corosync
+    confirmedMembers: "Membros confirmados: {members}"
     navigation: Seções de administração do cluster
     section_overview: Prontidão dos hosts
     section_plan: Planejar cluster
+    section_templates: Modelos de workload
+    templateCatalog: Receitas de workload do SUSE HA
+    templatesTitle: Modelos de cluster
+    templatesDescription: Compare perfis guiados de workload SUSE HA com os recursos dos hosts selecionados antes de planejar a configuração.
+    validateTemplates: Verificar compatibilidade
+    templatesUseExisting: Os modelos configuram recursos do cluster; eles não instalam aplicações
+    templatesUseExistingHelp: A aplicação e os dados precisam estar instalados e preparados nos hosts. A extensão verifica as capacidades conhecidas e destaca requisitos que precisam de validação do operador.
+    templateSelectHosts: Escolha os hosts candidatos
+    templateSelectHostsHelp: Selecione ao menos dois hosts prontos, inclusive os que ainda precisam ativar o complemento SLE HA. Verifique o perfil para ver cada requisito pendente e sua próxima ação.
+    templateNoHostsHelp: Importe ao menos dois hosts KVM acessíveis que ainda não façam parte de um cluster. A verificação do modelo ajudará com o complemento SLE HA e os demais requisitos pendentes.
+    templateNeedsTwoHosts: Selecione dois ou mais hosts elegíveis e execute a verificação de compatibilidade.
+    templateRequirements: Pré-requisitos detectados
+    templateSummaryPending: "{count} pré-requisitos aguardam a verificação dos hosts"
+    templateSummaryMet: "{met} de {total} pré-requisitos detectados"
+    templateReviewPrerequisites: Revise os hosts selecionados e execute a verificação de compatibilidade.
+    templateAction_select_hosts: Selecione ao menos dois hosts elegíveis para verificar este perfil.
+    templateAction_preflight: Execute a verificação somente leitura para encontrar o primeiro item a resolver.
+    templateAction_subscription: O complemento SLE HA está inativo em um dos hosts selecionados.
+    templateAction_ha_stack: Faltam ferramentas SUSE HA ou agentes de recursos necessários.
+    templateAction_time_sync: Configure a sincronização de horário nos hosts que ainda não sincronizam.
+    templateAction_workload_package: Falta o pacote do serviço de workload em um dos hosts selecionados.
+    templateAction_storage_pool: Crie ou confira um pool libvirt em cada host; o failover de VMs também requer armazenamento compartilhado ou replicado.
+    templateAction_review_host: Confira a versão e a arquitetura SLES dos hosts; elas precisam ser compatíveis e consistentes.
+    templateAction_host_connectivity: Um host selecionado não concluiu a verificação SSH. Confira a conexão ou o registro de importação.
+    templateAction_none: Todos os pré-requisitos detectados foram atendidos.
+    templateActionButton_select_hosts: Escolher hosts
+    templateActionButton_preflight: Verificar hosts
+    templateActionButton_subscription: Gerenciar subscrição
+    templateActionButton_ha_stack: Instalar ferramentas SUSE HA ({count})
+    templateActionButton_time_sync: Configurar horário ({count})
+    templateActionButton_workload_package: Preparar serviço ({count})
+    templateActionButton_storage_pool: Gerenciar armazenamento
+    templateActionButton_review_host: Revisar hosts
+    templateActionButton_host_connectivity: Revisar conexão do host
+    templateActionButton_none: Pronto
+    templateResolving: Resolvendo pré-requisito…
+    templateResolveRequirements: Resolver requisitos pendentes
+    templateResolveHelp_select_hosts: Escolha os hosts candidatos deste perfil.
+    templateResolveHelp_preflight: Verifique os hosts selecionados para identificar os itens pendentes.
+    templateResolveHelp_subscription: Abra as subscrições do host para ativar o SLE HA.
+    templateResolveHelp_ha_stack: Instale o padrão SUSE HA e os agentes de recursos nos hosts afetados.
+    templateResolveHelp_time_sync: Habilite o chronyd se uma fonte NTP confiável estiver configurada nos hosts afetados.
+    templateResolveHelp_workload_package: Instale o pacote necessário e habilite/inicie o serviço nos hosts afetados. A configuração do workload e do recurso Pacemaker permanece separada.
+    templateFixesTitle: Correções rápidas
+    templateFixesHelp: Cada item corrige apenas o requisito indicado; confira o resultado e execute a verificação novamente.
+    templateFixesNeedCheck: Verifique os hosts para encontrar as correções disponíveis
+    templateFixesNeedCheckHelp: A verificação identifica o que falta em cada host antes de habilitar qualquer correção.
+    templateFixButton: Corrigir
+    templateFixHostsButton: Corrigir em {count} hosts
+    operationJobMissing: A API não retornou o identificador da tarefa. Atualize os dados dos hosts antes de tentar novamente.
+    operationJobTimeout: A tarefa continua sem resultado após 30 minutos. Atualize os dados dos hosts antes de tentar novamente.
+    operationQueued: Na fila
+    operationRunning: Em execução
+    operationResolved: Concluída
+    operationInstalled: Instalação concluída
+    operationFailed: Falhou
+    templateResolveHelp_storage_pool: Abra o gerenciamento de armazenamento no host que precisa de um pool libvirt.
+    templateResolveHelp_review_host: Esta incompatibilidade exige alterações no host ou ambiente; revise os detalhes do host.
+    templateResolveHelp_host_connectivity: Abra Hosts para conferir a conexão e as configurações de importação do host; depois execute a verificação novamente.
+    templateManualChecks: Verifique antes de usar este perfil
+    templatesSafety: O resultado candidato indica que os pré-requisitos SUSE HA detectados são compatíveis. Não confirma prontidão para produção e não configura nem instala o workload.
+    template_fit_not_checked: Execute a verificação de compatibilidade
+    template_fit_select_hosts: Selecione hosts
+    template_fit_candidate: Candidato — revise as verificações manuais
+    template_fit_not_compatible: Requisitos não atendidos
+    templateReqTwoNodes: Pelo menos dois hosts elegíveis selecionados
+    templateReqConnectivity: Verificação SSH concluída em todos os hosts selecionados
+    templateReqSuseHa: SLE HA ativo e ferramentas de cluster SUSE presentes em todos os hosts selecionados
+    templateReqCompatibility: Versão SLES compatível, arquitetura e versão iguais entre os hosts
+    templateReqTools: crm e crm_mon disponíveis em todos os hosts selecionados
+    templateReqTimeSync: Sincronização de horário ativa em todos os hosts selecionados
+    templateReqAgents: "Agentes de recursos SUSE necessários presentes em todos os hosts: {agents}"
+    templateReqLibvirtStorage: "Pelo menos um pool de armazenamento libvirt detectado em cada host (mínimo encontrado: {count})"
+    templateReqFencing: Confirme o fencing suportado para o workload e a topologia
+    noneDetected: nenhum detectado
+    templateReqQuorum: Revise quorum e o witness QDevice/QNetd; a SUSE recomenda witness em clusters com número par de nós, especialmente dois nós.
+    templateVmCapacity: "Menor capacidade reportada entre os hosts selecionados: {cpu} núcleos de vCPU e {memory} GiB de RAM por nó. É a capacidade total do host, não a capacidade livre."
+    templateVmCapacityUnknown: Inventário de CPU ou memória dos hosts não disponível nesta seleção.
+    templateNextStep: "Próxima ação sugerida:"
+    templateNextCheckConnectivity: Restabeleça o SSH e execute a verificação novamente.
+    templateNextCheckSles: Confira a versão do SLES e a compatibilidade com a versão SUSE HA selecionada.
+    templateNextActivateHa: Ative a extensão SLE HA neste host.
+    templateNextInstallTools: Instale o padrão SUSE ha_sles usando os repositórios SUSE configurados.
+    templateNextSyncTime: Restabeleça a sincronização NTP/chrony e execute a verificação novamente.
+    templateNextInstallAgents: Instale/ative o pacote SUSE HA que fornece o agente OCF ausente.
+    templateNextConfigurePool: Crie e valide um pool libvirt antes de considerar failover de VMs.
+    templateNextInstallService: Instale e configure {service} de forma consistente neste host.
+    selected: Selecionado
+    notSelected: Não selecionado
+    templateStatusPending: Não verificado
+    templateStatusMet: Atendido
+    templateStatusMissing: Ausente / bloqueado
+    templateHostBreakdown: Resultado por host
+    templateConfigurationPreview: Prévia do plano de recursos
+    templateCheckedAt: "Verificação somente leitura concluída: {time}"
+    useTemplate: Usar este perfil no planejador
+    templateCanPlan: Pré-requisitos detectados; ainda há verificações manuais.
+    selectedTemplate: "Perfil do planejador: {template}"
+    clearTemplate: Limpar perfil selecionado
+    templatePlanPreview: Recursos de workload propostos
+    templatePlanPreviewHelp: Apenas uma prévia. O assistente SUSE continua responsável por criar o cluster; os recursos do workload exigem uma configuração revisada separadamente após a confirmação do cluster.
+    templateStatusSlesOk: "Versão SLES compatível detectada: {version}"
+    templateStatusSlesMissing: "Versão SLES não reconhecida ou incompatível: {version}"
+    templateStatusHaOk: SLE HA, crm e crm_mon disponíveis
+    templateStatusHaMissing: SLE HA ou ferramentas de cluster necessárias ausentes
+    templateStatusTimeOk: Relógio do host sincronizado
+    templateStatusTimeMissing: Sincronização de horário ausente ou desconhecida
+    templateStatusAgentEvidence: "Agentes OCF necessários encontrados: {count}/{total}"
+    templateStatusPoolEvidence: "Pools libvirt: {pools}"
+    templateStatusAppOk: "Serviço {service} ativo"
+    templateStatusAppMissing: "Serviço {service} ausente ou inativo"
+    templateStatusNoPreflight: Execute a verificação somente leitura para inspecionar este host
+    templateReqApache: Serviço Apache ativo em todos os hosts selecionados
+    templateReqNfsServer: Serviço NFS ativo em todos os hosts selecionados
+    templateReqWebConfig: Confirme que configuração e conteúdo da aplicação são consistentes entre os nós de failover
+    template_service_resources: "Crie o agente de recurso suportado pela SUSE escolhido; opcionalmente adicione ocf:heartbeat:IPaddr2 para um endereço flutuante."
+    template_service_ordering: "Agrupe o endereço virtual e o serviço quando apropriado; defina ordem e colocation conforme o comportamento documentado do agente."
+    template_service_dependencies: "Escolha agente e parâmetros exatos nos metadados do OCF SUSE instalado; instalar aplicações não faz parte deste perfil."
+    template_vm_resources: "Crie um recurso ocf:heartbeat:VirtualDomain para cada máquina virtual existente escolhida."
+    template_vm_ordering: "Defina inicialização, colocation e recuperação somente após confirmar acesso seguro aos discos da VM por todos os nós-alvo."
+    template_vm_dependencies: "A identidade do recurso e a visibilidade do armazenamento precisam ser consistentes; um pool libvirt listado não comprova armazenamento compartilhado."
+    template_web_resources: "Crie recursos ocf:heartbeat:apache e ocf:heartbeat:IPaddr2 para o serviço web e o endereço usado pelos clientes."
+    template_web_ordering: "Agrupe os recursos após revisar a ordem de failover pretendida para o endereço e o serviço."
+    template_web_dependencies: "Configuração Apache, certificados, conteúdo e dependências precisam ser consistentes em todos os nós."
+    template_nfs_resources: "A sequência documentada pela SUSE usa recursos Filesystem, nfsserver, exportfs e IPaddr2."
+    template_nfs_ordering: "Filesystem → nfsserver → exportfs → IP virtual, conforme o desenho de armazenamento e as orientações SUSE."
+    template_nfs_dependencies: "Valide propriedade do armazenamento, identidade das exportações, acesso dos clientes, fencing e recuperação NFS documentada pela SUSE antes de aplicar."
+    templateReqNetwork: Confirme endereços estáticos, links Corosync redundantes, acesso de firewall e sincronização de horário
+    templateReqVmStorage: Confirme que os discos das VMs estão em armazenamento acessível por todos os nós elegíveis e valide fencing e recuperação
+    templateReqApplication: Confirme que a aplicação e seu agente de recursos SUSE suportado estão instalados e configurados
+    templateReqNfsStorage: Confirme armazenamento compartilhado ou replicado, propriedade do filesystem e requisitos de recuperação das exportações
+    template_service_category: Uso geral
+    template_service_title: Serviço existente com IP virtual
+    template_service_description: Um ponto de partida guiado para um serviço já instalado nos hosts, gerenciado pelo Pacemaker com endereço flutuante opcional.
+    template_vm_category: Virtualização
+    template_vm_title: Failover de máquina virtual KVM
+    template_vm_description: Perfil para gerenciar uma VM existente como recurso do Pacemaker quando o armazenamento e a recuperação permitem failover.
+    template_web_category: Serviço de aplicação
+    template_web_title: Serviço web com IP virtual
+    template_web_description: Perfil para serviço web sem estado, usando endereço flutuante e o agente de recursos suportado disponível no host.
+    template_nfs_category: Serviços de arquivos
+    template_nfs_title: Serviço NFS de alta disponibilidade
+    template_nfs_description: Perfil NFS coordenando recursos de armazenamento, filesystem, exportação, serviço e endereço virtual para clientes.
     section_nodes: Nós
     section_resources: Recursos
     section_constraints: Restrições
@@ -635,7 +880,7 @@ kvmManager:
     noHosts: Nenhum host KVM registrado
     noHostsHelp: Importe hosts SUSE Linux com KVM antes de planejar um cluster.
     addHost: Adicionar host
-    host: Host
+    host: "Host"
     hostState: Estado SSH
     haAddon: Complemento SLE HA
     haEnabled: Habilitado
@@ -647,9 +892,9 @@ kvmManager:
     resources: Recursos do host
     checkedAt: Última verificação do host
     manageSubscription: Administrar complementos
-    pacemaker: Pacemaker
-    corosync: Corosync
-    hawk: Hawk
+    pacemaker: "Pacemaker"
+    corosync: "Corosync"
+    hawk: "Hawk"
     active: ativo
     inactive: inativo
     notInstalled: não instalado
@@ -657,6 +902,7 @@ kvmManager:
     clusterNotInitialized: Não inicializado
     haStackMissing: Ferramentas HA não instaladas
     haStackStopped: Serviços HA inativos
+    hawkBackend: Backend do Hawk
     notApplicable: Não pronto
     readOnlyNote: A detecção do HA é somente de leitura. Ter o complemento SLE HA ativo não significa que o host esteja pronto para entrar em um cluster; redes, sincronização de horário, quorum e fencing ainda precisam ser verificados.
     hawkTitle: Área de administração de clusters
@@ -668,6 +914,13 @@ kvmManager:
     planTitle: Planejar um cluster
     planDescription: Revise a topologia e os pré-requisitos de segurança em linguagem simples antes de habilitar alterações nos hosts.
     preparationOnly: Somente planejamento
+    guidedWorkflowBadge: Configuração guiada
+    setupProgress: Progresso da configuração do cluster
+    setupStatus: STATUS DA CONFIGURAÇÃO
+    setupStepCounter: Etapa {current} de {total}
+    previousStep: Voltar
+    nextStep: Continuar
+    checkClusterStatus: Verificar estado do cluster
     afterHostActivation: Após ativar o host
     currentStep: Etapa atual
     setup_nodes: Selecionar hosts
@@ -679,11 +932,11 @@ kvmManager:
     setup_review: Revisar alterações
     setup_review_help: Veja cada operação nos hosts e seu efeito antes de confirmar.
     setup_configure: Configurar cluster
-    setup_configure_help: Após instalar ha_sles e validar a topologia, use o terminal da extensão para executar crm cluster init no primeiro nó e crm cluster join nos demais. O bootstrap SUSE é interativo para revisar rede, fencing, IP virtual e quorum.
+    setup_configure_help: Execute crmsh cluster init e join no terminal de cada host.
     selectNodes: Escolha os nós do cluster
     selectNodesHelp: São exibidos apenas hosts acessíveis com SLE HA ativo e sem cluster detectado. Esta seleção serve para planejamento e não altera os hosts.
     noEligibleHosts: Ainda não há hosts prontos para o planejamento
-    noEligibleHostsHelp: Importe um host KVM e ative o complemento SLE HA primeiro. A página atualizará automaticamente o estado somente de leitura.
+    noEligibleHostsHelp: Importe um host KVM com o complemento SLE HA ativo. A página atualizará automaticamente o estado somente de leitura.
     openNodes: Revisar estado dos hosts
     readyForPlanning: Disponível para planejamento
     twoNodeTitle: "Topologia com dois nós: planeje um voto de quorum independente"
@@ -711,13 +964,31 @@ kvmManager:
     runPreflight: Executar pré-verificação somente leitura
     preflightRunning: Verificando os hosts selecionados...
     preflightReadOnly: Conecta aos hosts selecionados e consulta o estado do sistema; nenhuma alteração é feita.
+    preflightScope: "Verificação somente leitura de {count} hosts selecionados: {hosts}"
+    preflightHasBlockers: Alguns pré-requisitos precisam de atenção
+    preflightBlockerHelp: Revise cada host abaixo. A extensão verifica a ativação do HA, a sincronização do horário e as ferramentas necessárias; caminhos de rede e fencing ainda precisam de revisão manual.
+    networkCheckManualSummary: Os caminhos de rede do Corosync precisam de validação manual.
+    reviewBeforeChanges: Revise a configuração
+    reviewBeforeChangesHelp: Confirme os hosts e as decisões abaixo. Instalar as ferramentas HA ausentes é a única alteração disponível nos hosts nesta etapa.
+    reviewHosts: Hosts selecionados
+    reviewTopology: Topologia planejada
+    preflightReadyTitle: Verificações automáticas aprovadas
+    preflightReadyHelp: As verificações automáticas passaram. A conectividade de rede, o posicionamento da testemunha de quorum e o fencing ainda precisam ser confirmados na configuração interativa da SUSE.
+    haStackMissingCount: "Faltam ferramentas HA em {count} host(s): {hosts}."
+    haStackInstalledOnAll: As ferramentas de linha de comando HA necessárias foram detectadas em todos os hosts selecionados.
+    confirmInstallHaStack: Instalar nos hosts selecionados
+    reviewIncomplete: Conclua as decisões de configuração primeiro
+    reviewIncompleteHelp: Informe um nome de cluster válido, escolha a estratégia de quorum e selecione um método de fencing para continuar.
+    bootstrapRequirements: Volte à revisão, resolva os bloqueios das verificações automáticas, instale as ferramentas HA ausentes e escolha as opções de quorum e fencing.
+    bootstrapInteractiveTitle: A SUSE conclui a configuração do cluster de forma interativa
+    bootstrapInteractiveHelp: O plano registra o quorum como "{quorum}" e o fencing como "{fencing}". O crmsh ainda solicita a configuração final de rede, quorum e fencing; confirme essas escolhas no host antes de prosseguir.
     preflightError: Não foi possível concluir a pré-verificação
     preflightResults: Resultados por host
     checked: Verificado
     checkFailed: Falha na verificação
     operatingSystem: Sistema operacional
     architecture: Arquitetura
-    hostname: Hostname
+    hostname: "Nome do host"
     haCheckOk: Extensão SLE HA ativa
     haCheckMissing: Não foi possível confirmar a extensão SLE HA ativa
     timeCheckOk: Sincronização de horário reportada como saudável
@@ -727,6 +998,8 @@ kvmManager:
     networkCheckManual: "{count} interface(s) de rede ativa(s) encontrada(s); conectividade Corosync e endereços estáveis ainda precisam ser validados"
     fencingCheckManual: "{count} dispositivo(s) watchdog encontrado(s); este teste não configura nem valida o fencing"
     compatibilityWarning: Compatibilidade precisa ser revisada
+    compatibilitySupported: Versão SLES suportada para a configuração de HA.
+    compatibilityUnsupported: Esta versão do SLES está fora da matriz de compatibilidade de HA documentada atualmente pela extensão.
     architectureMismatch: Os hosts selecionados informam arquiteturas de CPU diferentes.
     releaseMismatch: Os hosts selecionados informam versões diferentes do sistema operacional.
     clusterAdministration: ADMINISTRAÇÃO DO CLUSTER
@@ -751,11 +1024,11 @@ kvmManager:
     unnamedCluster: Cluster SLE HA
     statusSource: Consulta via {host}
     nodes: Nós
-    onlineNodes: Online
+    onlineNodes: "Online"
     managedResources: Recursos gerenciados pelo Pacemaker
-    quorum: Quorum
+    quorum: "Quorum"
     quorumUnknown: Não confirmado
-    fencing: Fencing
+    fencing: "Fencing"
     fencingUnknown: Não confirmado
     manageNodes: Administrar nós
     manageResources: Administrar recursos
@@ -766,11 +1039,11 @@ kvmManager:
     node: Nó
     nodeStatus: Estado
     nodeId: ID do nó
-    standby: Standby
+    standby: "Em espera"
     maintenance: Manutenção
     operations: Operações
-    online: Online
-    offline: Offline
+    online: "Online"
+    offline: "Offline"
     unclean: Instável / unclean
     enabledState: Ativo
     disabledState: Inativo
@@ -816,12 +1089,23 @@ kvmManager:
     fencingHelp: A ferramenta de fencing não retornou dados. Isso não prova que o fencing está configurado ou funcional.
     fencingBestPractice: Com 2 nós, a SUSE recomenda QDevice/QNetd para um voto independente. Em qualquer topologia, valide STONITH/SBD antes de executar cargas de trabalho; ler a configuração não comprova que o fencing funciona.
     installHaStackTitle: Instalar as ferramentas do cluster SUSE HA
-    installHaStackHelp: Instala o padrão oficial ha_sles com zypper nos hosts selecionados. A extensão SLE HA precisa estar ativa e os repositórios acessíveis.
+    installHaStackHelp: Instala o padrão oficial ha_sles com zypper nos hosts selecionados. A extensão SLE HA precisa estar ativa e os repositórios acessíveis. Pacemaker, Corosync e Hawk são iniciados pelo fluxo suportado de inicialização do cluster.
     installHaStack: Instalar ferramentas HA
+    enableHaTools: Habilitar ferramentas HA
+    enableHaToolsBatch: "Instalar em todos os hosts elegíveis ({count})"
+    haToolsBatchInstalling: Instalando nos hosts selecionados...
+    haToolsNoEligible: Nenhum host elegível
+    haToolsNoEligibleHelp: O host precisa estar acessível, ter o complemento SLE HA ativo e ainda não possuir as ferramentas HA instaladas.
+    haToolsMissingResult: A API não retornou um resultado de instalação para este host.
+    haToolsInstalling: Instalando ferramentas HA...
+    haToolsInstalled: Ferramentas HA instaladas
+    haToolsInstallFailed: Falha ao instalar ferramentas HA
+    activateHaAddonFirst: Ative o complemento SUSE HA antes de instalar estas ferramentas.
+    serviceActivationGuide: Os pacotes foram instalados. Inicialize o cluster com o fluxo SUSE crm cluster init para configurar e iniciar Pacemaker, Corosync e Hawk.
     stackInstallRunning: Instalando ferramentas HA...
     installReviewTitle: Revise a instalação
     installReviewText: Será executado zypper install -t pattern ha_sles em {hosts}.
-    installReviewWarning: Isso instala pacotes e pode levar alguns minutos. Não inicializa um cluster nem altera a configuração Corosync.
+    installReviewWarning: Isso instala pacotes e pode levar alguns minutos. Não inicializa um cluster nem altera a configuração Corosync; o fluxo de inicialização SUSE inicia os serviços após configurá-los.
     stackInstallResults: Resultado da instalação por host
     stackInstalled: Instalado
     stackInstallFailed: Falha
@@ -880,108 +1164,223 @@ kvmManager:
     copyFailed: O navegador bloqueou a área de transferência; selecione e copie o comando manualmente.
     bootstrapSafety: Execute a pré-verificação primeiro. O terminal abre um shell SSH real; cada comando crmsh altera o host ou cluster e deve ser revisado antes de executar. O bootstrap SUSE é interativo.
     preflightRequiredForBootstrap: Conclua uma pré-verificação bem-sucedida em todos os hosts selecionados. Confirme manualmente os endereços estáveis, conectividade Corosync, fencing e posicionamento do quorum.
+    createResource: Criar recurso
+    resourceConfiguration: CONFIGURAÇÃO DE RECURSO
+    createPrimitiveTitle: Criar um recurso primitivo Pacemaker
+    createPrimitiveHelp: Escolha um agente SUSE instalado e informe seus parâmetros. O novo recurso será criado como Parado para não iniciar antes da sua revisão.
+    resourceId: ID do recurso
+    resourceAgent: Agente de recurso
+    selectResourceAgent: Selecione um agente instalado
+    resourceParameters: Parâmetros do agente
+    resourceParametersPlaceholder: "ip=192.168.10.50\nmonitor_interval=30s"
+    resourceParametersHelp: Informe um parâmetro por linha no formato chave=valor. Consulte os requisitos do agente selecionado. Os valores não são gravados no log de auditoria da extensão.
+    resourceAgentGuide: Detalhes do agente · {agent}
+    resourceAgentsUnavailable: Não foi possível carregar os agentes de recurso
+    resourceAgentsEmpty: Nenhum agente OCF ou systemd instalado foi encontrado neste host.
+    resourceParameterFormat: Parâmetro inválido na linha {line}. Use chave=valor com um valor não vazio.
+    reviewResourceCreate: Revisar recurso
+    editResource: Editar
+    deleteResource: Remover
+    editResourceTitle: Editar recurso · {id}
+    editResourceHelp: Adicione, altere ou remova um parâmetro ou atributo meta por vez. Valores secretos existentes não são enviados ao navegador.
+    attributeType: Tipo de atributo
+    resourceParameter: Parâmetro do recurso
+    resourceMeta: Atributo meta do Pacemaker
+    attributeAction: Alteração
+    setAttribute: Definir ou atualizar
+    deleteAttribute: Remover
+    updateAttribute: atualizar
+    attributeName: Nome
+    attributeValue: Valor
+    reviewResourceEdit: Revisar alteração
+    reviewResourceChangeTitle: Revise a alteração de configuração
+    reviewCreateResource: Criar {id} usando {agent} com {count} parâmetros e deixá-lo Parado.
+    reviewDeleteResource: Remover {id} da configuração do Pacemaker. O recurso precisa estar parado e sem falhas pendentes.
+    reviewEditResource: "{action} o atributo {attribute} de {id}."
+    resourceChangeSafety: Esta alteração modifica a configuração ativa do Pacemaker. Revise os requisitos do agente e o impacto esperado antes de aplicar.
+    resourceChangeRunning: Aplicando alteração...
+    resourceChangeSucceeded: Configuração do recurso atualizada
+    addConstraint: Adicionar regra
+    constraintConfiguration: CONFIGURAÇÃO DE REGRAS
+    constraintEditorHelp: Crie uma regra de localização, ordem ou colocação do Pacemaker usando recursos e nós reportados pelo cluster.
+    constraintId: ID da regra
+    constraintType: Tipo de regra
+    selectResource: Selecione um recurso
+    otherResource: Recurso relacionado
+    clusterNode: Nó do cluster
+    selectNode: Selecione um nó
+    constraintScore: Pontuação
+    orderKind: Comportamento da ordem
+    reviewConstraint: Revisar regra
+    reviewConstraintTitle: Revise a alteração da regra do cluster
+    reviewCreateConstraint: Criar regra de {kind} {id} para {resource} e {other} (pontuação {score}).
+    reviewDeleteConstraint: Excluir a regra Pacemaker {id}.
+    constraintChangeSafety: Esta ação altera as políticas ativas do Pacemaker e pode mover ou parar cargas de trabalho. Valide o impacto esperado no agendamento antes de aplicar.
+    constraintChangeRunning: Aplicando regra...
+    constraintMutationSucceeded: Regra do Pacemaker atualizada
+    constraintMutationFailed: Não foi possível atualizar a regra do Pacemaker
+    constraintInvalid: Preencha os campos da regra com recursos, nó e pontuação válidos.
+    deleteConstraint: Excluir regra {id}
+    deleteConstraintShort: Excluir
+    create_location: Regra de localização
+    create_order: Regra de ordem
+    create_colocation: Regra de colocação conjunta
   deploy:
-    eyebrow: SUSE VIRTUALIZATION
-    title: Implantar host KVM
-    subtitle: Crie uma VM SUSE Linux no SUSE Virtualization, prepare KVM e Cockpit e depois importe-a nesta extensão.
-    sessionTitle: Usa sua sessão do Rancher
-    sessionHelp: A extensão usa sua identidade autenticada no Rancher para acessar a API do SUSE Virtualization. Seu papel do Rancher controla os clusters, namespaces, imagens, redes e operações disponíveis. Nenhuma senha ou kubeconfig do Harvester é armazenada.
-    nestedTitle: Verifique o suporte à virtualização aninhada
-    nestedHelp: A VM usa CPU host-passthrough para acessar os recursos de virtualização. A virtualização aninhada pode exigir configuração nos nós do SUSE Virtualization; a SUSE documenta KVM aninhado no SLES como prévia tecnológica, sem suporte para produção.
-    stepOne: ETAPA 1
-    targetTitle: Destino do SUSE Virtualization
-    targetHelp: Selecione um cluster gerenciado pelo Rancher em que as APIs do SUSE Virtualization e seu papel permitam criar VMs.
-    cluster: Cluster
-    selectCluster: Selecione um cluster
-    namespace: Namespace
-    selectNamespace: Selecione um namespace
-    image: Imagem SUSE Linux
-    selectImage: Selecione uma imagem importada
-    imageHelp: São listadas apenas imagens importadas com sucesso e que possuem uma classe de armazenamento.
-    network: Rede da VM
-    selectNetwork: Selecione uma rede
-    networkHelp: Escolha uma conexão de rede neste namespace que forneça conectividade IP ao convidado.
-    connected: API disponível
-    targetNotReady: Verificação necessária
-    stepTwo: ETAPA 2
-    vmTitle: Configuração e acesso da VM
-    vmHelp: Configure os recursos e o acesso SSH/Cockpit inicial. A senha e a chave pública ficam em um Secret Kubernetes no namespace selecionado; a chave SSH privada permanece em sua estação.
-    vmName: Nome da VM
-    cpu: vCPU
-    memory: Memória
-    disk: Tamanho do disco de inicialização
-    diskHelp: Mínimo de {min} GiB conforme a imagem selecionada.
+    eyebrow: MÁQUINA EXISTENTE
+    title: Preparar host KVM
+    subtitle: Prepare uma máquina SUSE Linux existente por SSH e importe-a em Hosts KVM em um único fluxo guiado.
+    existingMachineTitle: Use uma máquina que já existe
+    existingMachineHelp: Este fluxo se conecta diretamente à máquina informada. Ele não cria, altera nem remove máquinas virtuais no Rancher ou no SUSE Virtualization.
+    stepOne: ETAPA 1 · CONEXÃO
+    connectionTitle: Conectar à máquina
+    connectionHelp: Use uma conta SSH que possa executar sudo. As credenciais só serão salvas se a preparação e a importação forem concluídas.
+    hostName: Nome de exibição
+    hostNamePlaceholder: kvm-host-01
+    address: IP ou nome DNS do host
+    sshPort: Porta SSH
     sshUser: Usuário SSH
-    initialPassword: Senha inicial SSH / Cockpit
-    initialPasswordHelp: Use pelo menos 12 caracteres. Você precisará dessa senha ao importar o host e acessar o Cockpit.
-    sshPublicKey: Chave pública SSH
-    sshPublicKeyHelp: Cole uma chave pública OpenSSH. A extensão não recebe nem armazena a chave privada correspondente.
-    installKvm: Instalar ferramentas KVM e Cockpit na primeira inicialização
-    installKvmHelp: Usa os padrões SUSE zypper kvm_server e kvm_tools, instala os pacotes Cockpit e habilita libvirt/Cockpit. A imagem SLES precisa ter repositórios SUSE funcionais e cloud-init.
-    stepThree: ETAPA 3
-    reviewTitle: Revisar e implantar
-    reviewHelp: Revise a VM, a rede e os recursos. A VM só será criada quando você selecionar Implantar VM.
-    preview: Revisar implantação
-    validationSummary: Campos para corrigir antes da prévia
-    validationCluster: Selecione um cluster ativo do Rancher.
-    validationTarget: Resolva o acesso ao cluster ou a verificação da API do SUSE Virtualization para continuar.
-    validationNamespace: Selecione um namespace ativo.
-    validationImage: Selecione uma imagem SUSE Linux importada com sucesso e com classe de armazenamento.
-    validationNetwork: Selecione um anexo de rede disponível no namespace escolhido.
-    validationVmName: Informe um nome de VM com letras minúsculas, números e hífens internos; comece e termine com letra ou número.
-    validationCpu: Defina vCPU como um número inteiro entre 2 e 128.
-    validationMemory: Defina a memória como um número inteiro entre 4 e 512 GiB.
-    validationDisk: Defina o disco de inicialização como um número inteiro entre {min} e 2048 GiB.
-    validationSshUser: Use um nome Linux iniciado por letra ou sublinhado, com até 32 letras minúsculas, números, sublinhados ou hífens.
-    validationPassword: Informe uma senha inicial de 12 a 128 caracteres.
-    validationSshKey: Cole uma chave pública OpenSSH válida (por exemplo, ssh-ed25519 ou ssh-rsa).
-    back: Editar configuração
-    create: Implantar VM
-    creating: Criando VM...
-    resources: Recursos
-    guestSetup: Configuração na primeira inicialização
-    guestSetupKvm: Instalar KVM + Cockpit com pacotes SUSE
-    guestSetupKeyOnly: Configurar apenas o acesso SSH
-    createdHosts: HOSTS KVM IMPLANTADOS
-    vmListTitle: Estado da implantação
-    state: Estado
-    address: IP do convidado
-    actions: Ações
-    importHost: Continuar para importar
-    importHelp: Quando a VM informar um endereço IP, continue para Adicionar host. Informe a chave privada SSH correspondente e conclua as verificações existentes antes da importação.
+    sshPassword: Senha SSH
+    trustHostKey: Aceitar e fixar esta chave SSH do host
+    trustHostKeyHelp: Ative no primeiro acesso quando a API ainda não conhecer a chave desta máquina. A chave recebida ficará vinculada ao host importado.
+    stepTwo: ETAPA 2 · PREPARAÇÃO
+    preparationTitle: O que a extensão vai preparar
+    preparationHelp: A extensão verifica o sistema operacional, instala apenas os pacotes KVM e Cockpit ausentes, habilita os sockets necessários e valida o libvirt antes de importar.
+    preparationSles: Confirmar que a máquina usa SUSE Linux Enterprise.
+    preparationKvm: Atualizar os repositórios configurados e instalar os padrões de servidor/ferramentas KVM que estiverem ausentes.
+    preparationCockpit: Instalar os pacotes Cockpit e habilitar cockpit.socket.
+    preparationImport: Validar SSH/libvirt e incluir o host na lista Hosts.
+    preparationSafety: A instalação exige repositórios SUSE funcionais e acesso sudo. Revise o resumo antes de iniciar; a operação pode levar alguns minutos.
+    stepThree: ETAPA 3 · REVISÃO
+    reviewTitle: Revisar e preparar
+    reviewHelp: Confirme o destino e as alterações. A extensão só importará a máquina após a preparação e a validação do libvirt.
+    changes: Alterações previstas
+    changesSummary: Atualizar repositórios; instalar pacotes KVM/Cockpit ausentes; habilitar sockets libvirt/Cockpit; importar host.
+    review: Revisar alterações
+    edit: Editar
+    prepareImport: Preparar e importar host
+    preparing: Preparando pacotes e validando libvirt…
+    prepareFailed: Falha ao preparar ou importar o host
+    preparedImported: "{host} foi preparado e importado."
+    openHost: Abrir host
+  backups:
+    eyebrow: PROTEÇÃO DE DADOS
+    title: Backups de VMs
+    subtitle: Crie e gerencie arquivos de VMs desligadas em armazenamento de objetos compatível com S3.
+    loading: Carregando…
     refresh: Atualizar
-    loading: Carregando...
-    creatingSecret: Preparando a configuração inicial...
-    creatingVm: Criando a VM e o armazenamento...
-    linkingSecret: Protegendo o ciclo de vida do cloud-init...
-    secretCleanupWarning: A VM foi criada, mas este papel não conseguiu vincular o Secret do cloud-init para remoção automática. Revise as permissões de Secret do namespace e remova o Secret manualmente se excluir esta VM.
-    running: Em execução
-    pending: Pendente
-    noClusters: Nenhum cluster ativo gerenciado pelo Rancher está disponível para sua conta.
-    loadError: Não foi possível carregar os recursos do SUSE Virtualization
-    createError: Falha ao implantar a VM
-    genericError: A solicitação falhou. Verifique a sessão do Rancher e as permissões do cluster.
+    mvpTitle: Backups manuais de VMs desligadas
+    mvpHelp: Os arquivos contêm o XML da VM no libvirt e discos locais qcow2/raw suportados. Agendamento e restauração automatizada ainda não estão incluídos. Mantenha a VM desligada até a captura terminar.
+    readOnlyHelp: Sua função no Rancher permite visualizar os backups, mas criar ou excluir esses recursos exige a permissão configurada para operadores de armazenamento.
+    captureTab: Criar backup
+    destinationTab: Destinos
+    archivesTab: Arquivos
+    destinationTitle: Destino S3
+    destinationHelp: As credenciais são criptografadas pela API antes de serem armazenadas. A identidade de workload usa a cadeia de credenciais AWS do ambiente da API.
+    destinationName: Nome
+    bucket: Bucket
+    endpoint: URL do endpoint
+    region: Região
+    prefix: Prefixo de objetos
+    auth: Autenticação
+    accessKey: Chave de acesso
+    workloadIdentity: Identidade de workload / função IAM
+    accessKeyId: ID da chave de acesso
+    secretAccessKey: Chave secreta de acesso
+    encryption: Criptografia no servidor
+    providerDefault: Padrão do provedor
+    none: Nenhuma
+    kmsKeyId: ID da chave KMS
+    pathStyle: Usar requisições path-style
+    saveDestination: Salvar destino
+    saving: Salvando…
+    destinationSaved: Destino salvo. Teste a conexão antes de iniciar um backup.
+    savedDestinations: Destinos salvos
+    noDestinations: Nenhum destino configurado.
+    credentialsSaved: Credenciais salvas
+    testConnection: Testar conexão
+    testing: Testando…
+    connectionOk: Acesso ao S3 verificado.
+    delete: Excluir
+    confirmDeleteDestination: Excluir este destino? Destinos com arquivos de backup não podem ser removidos.
+    captureTitle: Fazer backup de uma máquina virtual
+    captureHelp: O arquivo é transmitido do host KVM ao S3 com upload multipart, sem carregar toda a imagem de disco na memória da API.
+    destination: Destino
+    selectDestination: Selecione um destino
+    host: Host KVM
+    selectHost: Selecione um host
+    vm: Máquina virtual
+    loadingVms: Carregando VMs…
+    selectVm: Selecione uma VM desligada
+    poweredOffOnly: Nesta versão, são aceitas apenas VMs desligadas com discos locais em arquivo qcow2 ou raw, sem backing chain. Volumes compartilhados, de bloco, de rede e snapshots não estão incluídos.
+    startBackup: Iniciar backup
+    backupRunning: Iniciando…
+    operation: Operação
+    waitingForHost: Aguardando o host começar a transmitir o arquivo…
+    refreshProgress: Atualizar progresso
+    backupComplete: Arquivo de backup concluído e catalogado.
+    operationInProgress: Transferência do arquivo em andamento…
+    backupFailed: O backup falhou. Confirme que a VM está desligada e os discos usam um formato compatível.
+    archivesTitle: Arquivos de backup
+    archivesHelp: Baixe o arquivo original ou remova-o do S3 e do catálogo.
+    noBackups: Ainda não há arquivos de backup.
+    download: Baixar arquivo
+    confirmDeleteBackup: Excluir permanentemente este arquivo de backup do armazenamento de objetos?
+    restoreNote: Esta versão disponibiliza o download do arquivo e o metadado SHA-256. Ela ainda não recria nem restaura uma VM a partir do arquivo.
   common:
-    yes: Yes
-    no: No
-    unknown: Unknown
-    optional: Optional
+    yes: "Sim"
+    no: "Não"
+    unknown: "Desconhecido"
+    optional: "Opcional"
   vmTable:
-    vm: Virtual machine
-    state: State
+    vm: "Máquina virtual"
+    state: "Estado"
     ipAddresses: Endereços IP
-    memory: Memory
-    autostart: Autostart
-    actions: Actions
-    enabled: Enabled
-    disabled: Disabled
-    details: Details
+    memory: "Memória"
+    autostart: "Inicialização automática"
+    actions: "Ações"
+    enabled: "Ativado"
+    disabled: "Desativado"
+    details: "Detalhes"
+    snapshots: "Snapshots"
     configure: Configurar
     console: Terminal
     consoleRequiresRunning: Inicie a máquina virtual para abrir o terminal.
-    resume: Resume
-    pause: Pause
-    start: Start
-    shutdown: Shut down
-    restart: Restart
-    empty: No virtual machines found.
+    resume: "Retomar"
+    pause: "Pausar"
+    start: "Iniciar"
+    shutdown: "Desligar"
+    restart: "Reiniciar"
+    empty: "Nenhuma máquina virtual encontrada."
+    moreActions: "Mais ações"
+  managedClusters:
+    eyebrow: VIRTUALIZAÇÃO KVM
+    title: Grupos de hosts KVM
+    subtitle: Agrupe hosts existentes e consulte juntos os inventários de VMs, redes e armazenamento.
+    back: Voltar para clusters
+    scopeTitle: Apenas agrupamento de inventário
+    scopeHelp: Isso cria um grupo de hosts gerenciado pela extensão. Não configura SUSE HA, armazenamento compartilhado, redes comuns, failover, agendamento ou migração ao vivo.
+    createTitle: Criar grupo KVM
+    createHelp: Selecione pelo menos dois hosts prontos. Cada host pode pertencer a apenas um grupo.
+    name: Nome do grupo
+    ready: Pronto
+    creating: Criando…
+    create: Criar grupo
+    groupsTitle: Grupos KVM existentes
+    refresh: Atualizar
+    empty: Ainda não há grupos de hosts KVM.
+    setupState: Configuração necessária
+    open: Abrir inventário
+    removeGroup: Remover grupo
+    checked: Inventário consultado
+    capabilityTitle: Operações entre hosts ainda não estão habilitadas
+    capabilityHelp: Compare os hosts nesta tela. A migração de VMs continuará desabilitada até que seja possível validar o armazenamento compartilhado, redes correspondentes e uma operação segura.
+    host: Host
+    hostState: Conexão
+    vms: VMs
+    storage: Pools de armazenamento
+    networks: Redes libvirt
+    crossHostVms: Máquinas virtuais neste grupo
+    noVms: Os hosts selecionados não reportaram VMs.
+    loading: Carregando…
+    readOnly: Acesso somente leitura
+    readOnlyHelp: Suas funções no Rancher permitem visualizar estes recursos, mas criá-los ou removê-los exige a permissão configurada de operador de armazenamento ou de cluster.

@@ -6,6 +6,7 @@ cd "$ROOT"
 
 : "${KUBECONFIG:?Set KUBECONFIG to the kubeconfig for the target Rancher cluster}"
 : "${KUBE_CONTEXT:?Set KUBE_CONTEXT explicitly to prevent deploying to the wrong cluster}"
+: "${EXPECTED_API_SERVER:?Set EXPECTED_API_SERVER to the exact API server URL of the target Rancher cluster}"
 
 KVM_NAMESPACE="${KVM_NAMESPACE:-rancher-kvm-registry}"
 PLUGIN_NAMESPACE="${PLUGIN_NAMESPACE:-cattle-ui-plugin-system}"
@@ -23,10 +24,31 @@ if ! command -v kubectl >/dev/null || ! command -v python3 >/dev/null || ! comma
 fi
 
 SERVER="$(k config view --minify -o jsonpath='{.clusters[0].cluster.server}')"
-if [[ -n "${EXPECTED_API_SERVER:-}" && "$SERVER" != *"$EXPECTED_API_SERVER"* ]]; then
+if [[ "$SERVER" != "$EXPECTED_API_SERVER" ]]; then
   echo "Refusing deployment: server '$SERVER' does not match EXPECTED_API_SERVER '$EXPECTED_API_SERVER'." >&2
   exit 1
 fi
+
+# Rancher serves extension assets through its HTTPS UIPlugin proxy. Derive the
+# public origin and ingress class from the target cluster unless explicitly
+# provided, so the local deployment never registers an insecure in-cluster URL.
+if [[ -z "${RANCHER_PUBLIC_ORIGIN:-}" ]]; then
+  RANCHER_HOST="$(k get ingress rancher -n cattle-system -o jsonpath='{.spec.rules[0].host}' 2>/dev/null || true)"
+  if [[ -z "$RANCHER_HOST" ]]; then
+    echo "Could not find cattle-system/ingress/rancher. Set RANCHER_PUBLIC_ORIGIN to the HTTPS origin users open." >&2
+    exit 1
+  fi
+  RANCHER_PUBLIC_ORIGIN="https://${RANCHER_HOST}"
+fi
+if [[ "$RANCHER_PUBLIC_ORIGIN" != https://* ]]; then
+  echo "RANCHER_PUBLIC_ORIGIN must start with https://." >&2
+  exit 1
+fi
+if [[ -z "${KVM_INGRESS_CLASS:-}" ]]; then
+  KVM_INGRESS_CLASS="$(k get ingress rancher -n cattle-system -o jsonpath='{.spec.ingressClassName}' 2>/dev/null || true)"
+fi
+KVM_INGRESS_CLASS="${KVM_INGRESS_CLASS:-nginx}"
+export RANCHER_PUBLIC_ORIGIN KVM_INGRESS_CLASS
 
 INSTALLED_VERSION=""
 if INSTALLED_VERSION="$(k get uiplugin kvm-manager -n "$PLUGIN_NAMESPACE" -o jsonpath='{.spec.plugin.version}' 2>/dev/null)"; then
@@ -36,7 +58,7 @@ else
 fi
 VERSION="$(python3 scripts/sync-version.py --installed-version "$INSTALLED_VERSION")"
 
-printf 'Target context: %s\nAPI server: %s\nKVM extension version: %s\n' "$KUBE_CONTEXT" "$SERVER" "$VERSION"
+printf 'Target context: %s\nAPI server: %s\nRancher origin: %s\nIngress class: %s\nKVM extension version: %s\n' "$KUBE_CONTEXT" "$SERVER" "$RANCHER_PUBLIC_ORIGIN" "$KVM_INGRESS_CLASS" "$VERSION"
 read -r -p "Type 'deploy' to build and apply only KVM extension resources: " CONFIRM
 if [[ "$CONFIRM" != "deploy" ]]; then
   echo "Deployment cancelled."
@@ -65,7 +87,10 @@ if CURRENT_API_JSON="$(k get configmap kvm-api-source -n "$KVM_NAMESPACE" -o jso
 fi
 
 k apply --server-side --force-conflicts -f deploy/kvm-api-source-configmap.yaml
-k apply --server-side --force-conflicts -f deploy/kvm-extension-assets-configmap.yaml
+python3 scripts/apply-assets-configmap.py \
+  --kubeconfig "$KUBECONFIG" \
+  --context "$KUBE_CONTEXT" \
+  --file deploy/kvm-extension-assets-configmap.yaml
 k apply --server-side --force-conflicts -f deploy/ui-extension.yaml
 
 if [[ "$CURRENT_API_HASH" != "$DESIRED_API_HASH" ]]; then
@@ -77,23 +102,12 @@ else
 fi
 
 k rollout status "deployment/kvm-extension-assets" -n "$KVM_NAMESPACE" --timeout=180s
-PLUGIN_READY=0
-for _ in $(seq 1 90); do
-  if k get uiplugin kvm-manager -n "$PLUGIN_NAMESPACE" -o json | python3 -c 'import json,sys; x=json.load(sys.stdin); sys.exit(0 if x.get("status",{}).get("ready") is True and x.get("status",{}).get("observedGeneration")==x.get("metadata",{}).get("generation") and not x.get("status",{}).get("error") else 1)'; then
-    PLUGIN_READY=1
-    break
-  fi
-  sleep 2
-done
-if [[ "$PLUGIN_READY" != "1" ]]; then
-  k get uiplugin kvm-manager -n "$PLUGIN_NAMESPACE" -o yaml
-  echo "The KVM plugin did not become ready within 180 seconds." >&2
-  exit 1
-fi
-
 LIVE_VERSION="$(k get uiplugin kvm-manager -n "$PLUGIN_NAMESPACE" -o jsonpath='{.spec.plugin.version}')"
-if [[ "$LIVE_VERSION" != "$VERSION" ]]; then
-  echo "Plugin version verification failed (expected=$VERSION, found=$LIVE_VERSION)." >&2
+LIVE_ENDPOINT="$(k get uiplugin kvm-manager -n "$PLUGIN_NAMESPACE" -o jsonpath='{.spec.plugin.endpoint}')"
+LIVE_NO_CACHE="$(k get uiplugin kvm-manager -n "$PLUGIN_NAMESPACE" -o jsonpath='{.spec.plugin.noCache}')"
+LIVE_UI_COMPONENT="$(k get uiplugin kvm-manager -n "$PLUGIN_NAMESPACE" -o jsonpath='{.spec.plugin.metadata.catalog\.cattle\.io/ui-component}')"
+if [[ "$LIVE_VERSION" != "$VERSION" || "$LIVE_ENDPOINT" != "$RANCHER_PUBLIC_ORIGIN/kvm-manager/$VERSION" || "$LIVE_NO_CACHE" != "true" || "$LIVE_UI_COMPONENT" != "plugins" ]]; then
+  echo "Plugin spec verification failed (expected version=$VERSION endpoint=$RANCHER_PUBLIC_ORIGIN/kvm-manager/$VERSION noCache=true ui-component=plugins; found version=$LIVE_VERSION endpoint=$LIVE_ENDPOINT noCache=$LIVE_NO_CACHE ui-component=$LIVE_UI_COMPONENT)." >&2
   exit 1
 fi
 
@@ -103,4 +117,6 @@ python3 scripts/update-local-catalog.py \
   --version "$VERSION" \
   --catalog-namespace "$PLUGIN_NAMESPACE"
 
-echo "KVM Manager $VERSION is ready in context '$KUBE_CONTEXT'."
+echo "KVM Manager $VERSION artifacts, API, and catalog are deployed in context '$KUBE_CONTEXT'."
+echo "Before testing, confirm Rancher Extensions > Installed reports $VERSION and reopen KVM > Clusters."
+echo "If Installed still reports an older version, the Rancher UI has not activated this release yet."

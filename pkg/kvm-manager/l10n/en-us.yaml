@@ -90,6 +90,7 @@ kvmManager:
     allResults: All results
     exportCsv: Export CSV
     detail: Details
+    moreActions: More actions
   cloudNative:
     actions: Actions
     consoleRequiresRunning: Start the virtual machine to open its terminal.
@@ -98,6 +99,10 @@ kvmManager:
     updating: Updating...
     storagePoolType: Directory storage pool
     storagePoolFormHelp: This libvirt pool uses a directory on the host. The extension creates the directory when needed; existing files are not moved.
+    moreActions: More actions
+    systemMounts: System mounts ({count})
+    systemMountsHelp: Virtual and temporary system filesystems. These are collapsed to keep persistent volumes and capacity information easy to scan.
+    noPersistentMounts: No persistent filesystem mounts match this filter.
     poolNameHelp: Use letters, numbers, dots, underscores, plus signs, or hyphens.
     poolPathHelp: Enter an absolute path on the KVM host. Ensure the host has enough free space and suitable permissions.
     accountSettings: Account settings
@@ -113,6 +118,7 @@ kvmManager:
     openCockpit: Open Cockpit
     accessLevelLabel: "KVM access: {level}"
     role_viewer: Viewer
+    role_scoped_operator: Scoped operator
     role_vm_operator: VM operator
     role_host_operator: Host operator
     role_host_admin: Host administrator
@@ -126,6 +132,73 @@ kvmManager:
     operationRepository: Repository operation
     operationService: Service operation
     operationHost: Host operation
+    operationElapsed: "Elapsed: {time}"
+    operationPhase_applying: Applying the change on the KVM host...
+    operationPhase_verifying: Checking the updated host state...
+    operationPhase_running: Waiting for the KVM host response...
+    recentActivity: Recent activity
+    recentActivityHelp: Recent KVM administration actions recorded by the extension. Sensitive command details are not shown.
+    vmActivityHelp: Recent extension actions that targeted this virtual machine.
+    loadingActivity: Loading activity...
+    refreshActivity: Refresh activity
+    noRecentActivity: No host actions have been recorded yet.
+    noVmActivity: No actions have been recorded for this VM yet.
+    activitySucceeded: Succeeded
+    activityFailed: Failed
+    activityVmStart: Start virtual machine
+    activityVmShutdown: Shut down virtual machine
+    activityVmReboot: Restart virtual machine
+    activityVmPause: Pause virtual machine
+    activitySnapshotCreate: Create VM snapshot
+    activitySnapshotDelete: Delete VM snapshot
+    activitySnapshotRevert: Restore VM snapshot
+    activityVmConfigure: Change VM configuration
+    activityHostImport: Import host
+    activityHostUpdate: Edit host
+    activityHostRefresh: Refresh host
+    activityNetworkUpdate: Change network configuration
+    activityNetworkCreate: Create virtual network
+    activityNetworkDelete: Delete virtual network
+    activityVolumeCreate: Create storage volume
+    activityVolumeDelete: Delete storage volume
+    topologyEyebrow: CONNECTION MAP
+    networkTopology: Network topology
+    networkTopologyHelp: See host interfaces, NetworkManager connections, libvirt networks, and VM attachments together.
+    hostNetworkLayer: Host interfaces and connections
+    libvirtNetworkLayer: Libvirt networks and VMs
+    bridgeMaster: bridge master
+    attachedVms: "Attached VMs: {count}"
+    networkTopologyNote: VM attachments are matched from libvirt interface sources. Host connections and bridge names are shown from live host inventory; the map does not infer routes or guarantee guest reachability.
+    reviewChangeTitle: Review change
+    reviewChangeEyebrow: IMPACT REVIEW
+    confirmChange: Confirm change
+    reviewNetworkTitle: Review network change
+    reviewNetworkWarning: Applying network changes can interrupt host connectivity. Confirm that the selected interface is not your only management path.
+    reviewLibvirtNetwork: "{action}: {name}; mode {mode}; bridge {bridge}; address {address}; DHCP {dhcp}."
+    reviewDisconnectConnection: "Deactivate NetworkManager connection {name} on {device}."
+    reviewStopNetwork: "Stop libvirt network {name}."
+    reviewStopNetworkWarning: Connected VMs may lose network access until this network starts again or they are moved to another network.
+    reviewStopPool: "Stop storage pool {name}."
+    reviewPoolActionTitle: Review storage pool action
+    reviewStopPoolWarning: Stopping this pool can make its volumes unavailable to virtual machines. Check VM storage dependencies before continuing.
+    reviewDeleteNetworkTitle: Review virtual network removal
+    reviewDeleteNetwork: "Remove the libvirt network definition {name}."
+    reviewDeleteNetworkWarning: The network must be stopped. VMs configured to use it will lose that network until attached to another one.
+    reviewDeletePoolTitle: Review storage pool removal
+    reviewDeletePool: "Remove the libvirt pool definition {pool} at {path}."
+    reviewDeletePoolWarning: If active, the pool will be stopped before its definition is removed. Storage files are not deleted; check VM dependencies and availability before proceeding.
+    reviewDeleteVolumeTitle: Review volume deletion
+    reviewDeleteVolume: "Permanently delete volume {volume} from pool {pool} at {path}."
+    reviewDeleteVolumeWarning: This deletes the virtual disk data and cannot be undone. Make sure it is not needed by a VM or recovery plan.
+    reviewVmDeviceTitle: Review VM device change
+    reviewDetachDisk: "Detach disk {item} from virtual machine {vm}."
+    reviewDetachNetwork: "Detach network interface {item} from virtual machine {vm}."
+    reviewVmDeviceWarning: The guest will lose access to this device. Check application impact and ensure the VM can be safely reconfigured.
+    reviewDeleteSnapshotTitle: Review snapshot deletion
+    reviewDeleteSnapshot: "Delete snapshot {snapshot} from virtual machine {vm}."
+    reviewRevertSnapshotTitle: Review snapshot restore
+    reviewRevertSnapshot: "Restore virtual machine {vm} to snapshot {snapshot}."
+    reviewSnapshotWarning: Restoring changes the VM state and may discard changes made after the snapshot. Deleting removes this recovery point.
     lastUpdatedAt: "Host metrics updated: {time} · auto-refresh every 30 seconds"
     updateFailedAt: "A refresh failed. Some displayed data may be outdated."
     updateStaleAt: "Data may be stale. Last successful refresh: {time}."
@@ -219,6 +292,24 @@ kvmManager:
     detachNetwork: Detach interface
     confirmVmDeviceChange: "Apply {action}: {detail}? The change takes effect after restart; detached storage is retained."
     snapshots: Snapshots
+    snapshotsLibraryHelp: Review VM snapshot history, restore a version, or download its disk images.
+    snapshotRetention: Snapshot retention review
+    snapshotRetentionHelp: Preview older snapshots for stopped VMs. Nothing is deleted until you select the snapshots and confirm.
+    keepLatest: Keep latest per VM
+    reviewCleanup: Review {count} candidates
+    cleanupReviewTitle: Review deletion of {count} snapshots
+    cleanupReviewHelp: Only snapshots from stopped VMs are listed. Select exactly what to delete, then confirm.
+    continueCleanup: Review deletion
+    confirmCleanup: Delete {count} selected snapshots
+    cleanupPartialFailure: "Could not delete {count} snapshot(s): {details}"
+    snapshotVersion: Version
+    snapshotCreated: Created
+    selectVm: Select a virtual machine
+    downloadSnapshot: Download snapshot
+    refreshSnapshots: Refresh snapshots
+    loadingSnapshots: Loading VM snapshots…
+    legacySnapshot: Existing snapshot
+    snapshotExportHelp: Downloads contain one standalone qcow2 disk image per writable disk in a compressed archive. Shut down the VM before exporting; RAM and device state are not included.
     snapshotHelp: Internal snapshots capture a stopped VM and its writable qcow2 disks. The VM must remain shut down for snapshot actions.
     snapshotUnsupported: Snapshots are unavailable because this VM has no writable disk or includes a disk format other than qcow2.
     snapshotRequiresStopped: Shut down the VM before creating, reverting, or deleting snapshots.
@@ -248,6 +339,7 @@ kvmManager:
     terminal: Terminal
     edit: Edit
     delete: Delete
+    confirmDeleteAction: Confirm delete
     cancel: Cancel
     saveChanges: Save changes
     addPool: Add storage pool
@@ -602,8 +694,17 @@ kvmManager:
     title: Clusters
     subtitle: Check SLE HA readiness on registered KVM hosts and prepare cluster administration.
     section_clusters: Clusters
+    managedKvmClusters: KVM virtualization groups
+    readinessSequenceTitle: Prepare the host for a cluster
+    readinessAddon: Activate the SLE HA add-on
+    readinessTools: Install the cluster tools
+    readinessConfigure: Configure the cluster with crmsh
+    readinessVerify: Verify services, quorum, and fencing
     inventoryTitle: Existing clusters
     inventoryDescription: This area lists only clusters whose membership and identity have been verified from the SUSE HA stack.
+    haToolsPanelTitle: Host HA tools
+    haToolsPanelHelp: Install the SUSE HA pattern on eligible hosts together. Up to three hosts are processed concurrently, with a separate result shown for each host.
+    viewHostReadiness: Detailed readiness
     startPlanning: Plan a cluster
     noClusters: No verified clusters yet
     noClustersHelp: Hosts remain in the planning and readiness areas until SUSE HA confirms cluster membership. Creating a plan here does not create a cluster.
@@ -618,11 +719,155 @@ kvmManager:
     registeredHosts: Registered hosts
     haEnabledHosts: Hosts with SLE HA
     haEnabledHostsHelp: Add-on is registered on the host
-    clusterHosts: Hosts reporting a cluster
-    clusterHostsHelp: Host-level check; one cluster can include multiple hosts
+    clusterHosts: Confirmed clusters
+    clusterHostsHelp: Distinct Corosync membership fingerprints
+    confirmedMembers: "Confirmed members: {members}"
     navigation: Cluster administration sections
     section_overview: Host readiness
     section_plan: Plan cluster
+    section_templates: Workload templates
+    templateCatalog: SUSE HA workload recipes
+    templatesTitle: Cluster templates
+    templatesDescription: Compare guided SUSE HA workload profiles against the selected hosts before planning their configuration.
+    validateTemplates: Check compatibility
+    templatesUseExisting: Templates configure cluster resources; they do not install applications
+    templatesUseExistingHelp: The application and its data must already be installed and prepared on the hosts. The extension checks known host capabilities and calls out requirements that need operator verification.
+    templateSelectHosts: Choose candidate hosts
+    templateSelectHostsHelp: Select at least two ready hosts, including hosts that still need the SLE HA add-on. Check the profile to see every unmet prerequisite and its next action.
+    templateNoHostsHelp: Import at least two reachable KVM hosts that are not already members of a cluster. The template checker will help with the SLE HA add-on and other missing requirements.
+    templateNeedsTwoHosts: Select two or more eligible hosts, then run the compatibility check.
+    templateRequirements: Detected prerequisites
+    templateSummaryPending: "{count} requirements await a host check"
+    templateSummaryMet: "{met} of {total} requirements detected"
+    templateReviewPrerequisites: Review the selected hosts and run the compatibility check.
+    templateAction_select_hosts: Select at least two eligible hosts to check this profile.
+    templateAction_preflight: Run the read-only host check to find the first item to resolve.
+    templateAction_subscription: The SLE HA add-on is inactive on a selected host.
+    templateAction_ha_stack: SUSE HA tools or required resource agents are missing.
+    templateAction_time_sync: Configure time synchronization on hosts that are not synchronized.
+    templateAction_workload_package: The workload service package is missing on selected hosts.
+    templateAction_storage_pool: Create or verify a libvirt storage pool on each host; VM failover also needs shared or replicated storage.
+    templateAction_review_host: Review the SLES release and architecture on selected hosts; they must be compatible and consistent.
+    templateAction_host_connectivity: A selected host did not complete the SSH preflight. Review its connection or import record.
+    templateAction_none: All detected prerequisites are met.
+    templateActionButton_select_hosts: Choose hosts
+    templateActionButton_preflight: Check hosts
+    templateActionButton_subscription: Manage subscription
+    templateActionButton_ha_stack: Install SUSE HA tools ({count})
+    templateActionButton_time_sync: Set up time sync ({count})
+    templateActionButton_workload_package: Prepare service ({count})
+    templateActionButton_storage_pool: Manage storage
+    templateActionButton_review_host: Review hosts
+    templateActionButton_host_connectivity: Review host connection
+    templateActionButton_none: Ready
+    templateResolving: Resolving prerequisite…
+    templateResolveRequirements: Resolve missing requirements
+    templateResolveHelp_select_hosts: Choose candidate hosts for this profile.
+    templateResolveHelp_preflight: Check the selected hosts and show the missing items.
+    templateResolveHelp_subscription: Open the host subscription page to activate SLE HA.
+    templateResolveHelp_ha_stack: Install the SUSE HA pattern and resource agents on affected hosts.
+    templateResolveHelp_time_sync: Enable chronyd when a trusted NTP source is configured on the affected hosts.
+    templateResolveHelp_workload_package: Install the required package and enable/start its service on affected hosts. Workload configuration and the Pacemaker resource remain separate.
+    templateFixesTitle: Quick fixes
+    templateFixesHelp: Each action resolves only the listed requirement; review its result and run the check again.
+    templateFixesNeedCheck: Check hosts to discover available fixes
+    templateFixesNeedCheckHelp: The check identifies what is missing on each host before offering a fix.
+    templateFixButton: Fix
+    templateFixHostsButton: Fix on {count} hosts
+    operationJobMissing: The API did not return a task ID. Refresh host data before trying again.
+    operationJobTimeout: The task has not returned after 30 minutes. Refresh host data before trying again.
+    operationQueued: Queued
+    operationRunning: Running
+    operationResolved: Completed
+    operationInstalled: Installation complete
+    operationFailed: Failed
+    templateResolveHelp_storage_pool: Open storage administration on the host that needs a libvirt pool.
+    templateResolveHelp_review_host: This compatibility issue needs host or environment changes; review the host findings.
+    templateResolveHelp_host_connectivity: Open Hosts to inspect the failed host connection and its import settings, then run the check again.
+    templateManualChecks: Verify before using this profile
+    templateSafety: A candidate result means the detected SUSE HA prerequisites match. It is not a production-readiness check and does not configure or install the workload.
+    template_fit_not_checked: Run compatibility check
+    template_fit_select_hosts: Select hosts
+    template_fit_candidate: Candidate — review manual checks
+    template_fit_not_compatible: Requirements not met
+    templateReqTwoNodes: At least two selected eligible hosts
+    templateReqConnectivity: SSH preflight completed on every selected host
+    templateReqSuseHa: SLE HA is active and SUSE cluster tools are present on all selected hosts
+    templateReqCompatibility: Supported SLES release, architecture, and release match across hosts
+    templateReqTools: crm and crm_mon are available on every selected host
+    templateReqTimeSync: Time synchronization is active on every selected host
+    templateReqAgents: "Required SUSE resource agents present on all hosts: {agents}"
+    templateReqLibvirtStorage: "At least one libvirt storage pool detected on every host (minimum pools: {count})"
+    templateReqFencing: Confirm supported fencing is configured for the workload and topology
+    noneDetected: none detected
+    templateReqQuorum: Review quorum and the QDevice/QNetd witness plan; SUSE recommends a witness for even-sized clusters, especially two nodes.
+    templateVmCapacity: "Smallest reported host capacity in this selection: {cpu} vCPU cores, {memory} GiB RAM per node. This is total host capacity, not free capacity."
+    templateVmCapacityUnknown: Host CPU or memory inventory is not available for this selection.
+    templateNextStep: "Suggested next step:"
+    templateNextCheckConnectivity: Restore SSH connectivity and rerun the check.
+    templateNextCheckSles: Verify the SLES release and compatibility support for the selected SUSE HA version.
+    templateNextActivateHa: Activate the SLE HA extension on this host.
+    templateNextInstallTools: Install the SUSE ha_sles pattern from the configured SUSE repositories.
+    templateNextSyncTime: Restore NTP/chrony synchronization and rerun the check.
+    templateNextInstallAgents: Install/enable the SUSE HA agent package that provides the missing OCF agent.
+    templateNextConfigurePool: Create and verify a libvirt storage pool before considering VM failover.
+    templateNextInstallService: Install and configure {service} consistently on this host.
+    selected: Selected
+    notSelected: Not selected
+    templateStatusPending: Not checked
+    templateStatusMet: Met
+    templateStatusMissing: Missing / blocked
+    templateHostBreakdown: Host-by-host findings
+    templateConfigurationPreview: Resource plan preview
+    templateCheckedAt: "Read-only check completed: {time}"
+    useTemplate: Use this profile in the planner
+    templateCanPlan: Host prerequisites detected; manual checks remain.
+    selectedTemplate: "Planner profile: {template}"
+    clearTemplate: Clear selected profile
+    templatePlanPreview: Proposed workload resources
+    templatePlanPreviewHelp: Preview only. The SUSE cluster wizard remains responsible for cluster creation; workload resources need a separate reviewed configuration after the cluster is verified.
+    templateStatusSlesOk: "Supported SLES release detected: {version}"
+    templateStatusSlesMissing: "Unsupported or unrecognized SLES release: {version}"
+    templateStatusHaOk: SLE HA, crm, and crm_mon are available
+    templateStatusHaMissing: SLE HA or required cluster tools are missing
+    templateStatusTimeOk: Host clock is synchronized
+    templateStatusTimeMissing: Host clock synchronization is missing or unknown
+    templateStatusAgentEvidence: "Required OCF agents found: {count}/{total}"
+    templateStatusPoolEvidence: "Libvirt pools: {pools}"
+    templateStatusAppOk: "Service {service} is active"
+    templateStatusAppMissing: "Service {service} is missing or inactive"
+    templateStatusNoPreflight: Run the read-only check to inspect this host
+    templateReqApache: Apache is active on every selected host
+    templateReqNfsServer: NFS is active on every selected host
+    templateReqWebConfig: Confirm application configuration and content are consistent across failover nodes
+    template_service_resources: "Create the selected SUSE-supported service resource agent; optionally add ocf:heartbeat:IPaddr2 for a floating address."
+    template_service_ordering: "Group the virtual address and service where appropriate; set order and colocation based on the service's documented agent behavior."
+    template_service_dependencies: "Select the exact agent and parameters from the installed SUSE OCF agent metadata; application installation is outside this profile."
+    template_vm_resources: "Create one ocf:heartbeat:VirtualDomain resource for each selected existing virtual machine."
+    template_vm_ordering: "Set startup, colocation, and recovery policy only after confirming every target node can safely access the VM disks."
+    template_vm_dependencies: "VM resource identity and storage visibility must be consistent; a listed libvirt pool is not proof of shared storage."
+    template_web_resources: "Create ocf:heartbeat:apache and ocf:heartbeat:IPaddr2 resources for the web service and client-facing address."
+    template_web_ordering: "Place resources in a reviewed group so the address and service follow the intended failover order."
+    template_web_dependencies: "Apache configuration, certificates, content, and dependencies must be consistent on all nodes."
+    template_nfs_resources: "SUSE's documented sequence uses Filesystem, nfsserver, exportfs, and IPaddr2 resources."
+    template_nfs_ordering: "Filesystem → nfsserver → exportfs → virtual IP, adjusted to the selected storage design and SUSE guidance."
+    template_nfs_dependencies: "Validate storage ownership, export identity, client access, fencing, and the SUSE NFS recovery guidance before applying."
+    templateReqNetwork: Confirm static addressing, redundant Corosync links, firewall reachability, and time sync
+    templateReqVmStorage: Confirm VM disks are on storage accessible to all eligible nodes and validate fencing/recovery behavior
+    templateReqApplication: Confirm the application and its SUSE-supported resource agent are installed and configured
+    templateReqNfsStorage: Confirm shared or replicated storage, filesystem ownership, and export recovery requirements
+    template_service_category: General purpose
+    template_service_title: Existing service with virtual IP
+    template_service_description: A guided starting point for a service already installed on the hosts, managed by Pacemaker with an optional floating address.
+    template_vm_category: Virtualization
+    template_vm_title: KVM virtual machine failover
+    template_vm_description: A profile for managing an existing VM as a Pacemaker resource when its storage and recovery design support failover.
+    template_web_category: Application service
+    template_web_title: Web service behind a virtual IP
+    template_web_description: A stateless web service profile using a floating address and the supported resource agent available on the host.
+    template_nfs_category: File services
+    template_nfs_title: Highly available NFS service
+    template_nfs_description: A coordinated NFS profile involving storage, filesystem, export, service, and client-facing virtual address resources.
     section_nodes: Nodes
     section_resources: Resources
     section_constraints: Constraints
@@ -657,6 +902,7 @@ kvmManager:
     clusterNotInitialized: Not initialized
     haStackMissing: HA tools not installed
     haStackStopped: HA services inactive
+    hawkBackend: Hawk backend
     notApplicable: Not ready
     readOnlyNote: HA detection is read-only. An active SLE HA add-on does not by itself mean the host is ready to join a cluster; network, time synchronization, quorum, and fencing still need validation.
     hawkTitle: Cluster administration workspace
@@ -668,6 +914,13 @@ kvmManager:
     planTitle: Plan a cluster
     planDescription: Review the topology and safety prerequisites in plain language before any host changes are enabled.
     preparationOnly: Preparation only
+    guidedWorkflowBadge: Guided workflow
+    setupProgress: Cluster setup progress
+    setupStatus: SETUP STATUS
+    setupStepCounter: Step {current} of {total}
+    previousStep: Back
+    nextStep: Continue
+    checkClusterStatus: Check cluster status
     afterHostActivation: After host activation
     currentStep: Current step
     setup_nodes: Select hosts
@@ -679,11 +932,11 @@ kvmManager:
     setup_review: Review changes
     setup_review_help: See each host operation and its expected effect before confirming.
     setup_configure: Configure cluster
-    setup_configure_help: After installing ha_sles and checking topology, use the extension terminal to run crm cluster init on the first node and crm cluster join on the others. SUSE bootstrap is interactive so you can review networking, fencing, virtual IP, and quorum choices.
+    setup_configure_help: Run SUSE crmsh cluster init and join from each host terminal.
     selectNodes: Choose cluster nodes
     selectNodesHelp: Only reachable hosts with SLE HA active and no detected cluster are listed. This selection is a planning aid and does not change hosts.
     noEligibleHosts: No hosts are ready for planning yet
-    noEligibleHostsHelp: Import a KVM host and activate the SLE HA add-on first. The page will refresh its read-only status automatically.
+    noEligibleHostsHelp: Import a KVM host with an active SLE HA add-on. The page will refresh its read-only status automatically.
     openNodes: Review host status
     readyForPlanning: Available for planning
     twoNodeTitle: "Two-node topology: plan an independent quorum witness"
@@ -711,6 +964,24 @@ kvmManager:
     runPreflight: Run read-only preflight
     preflightRunning: Checking selected hosts...
     preflightReadOnly: Connects to selected hosts and reads system state; it makes no changes.
+    preflightScope: "Read-only check for {count} selected hosts: {hosts}"
+    preflightHasBlockers: Some prerequisites need attention
+    preflightBlockerHelp: Review each host below. The extension checks HA activation, time synchronization, and required tools; network paths and fencing still need a manual review.
+    networkCheckManualSummary: Corosync network paths need manual validation.
+    reviewBeforeChanges: Review your setup
+    reviewBeforeChangesHelp: Confirm the hosts and decisions below. Installing missing HA tools is the only host change available in this step.
+    reviewHosts: Selected hosts
+    reviewTopology: Planned topology
+    preflightReadyTitle: Host checks passed
+    preflightReadyHelp: The automatic checks passed. Network connectivity, quorum witness placement, and fencing must still be confirmed in SUSE's interactive setup.
+    haStackMissingCount: "HA tools are missing on {count} host(s): {hosts}."
+    haStackInstalledOnAll: Required HA command-line tools are detected on all selected hosts.
+    confirmInstallHaStack: Install on selected hosts
+    reviewIncomplete: Complete the setup decisions first
+    reviewIncompleteHelp: Provide a valid cluster name, choose a quorum approach, and select a fencing method before continuing.
+    bootstrapRequirements: Return to review and resolve the automatic check blockers, install missing HA tools, and choose the quorum and fencing options.
+    bootstrapInteractiveTitle: SUSE completes cluster setup interactively
+    bootstrapInteractiveHelp: The plan records quorum as "{quorum}" and fencing as "{fencing}". crmsh still asks for the final network, quorum, and fencing configuration; verify those choices on the host before confirming.
     preflightError: Preflight could not complete
     preflightResults: Preflight results by host
     checked: Checked
@@ -727,6 +998,8 @@ kvmManager:
     networkCheckManual: "{count} active network interface(s) found; Corosync reachability and stable addressing still need validation"
     fencingCheckManual: "{count} watchdog device(s) found; fencing is not configured or validated by this check"
     compatibilityWarning: Compatibility needs review
+    compatibilitySupported: Supported SLES release detected for HA setup.
+    compatibilityUnsupported: This SLES release is outside the extension's currently documented HA compatibility matrix.
     architectureMismatch: Selected hosts report different CPU architectures.
     releaseMismatch: Selected hosts report different operating system releases.
     clusterAdministration: CLUSTER ADMINISTRATION
@@ -816,12 +1089,23 @@ kvmManager:
     fencingHelp: The fencing tool returned no data. This does not prove that fencing is configured or working.
     fencingBestPractice: For two-node clusters, SUSE recommends QDevice/QNetd for an independent vote. Validate STONITH/SBD before workloads depend on the cluster; reading configuration does not prove fencing works.
     installHaStackTitle: Install SUSE HA cluster tools
-    installHaStackHelp: Installs the official ha_sles pattern with zypper on selected hosts. The SLE HA extension must be active and repositories reachable.
+    installHaStackHelp: Installs the official ha_sles pattern with zypper on selected hosts. The SLE HA extension must be active and repositories reachable. Pacemaker, Corosync and Hawk are started by the supported cluster initialization workflow.
     installHaStack: Install HA tools
+    enableHaTools: Enable HA tools
+    enableHaToolsBatch: "Install on all eligible hosts ({count})"
+    haToolsBatchInstalling: Installing on selected hosts...
+    haToolsNoEligible: No eligible hosts
+    haToolsNoEligibleHelp: A host must be reachable, have the SLE HA add-on active, and not already have the HA tools installed.
+    haToolsMissingResult: The API did not return an installation result for this host.
+    haToolsInstalling: Installing HA tools...
+    haToolsInstalled: HA tools installed
+    haToolsInstallFailed: HA tools installation failed
+    activateHaAddonFirst: Activate the SUSE HA add-on before installing these tools.
+    serviceActivationGuide: Packages are installed. Initialize the cluster with SUSE's crm cluster init workflow to configure and start Pacemaker, Corosync and Hawk.
     stackInstallRunning: Installing HA tools...
     installReviewTitle: Review installation
     installReviewText: The extension will run zypper install -t pattern ha_sles on {hosts}.
-    installReviewWarning: This installs packages and may take several minutes. It does not initialize a cluster or change Corosync configuration.
+    installReviewWarning: This installs packages and may take several minutes. It does not initialize a cluster or change Corosync configuration; SUSE's cluster initialization starts the services after configuration.
     stackInstallResults: Installation result by host
     stackInstalled: Installed
     stackInstallFailed: Failed
@@ -880,87 +1164,168 @@ kvmManager:
     copyFailed: Clipboard access was blocked; select and copy the command manually.
     bootstrapSafety: Run preflight first. The terminal opens a real SSH shell; each crmsh command changes host or cluster state and should be reviewed before execution. SUSE cluster bootstrap is interactive.
     preflightRequiredForBootstrap: Complete a successful preflight on every selected host first. Also manually confirm stable addressing, Corosync reachability, fencing, and quorum placement.
+    createResource: Create resource
+    resourceConfiguration: RESOURCE CONFIGURATION
+    createPrimitiveTitle: Create a Pacemaker primitive
+    createPrimitiveHelp: Choose an installed SUSE resource agent and its parameters. New resources are created in Stopped state so they cannot start before you review them.
+    resourceId: Resource ID
+    resourceAgent: Resource agent
+    selectResourceAgent: Select an installed agent
+    resourceParameters: Agent parameters
+    resourceParametersPlaceholder: "ip=192.168.10.50\nmonitor_interval=30s"
+    resourceParametersHelp: Enter one parameter per line as key=value. Check the selected agent's documentation for required values. Values are not written to the extension audit log.
+    resourceAgentGuide: Agent details · {agent}
+    resourceAgentsUnavailable: Resource agents could not be loaded
+    resourceAgentsEmpty: No installed OCF or systemd agents were found on this host.
+    resourceParameterFormat: Invalid parameter on line {line}. Use key=value with a non-empty value.
+    reviewResourceCreate: Review resource
+    editResource: Edit
+    deleteResource: Delete
+    editResourceTitle: Edit resource · {id}
+    editResourceHelp: Add, change, or remove a single parameter or meta attribute. Existing secret values are not returned to the browser.
+    attributeType: Attribute type
+    resourceParameter: Resource parameter
+    resourceMeta: Pacemaker meta attribute
+    attributeAction: Change
+    setAttribute: Set or update
+    deleteAttribute: Remove
+    updateAttribute: update
+    attributeName: Name
+    attributeValue: Value
+    reviewResourceEdit: Review change
+    reviewResourceChangeTitle: Review configuration change
+    reviewCreateResource: Create {id} using {agent} with {count} parameters; leave it Stopped.
+    reviewDeleteResource: Remove {id} from the Pacemaker configuration. The resource must be stopped and have no unresolved failure.
+    reviewEditResource: "{action} attribute {attribute} on {id}."
+    resourceChangeSafety: This changes the live Pacemaker configuration. Review the resource agent requirements and expected impact before applying.
+    resourceChangeRunning: Applying change...
+    resourceChangeSucceeded: Resource configuration updated
+    addConstraint: Add constraint
+    constraintConfiguration: CONSTRAINT CONFIGURATION
+    constraintEditorHelp: Create a Pacemaker location, ordering, or colocation rule using resources and nodes currently reported by the cluster.
+    constraintId: Constraint ID
+    constraintType: Constraint type
+    selectResource: Select a resource
+    otherResource: Related resource
+    clusterNode: Cluster node
+    selectNode: Select a cluster node
+    constraintScore: Score
+    orderKind: Order behavior
+    reviewConstraint: Review constraint
+    reviewConstraintTitle: Review cluster rule change
+    reviewCreateConstraint: Create {kind} rule {id} for {resource} and {other} (score {score}).
+    reviewDeleteConstraint: Delete the Pacemaker constraint {id}.
+    constraintChangeSafety: This changes the live Pacemaker policy and can move or stop workloads. Validate the expected scheduling impact before applying.
+    constraintChangeRunning: Applying rule...
+    constraintMutationSucceeded: Pacemaker rule updated
+    constraintMutationFailed: Could not update Pacemaker rule
+    constraintInvalid: Complete the constraint fields with valid resources, node, and score.
+    deleteConstraint: Delete constraint {id}
+    deleteConstraintShort: Delete
+    create_location: Location rule
+    create_order: Ordering rule
+    create_colocation: Colocation rule
   deploy:
-    eyebrow: SUSE VIRTUALIZATION
-    title: Deploy KVM host
-    subtitle: Create a SUSE Linux VM on SUSE Virtualization, prepare KVM and Cockpit, then import it into this extension.
-    sessionTitle: Uses your Rancher session
-    sessionHelp: The extension uses your signed-in Rancher identity for SUSE Virtualization API requests. Your Rancher role controls which clusters, namespaces, images, networks, and operations are available. No Harvester password or kubeconfig is stored.
-    nestedTitle: Check nested virtualization support
-    nestedHelp: The VM uses host-passthrough CPU so KVM can access virtualization features. Nested KVM may require configuration on SUSE Virtualization nodes; SUSE documents nested KVM in SLES as a technology preview and unsupported for production.
-    stepOne: STEP 1
-    targetTitle: SUSE Virtualization target
-    targetHelp: Select a Rancher-managed cluster where SUSE Virtualization APIs and your role permit VM creation.
-    cluster: Cluster
-    selectCluster: Select a cluster
-    namespace: Namespace
-    selectNamespace: Select a namespace
-    image: SUSE Linux image
-    selectImage: Select an imported image
-    imageHelp: Only successfully imported images with a storage class are listed.
-    network: VM network
-    selectNetwork: Select a network
-    networkHelp: Choose a network attachment in this namespace that can provide guest IP connectivity.
-    connected: API available
-    targetNotReady: Check required
-    stepTwo: STEP 2
-    vmTitle: VM configuration and access
-    vmHelp: Configure resources and initial SSH/Cockpit access. The password and public key are kept in a Kubernetes Secret in the selected namespace; the private SSH key stays on your workstation.
-    vmName: VM name
-    cpu: vCPU
-    memory: Memory
-    disk: Boot disk size
-    diskHelp: Minimum {min} GiB based on the selected image.
+    eyebrow: EXISTING MACHINE
+    title: Prepare a KVM host
+    subtitle: Prepare an existing SUSE Linux machine over SSH and import it into KVM Hosts in one guided flow.
+    existingMachineTitle: Works with a machine that already exists
+    existingMachineHelp: This flow connects directly to the machine you specify. It does not create, change, or delete virtual machines in Rancher or SUSE Virtualization.
+    stepOne: STEP 1 · CONNECTION
+    connectionTitle: Connect to the machine
+    connectionHelp: Use an SSH account that can run sudo. Credentials are saved only after preparation and import succeed.
+    hostName: Display name
+    hostNamePlaceholder: kvm-host-01
+    address: Host IP or DNS name
+    sshPort: SSH port
     sshUser: SSH user
-    initialPassword: Initial SSH / Cockpit password
-    initialPasswordHelp: Use at least 12 characters. You will need this password when importing the host and signing in to Cockpit.
-    sshPublicKey: SSH public key
-    sshPublicKeyHelp: Paste an OpenSSH public key. The extension does not receive or store the corresponding private key.
-    installKvm: Install KVM tools and Cockpit during first boot
-    installKvmHelp: Uses SUSE zypper patterns kvm_server and kvm_tools, then installs cockpit packages and enables libvirt/Cockpit. The SLES image must have working SUSE repositories and cloud-init.
-    stepThree: STEP 3
-    reviewTitle: Review and deploy
-    reviewHelp: Review the VM, network, and resource changes. The VM is created only after you select Deploy VM.
-    preview: Review deployment
-    validationSummary: Fields to review before preview
-    validationCluster: Select an active Rancher cluster.
-    validationTarget: Resolve the cluster access or SUSE Virtualization API check before continuing.
-    validationNamespace: Select an active namespace.
-    validationImage: Select a successfully imported SUSE Linux image with a storage class.
-    validationNetwork: Select a network attachment in the chosen namespace.
-    validationVmName: Enter a VM name using lowercase letters, numbers, and internal hyphens; start and end with a letter or number.
-    validationCpu: Set vCPU to a whole number from 2 to 128.
-    validationMemory: Set memory to a whole number from 4 to 512 GiB.
-    validationDisk: Set the boot disk to a whole number from {min} to 2048 GiB.
-    validationSshUser: Use a Linux account name starting with a letter or underscore and containing at most 32 lowercase letters, numbers, underscores, or hyphens.
-    validationPassword: Enter an initial password between 12 and 128 characters.
-    validationSshKey: Paste a valid OpenSSH public key (for example, ssh-ed25519 or ssh-rsa).
-    back: Edit configuration
-    create: Deploy VM
-    creating: Creating VM...
-    resources: Resources
-    guestSetup: First-boot setup
-    guestSetupKvm: Install KVM + Cockpit with SUSE packages
-    guestSetupKeyOnly: Inject SSH access only
-    createdHosts: DEPLOYED KVM HOSTS
-    vmListTitle: Deployment status
-    state: State
-    address: Guest IP
-    actions: Actions
-    importHost: Continue to import
-    importHelp: When the VM reports an IP address, continue to Add Host. Enter the matching SSH private key and complete the existing host checks before importing.
+    sshPassword: SSH password
+    trustHostKey: Accept and pin this SSH host key
+    trustHostKeyHelp: Enable for first contact when the API has no trusted key for this machine. The received key is pinned to the imported host record.
+    stepTwo: STEP 2 · PREPARATION
+    preparationTitle: What the extension will prepare
+    preparationHelp: The extension checks the operating system, installs only missing KVM and Cockpit packages, enables the required sockets, then verifies libvirt before importing.
+    preparationSles: Confirm the machine is SUSE Linux Enterprise.
+    preparationKvm: Refresh configured repositories and install missing KVM server/tools packages.
+    preparationCockpit: Install Cockpit packages and enable cockpit.socket.
+    preparationImport: Verify SSH/libvirt and add the host to the Hosts list.
+    preparationSafety: Package installation requires working SUSE repositories and sudo access. Review the summary before starting; the operation can take several minutes.
+    stepThree: STEP 3 · REVIEW
+    reviewTitle: Review and prepare
+    reviewHelp: Confirm the target and the host changes. The extension will import the machine only after preparation and libvirt validation succeed.
+    changes: Planned changes
+    changesSummary: Refresh repositories; install missing KVM/Cockpit packages; enable libvirt and Cockpit sockets; import host.
+    review: Review changes
+    edit: Edit
+    prepareImport: Prepare and import host
+    preparing: Preparing packages and validating libvirt…
+    prepareFailed: Host preparation or import failed
+    preparedImported: "{host} is prepared and imported."
+    openHost: Open host
+  backups:
+    eyebrow: DATA PROTECTION
+    title: VM backups
+    subtitle: Create and manage powered-off VM archives in S3-compatible object storage.
+    loading: Loading…
     refresh: Refresh
-    loading: Loading...
-    creatingSecret: Preparing first-boot configuration...
-    creatingVm: Creating VM and storage...
-    linkingSecret: Securing cloud-init lifecycle...
-    secretCleanupWarning: The VM was created, but this role could not link the cloud-init Secret for automatic cleanup. Review namespace Secret permissions and remove the Secret manually if you later delete this VM.
-    running: Running
-    pending: Pending
-    noClusters: No active Rancher-managed clusters are available to your account.
-    loadError: Could not load SUSE Virtualization resources
-    createError: VM deployment failed
-    genericError: Request failed. Check the Rancher session and cluster permissions.
+    mvpTitle: Manual, powered-off backups
+    mvpHelp: Archives contain the libvirt domain XML and supported local qcow2/raw disks. Restore automation and schedules are not included yet. Keep the VM powered off until capture finishes.
+    readOnlyHelp: Your Rancher role allows viewing backups, but creating or deleting backup resources requires the configured storage operator permission.
+    captureTab: Create backup
+    destinationTab: Destinations
+    archivesTab: Archives
+    destinationTitle: S3 destination
+    destinationHelp: Credentials are encrypted by the API before they are stored. Workload identity uses the API runtime's AWS credential chain.
+    destinationName: Name
+    bucket: Bucket
+    endpoint: Endpoint URL
+    region: Region
+    prefix: Object prefix
+    auth: Authentication
+    accessKey: Access key
+    workloadIdentity: Workload identity / IAM role
+    accessKeyId: Access key ID
+    secretAccessKey: Secret access key
+    encryption: Server-side encryption
+    providerDefault: Provider default
+    none: None
+    kmsKeyId: KMS key ID
+    pathStyle: Use path-style requests
+    saveDestination: Save destination
+    saving: Saving…
+    destinationSaved: Destination saved. Test its connection before starting a backup.
+    savedDestinations: Saved destinations
+    noDestinations: No destinations configured.
+    credentialsSaved: Credentials saved
+    testConnection: Test connection
+    testing: Testing…
+    connectionOk: S3 access verified.
+    delete: Delete
+    confirmDeleteDestination: Delete this destination? Destinations with backup archives cannot be removed.
+    captureTitle: Back up a virtual machine
+    captureHelp: The archive is streamed from the KVM host to S3 using multipart upload, so the API does not hold the full disk image in memory.
+    destination: Destination
+    selectDestination: Select destination
+    host: KVM host
+    selectHost: Select host
+    vm: Virtual machine
+    loadingVms: Loading VMs…
+    selectVm: Select a powered-off VM
+    poweredOffOnly: Only powered-off VMs with local file-backed qcow2 or raw disks without backing chains are supported in this release. Shared/block/network volumes and snapshots are not included.
+    startBackup: Start backup
+    backupRunning: Starting…
+    operation: Operation
+    waitingForHost: Waiting for the host to start streaming the archive…
+    refreshProgress: Refresh progress
+    backupComplete: Backup archive completed and catalogued.
+    operationInProgress: Archive transfer is in progress…
+    backupFailed: Backup failed. Check that the VM is powered off and its disks use a supported format.
+    archivesTitle: Backup archives
+    archivesHelp: Download the original archive or remove it from S3 and the catalog.
+    noBackups: No backup archives yet.
+    download: Download archive
+    confirmDeleteBackup: Permanently delete this backup archive from object storage?
+    restoreNote: This release provides archive download and SHA-256 metadata. It does not recreate or restore a VM from the archive.
   common:
     yes: Yes
     no: No
@@ -976,6 +1341,7 @@ kvmManager:
     enabled: Enabled
     disabled: Disabled
     details: Details
+    snapshots: Snapshots
     configure: Configure
     console: Terminal
     consoleRequiresRunning: Start the virtual machine to open its terminal.
@@ -985,3 +1351,36 @@ kvmManager:
     shutdown: Shut down
     restart: Restart
     empty: No virtual machines found.
+    moreActions: More actions
+  managedClusters:
+    eyebrow: KVM VIRTUALIZATION
+    title: KVM host groups
+    subtitle: Group existing hosts and inspect their VM, network, and storage inventory together.
+    back: Back to clusters
+    scopeTitle: Inventory group only
+    scopeHelp: This creates an extension-managed host group. It does not configure SUSE HA, shared storage, common networks, failover, scheduling, or live migration.
+    createTitle: Create a KVM host group
+    createHelp: Select at least two ready hosts. Hosts can belong to only one group at a time.
+    name: Group name
+    ready: Ready
+    creating: Creating…
+    create: Create group
+    groupsTitle: Existing KVM host groups
+    refresh: Refresh
+    empty: No KVM host groups yet.
+    setupState: Setup required
+    open: Open inventory
+    removeGroup: Remove group
+    checked: Inventory checked
+    capabilityTitle: Cross-host operations are not enabled
+    capabilityHelp: Compare hosts here. VM migration remains disabled until shared storage and matching networks can be verified and the operation has a safe implementation.
+    host: Host
+    hostState: Connection
+    vms: VMs
+    storage: Storage pools
+    networks: Libvirt networks
+    crossHostVms: Virtual machines across this group
+    noVms: No VMs were reported by the selected hosts.
+    loading: Loading…
+    readOnly: Read-only access
+    readOnlyHelp: Your Rancher roles allow viewing these resources, but creating or deleting them requires the configured storage or cluster operator permission.

@@ -20,3 +20,13 @@ api_request_slow method=GET route=/kvm-api/hosts/{host_id}/cloud-native status=2
 Use the API container's standard logs to inspect these events. Routes with
 repeated high latency are candidates for targeted SSH/libvirt profiling before
 adding caching or concurrency.
+
+## Scheduled review workflow
+
+At each scheduled performance review, also review engineering best practices
+for the extension and API (security, compatibility, maintainability, and
+operational safety), and record concrete findings with the performance results.
+The maintainer has authorized publishing the reviewed release to GitHub and
+Docker Hub as part of that scheduled review workflow. Publish only after the
+reviewed code and release artifacts are ready; this workflow does not authorize
+deploying to any cluster.

@@ -1,9 +1,12 @@
 import { importTypes } from '@rancher/auto-import';
 import { IPlugin } from '@shell/core/types';
+import { defineAsyncComponent } from 'vue';
 import Hosts from './pages/Hosts.vue';
 import Clusters from './pages/Clusters.vue';
 import CloudNative from './pages/CloudNative.vue';
 import Deploy from './pages/Deploy.vue';
+const ManagedKvmClusters = defineAsyncComponent(() => import('./pages/ManagedKvmClusters.vue'));
+const Backups = defineAsyncComponent(() => import('./pages/Backups.vue'));
 import './assets/kvm.css';
 
 // Init the package
@@ -31,6 +34,10 @@ export default function(plugin: IPlugin): void {
     name: 'deploy',
     label: 'Deploy',
     component: Deploy,
+  }, {
+    name: 'backups',
+    label: 'Backups',
+    component: Backups,
   }]);
 
   // Keep the Cloud Native page routable for the per-host administration menu,
@@ -41,6 +48,13 @@ export default function(plugin: IPlugin): void {
     component: CloudNative,
     // Keep this route available for the per-host menu without registering a
     // second page in the KVM product side navigation.
+    params: { product: 'kvm', cluster: '_' },
+    meta: { product: 'kvm', cluster: '_' },
+  });
+  plugin.addRoute('default', {
+    name: 'kvm-c-managed-clusters',
+    path: '/kvm/c/:cluster/managed-clusters',
+    component: ManagedKvmClusters,
     params: { product: 'kvm', cluster: '_' },
     meta: { product: 'kvm', cluster: '_' },
   });

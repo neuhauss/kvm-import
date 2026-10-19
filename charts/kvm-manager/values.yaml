@@ -8,6 +8,13 @@ rancher:
   # Rancher Global Role IDs. Empty roles inherit access only through higher tiers.
   viewerGlobalRoles: []
   vmOperatorGlobalRoles: []
+  networkOperatorGlobalRoles: []
+  storageOperatorGlobalRoles: []
+  softwareOperatorGlobalRoles: []
+  subscriptionOperatorGlobalRoles: []
+  accountOperatorGlobalRoles: []
+  serviceOperatorGlobalRoles: []
+  clusterOperatorGlobalRoles: []
   # Users with this role can manage host settings such as network, storage and accounts.
   hostOperatorGlobalRoles: []
   # Kept for backwards compatibility; these users receive full host administration.
@@ -51,5 +58,5 @@ assets:
       memory: 128Mi
 
 plugin:
-  # Override to use an external URL. The default is the in-cluster asset server.
+  # Override only when the extension assets have a separate public HTTPS origin.
   endpoint: ""

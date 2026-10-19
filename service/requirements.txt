@@ -4,3 +4,4 @@ paramiko==3.5.1
 cryptography==44.0.2
 httpx==0.28.1
 websockets==14.2
+boto3==1.43.114

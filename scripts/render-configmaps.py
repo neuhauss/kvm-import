@@ -2,14 +2,22 @@
 """Render the API/UI ConfigMaps after building the extension bundle and chart."""
 import base64
 import gzip
+import ipaddress
 import json
 import os
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 version = json.loads((ROOT / "pkg/kvm-manager/package.json").read_text())["version"]
+public_origin = os.environ.get("RANCHER_PUBLIC_ORIGIN", "https://rancher.example.com").rstrip("/")
+origin_url = urlsplit(public_origin)
+if origin_url.scheme != "https" or not origin_url.netloc or origin_url.path not in ("", "/"):
+    raise SystemExit("RANCHER_PUBLIC_ORIGIN must be an HTTPS origin without a path")
+ingress_class = os.environ.get("KVM_INGRESS_CLASS", "nginx")
+backend_namespace = os.environ.get("KVM_NAMESPACE", "rancher-kvm-registry")
 bundle_dir = ROOT / "dist-pkg" / f"kvm-manager-{version}"
 bundle_name = f"kvm-manager-{version}.umd.min.js"
 bundle_js = sorted(bundle_dir.glob("*.js"))
@@ -59,18 +67,14 @@ for key in list(binary_data):
     if key.startswith("kvm-manager-") and (key.endswith(".js") or key.endswith(".js.gz")) and key not in bundle_names and key not in {f"{name}.gz" for name in bundle_names}:
         del binary_data[key]
 for path in bundle_js:
-    # xterm's bundle contains terminal control bytes. Kubernetes rejects those
-    # bytes in ConfigMap.data, but binaryData safely stores the exact bundle.
+    # Store bundle files compressed in binaryData. This keeps the assets
+    # ConfigMap below Kubernetes' 1 MiB object limit as the extension grows.
+    # The asset Deployment inflates these files into its served directory.
     contents = path.read_bytes()
-    text = contents.decode("utf-8")
-    if any(ord(char) < 32 and char not in "\n\r\t" for char in text):
-        assets["data"].pop(path.name, None)
-        binary_data.pop(path.name, None)
-        compressed_bundle_files.add(path.name)
-        binary_data[f"{path.name}.gz"] = base64.b64encode(gzip.compress(contents, compresslevel=9, mtime=0)).decode()
-    else:
-        assets["data"][path.name] = text
-        binary_data.pop(path.name, None)
+    assets["data"].pop(path.name, None)
+    binary_data.pop(path.name, None)
+    compressed_bundle_files.add(path.name)
+    binary_data[f"{path.name}.gz"] = base64.b64encode(gzip.compress(contents, compresslevel=9, mtime=0)).decode()
 
 previous_version = f"{version.rsplit('.', 1)[0]}.{int(version.rsplit('.', 1)[1]) - 1}"
 kept_chart_versions = {version, previous_version}
@@ -160,7 +164,60 @@ for doc in ui_docs:
         doc["spec"]["template"]["spec"]["containers"][0]["args"] = [init_assets]
     if doc.get("kind") == "UIPlugin" and doc.get("metadata", {}).get("name") == "kvm-manager":
         doc["spec"]["plugin"]["version"] = version
-        doc["spec"]["plugin"]["endpoint"] = f"http://kvm-extension-assets.rancher-kvm-registry.svc:8080/kvm-manager/{version}"
-        doc["spec"]["plugin"]["noCache"] = False
+        doc["spec"]["plugin"]["endpoint"] = f"{public_origin}/kvm-manager/{version}"
+        # Versioned plugin URLs change per release; disable extension caching
+        # so the Rancher UI does not keep loading the previous bundle.
+        doc["spec"]["plugin"]["noCache"] = True
+        doc["spec"]["plugin"].setdefault("metadata", {}).update({
+            "catalog.cattle.io/display-name": "KVM",
+            "catalog.cattle.io/ui-component": "plugins",
+            "catalog.cattle.io/namespace": "cattle-ui-plugin-system",
+        })
+asset_ingress = next(
+    (
+        doc
+        for doc in ui_docs
+        if doc.get("kind") == "Ingress"
+        and doc.get("metadata", {}).get("name") == "kvm-extension-assets"
+    ),
+    None,
+)
+if asset_ingress is None:
+    asset_ingress = {
+        "apiVersion": "networking.k8s.io/v1",
+        "kind": "Ingress",
+        "metadata": {
+            "name": "kvm-extension-assets",
+            "namespace": "rancher-kvm-registry",
+            "labels": {
+                "app.kubernetes.io/name": "kvm-extension-assets",
+                "app.kubernetes.io/part-of": "rancher-kvm",
+            },
+        },
+        "spec": {},
+    }
+    ui_docs.append(asset_ingress)
+asset_ingress["spec"]["ingressClassName"] = ingress_class
+asset_rule = {
+    "http": {
+        "paths": [
+            {
+                "path": "/kvm-manager",
+                "pathType": "Prefix",
+                "backend": {
+                    "service": {
+                        "name": "kvm-extension-assets",
+                        "port": {"number": 8080},
+                    }
+                },
+            }
+        ]
+    }
+}
+try:
+    ipaddress.ip_address(origin_url.hostname or "")
+except ValueError:
+    asset_rule["host"] = origin_url.hostname
+asset_ingress["spec"]["rules"] = [asset_rule]
 ui_path.write_text(yaml.safe_dump_all(ui_docs, sort_keys=False, width=1000))
-print(f"ConfigMaps and UIPlugin updated for kvm-manager {version}.")
+print(f"ConfigMaps, HTTPS asset route, and UIPlugin updated for kvm-manager {version}.")

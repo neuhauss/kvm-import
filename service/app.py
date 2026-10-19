@@ -34,6 +34,8 @@ import paramiko
 from cryptography.fernet import Fernet, InvalidToken
 import httpx
 import websockets
+import boto3
+from botocore.config import Config as BotoConfig
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, WebSocket
 from fastapi.responses import RedirectResponse, StreamingResponse
 from pydantic import BaseModel, Field
@@ -48,8 +50,10 @@ if len(credential_key) < 32:
     raise RuntimeError("Configure KVM_CREDENTIAL_KEY with at least 32 random characters")
 FERNET_KEY = base64.urlsafe_b64encode(hashlib.sha256(credential_key.encode()).digest())
 cipher = Fernet(FERNET_KEY)
-app = FastAPI(title="Rancher KVM Host API", version="0.7.42")
+app = FastAPI(title="Rancher KVM Host API", version="0.7.109")
 performance_logger = logging.getLogger("kvm.performance")
+OPERATION_JOB_EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="kvm-operation")
+OPERATION_JOB_LOCK = threading.RLock()
 RANCHER_PUBLIC_ORIGIN = os.getenv("RANCHER_PUBLIC_ORIGIN", "https://rancher.example.com").rstrip("/")
 RANCHER_PUBLIC_HOST = urlsplit(RANCHER_PUBLIC_ORIGIN).netloc
 COCKPIT_PORT = 9090
@@ -113,10 +117,26 @@ def initialize_database() -> None:
         pass
     with connect_db() as db:
         db.execute("CREATE INDEX IF NOT EXISTS idx_audit_events_occurred_at ON audit_events(occurred_at DESC)")
+        db.execute("UPDATE operation_jobs SET status='failed',updated_at=? WHERE status IN ('queued','running')",
+                   (now(),))
+        for row in db.execute("SELECT id,results_json FROM operation_jobs WHERE status='failed'"):
+            try:
+                results = json.loads(row["results_json"])
+                changed = False
+                for item in results:
+                    if item.get("status") in ("queued", "running"):
+                        item.update({"status": "error", "error": "The API restarted before this operation completed. Refresh host status before retrying."})
+                        changed = True
+                if changed:
+                    db.execute("UPDATE operation_jobs SET results_json=? WHERE id=?", (json.dumps(results), row["id"]))
+            except (TypeError, ValueError):
+                continue
         db.execute(
             "DELETE FROM audit_events WHERE occurred_at < ?",
             ((datetime.now(timezone.utc) - timedelta(days=AUDIT_RETENTION_DAYS)).isoformat(),),
         )
+        db.execute("DELETE FROM operation_jobs WHERE created_at < ?",
+                   ((datetime.now(timezone.utc) - timedelta(days=30)).isoformat(),))
 
 
 class HostInput(BaseModel):
@@ -133,6 +153,68 @@ class HostInput(BaseModel):
 
 class VMAction(BaseModel):
     action: Literal["start", "shutdown", "reboot", "pause", "resume"]
+
+
+class ClusterPreflightRequest(BaseModel):
+    host_ids: list[str] = Field(min_length=2, max_length=10)
+
+
+class ManagedKvmClusterInput(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    host_ids: list[str] = Field(min_length=2, max_length=32)
+
+
+class BackupDestinationInput(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    endpoint_url: str | None = Field(default=None, max_length=512)
+    region: str = Field(default="us-east-1", min_length=1, max_length=64)
+    bucket: str = Field(min_length=3, max_length=63)
+    prefix: str = Field(default="rancher-kvm", max_length=512)
+    auth: Literal["access-key", "workload-identity"] = "access-key"
+    access_key_id: str | None = Field(default=None, max_length=256)
+    secret_access_key: str | None = Field(default=None, max_length=1024)
+    path_style: bool = False
+    encryption: Literal["provider-default", "sse-s3", "sse-kms", "none"] = "sse-s3"
+    kms_key_id: str | None = Field(default=None, max_length=256)
+
+
+class BackupJobInput(BaseModel):
+    destination_id: str = Field(min_length=1, max_length=64)
+    host_id: str = Field(min_length=1, max_length=64)
+    vm_name: str = Field(min_length=1, max_length=255)
+
+
+class ClusterAction(BaseModel):
+    action: Literal["node_standby", "node_online", "node_maintenance", "node_ready", "resource_start", "resource_stop", "resource_cleanup"]
+    target: str = Field(min_length=1, max_length=255)
+
+
+class ClusterResourceMutation(BaseModel):
+    action: Literal["create", "set_param", "delete_param", "set_meta", "delete_meta", "delete"]
+    resource_id: str = Field(min_length=1, max_length=128)
+    agent: str | None = Field(default=None, max_length=256)
+    parameters: dict[str, str] = Field(default_factory=dict)
+    key: str | None = Field(default=None, max_length=64)
+    value: str | None = Field(default=None, max_length=2048)
+
+
+class ClusterConstraintMutation(BaseModel):
+    action: Literal["create_location", "create_order", "create_colocation", "delete"]
+    constraint_id: str = Field(min_length=1, max_length=128)
+    resource: str | None = Field(default=None, max_length=128)
+    other_resource: str | None = Field(default=None, max_length=128)
+    node: str | None = Field(default=None, max_length=255)
+    score: str | None = Field(default=None, max_length=16)
+    order_kind: Literal["Mandatory", "Optional", "Serialize"] = "Mandatory"
+
+
+class ClusterInstallRequest(BaseModel):
+    host_ids: list[str] = Field(min_length=1, max_length=10)
+
+
+class ClusterPrerequisiteResolution(BaseModel):
+    host_ids: list[str] = Field(min_length=1, max_length=10)
+    action: Literal["enable_time_sync", "install_web_package", "install_nfs_package"]
 
 
 class VMAutostart(BaseModel):
@@ -229,7 +311,7 @@ class LibvirtNetworkConfig(BaseModel):
 
 class RepositoryAction(BaseModel):
     alias: str = Field(min_length=1, max_length=128)
-    action: Literal["enable", "disable", "refresh", "add", "remove"]
+    action: Literal["enable", "disable", "refresh", "add", "edit", "remove"]
     name: str | None = Field(default=None, max_length=256)
     uri: str | None = Field(default=None, max_length=2048)
 
@@ -293,6 +375,30 @@ def connect_db():
             id TEXT PRIMARY KEY, occurred_at TEXT NOT NULL, actor TEXT NOT NULL,
             action TEXT NOT NULL, target TEXT NOT NULL, outcome TEXT NOT NULL, detail TEXT
         )""")
+        db.execute("""CREATE TABLE IF NOT EXISTS operation_jobs (
+            id TEXT PRIMARY KEY, actor TEXT NOT NULL, kind TEXT NOT NULL,
+            status TEXT NOT NULL, results_json TEXT NOT NULL,
+            created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+        )""")
+        db.execute("""CREATE TABLE IF NOT EXISTS managed_clusters (
+            id TEXT PRIMARY KEY, name TEXT NOT NULL, cluster_type TEXT NOT NULL,
+            state TEXT NOT NULL, host_ids_json TEXT NOT NULL, template_id TEXT,
+            created_by TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+            last_checked_at TEXT, capabilities_json TEXT NOT NULL DEFAULT '{}'
+        )""")
+        db.execute("""CREATE TABLE IF NOT EXISTS backup_destinations (
+            id TEXT PRIMARY KEY, name TEXT NOT NULL, endpoint_url TEXT, region TEXT NOT NULL,
+            bucket TEXT NOT NULL, prefix TEXT NOT NULL, auth TEXT NOT NULL,
+            access_key_id_enc TEXT, secret_access_key_enc TEXT, path_style INTEGER NOT NULL,
+            encryption TEXT NOT NULL, kms_key_id TEXT, created_by TEXT NOT NULL,
+            created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+        )""")
+        db.execute("""CREATE TABLE IF NOT EXISTS vm_backups (
+            id TEXT PRIMARY KEY, destination_id TEXT NOT NULL, host_id TEXT NOT NULL,
+            host_name TEXT NOT NULL, vm_name TEXT NOT NULL, object_key TEXT NOT NULL,
+            size_bytes INTEGER NOT NULL, sha256 TEXT NOT NULL, created_by TEXT NOT NULL,
+            created_at TEXT NOT NULL, FOREIGN KEY(destination_id) REFERENCES backup_destinations(id)
+        )""")
         yield db
         db.commit()
     except Exception:
@@ -322,6 +428,7 @@ class AuthorizationContext:
     user_id: str
     roles: frozenset[str]
     access_level: str
+    permissions: frozenset[str]
 
 
 ROLE_CONFIG = {
@@ -330,11 +437,22 @@ ROLE_CONFIG = {
     "host_operator": {role.strip() for role in os.getenv("KVM_HOST_OPERATOR_GLOBAL_ROLES", "").split(",") if role.strip()},
     # Keep the original setting as the host-admin tier for existing installs.
     "host_admin": {role.strip() for role in os.getenv("KVM_ALLOWED_GLOBAL_ROLES", "admin").split(",") if role.strip()},
+    "network_admin": {role.strip() for role in os.getenv("KVM_NETWORK_OPERATOR_GLOBAL_ROLES", "").split(",") if role.strip()},
+    "storage_admin": {role.strip() for role in os.getenv("KVM_STORAGE_OPERATOR_GLOBAL_ROLES", "").split(",") if role.strip()},
+    "software_admin": {role.strip() for role in os.getenv("KVM_SOFTWARE_OPERATOR_GLOBAL_ROLES", "").split(",") if role.strip()},
+    "subscription_admin": {role.strip() for role in os.getenv("KVM_SUBSCRIPTION_OPERATOR_GLOBAL_ROLES", "").split(",") if role.strip()},
+    "account_admin": {role.strip() for role in os.getenv("KVM_ACCOUNT_OPERATOR_GLOBAL_ROLES", "").split(",") if role.strip()},
+    "service_admin": {role.strip() for role in os.getenv("KVM_SERVICE_OPERATOR_GLOBAL_ROLES", "").split(",") if role.strip()},
+    "cluster_admin": {role.strip() for role in os.getenv("KVM_CLUSTER_OPERATOR_GLOBAL_ROLES", "").split(",") if role.strip()},
 }
 
 
-ROLE_RANK = {"viewer": 1, "vm_operator": 2, "host_operator": 3, "host_admin": 4}
-PERMISSION_RANK = {"viewer": 1, "vm_operator": 2, "host_resources": 3, "host_admin": 4}
+ROLE_RANK = {"viewer": 1, "scoped_operator": 1, "vm_operator": 2, "host_operator": 3, "host_admin": 4}
+PERMISSION_RANK = {"viewer": 1, "vm_operator": 2, "host_resources": 3, "host_admin": 4,
+                   "network_admin": 3, "storage_admin": 3, "software_admin": 3,
+                   "subscription_admin": 3, "account_admin": 3, "service_admin": 3, "cluster_admin": 3}
+SCOPED_PERMISSIONS = {"network_admin", "storage_admin", "software_admin", "subscription_admin", "account_admin", "service_admin", "cluster_admin"}
+RESOURCE_PERMISSIONS = SCOPED_PERMISSIONS | {"host_resources"}
 
 
 def authenticate_request(authorization: str | None = None, cookie: str | None = None) -> AuthorizationContext:
@@ -373,11 +491,24 @@ def authenticate_request(authorization: str | None = None, cookie: str | None = 
         raise HTTPException(401, "The Rancher session is invalid or expired") from None
     access_level = ""
     for level, configured_roles in ROLE_CONFIG.items():
-        if roles.intersection(configured_roles) and ROLE_RANK[level] > ROLE_RANK.get(access_level, 0):
+        if level in ROLE_RANK and roles.intersection(configured_roles) and ROLE_RANK[level] > ROLE_RANK.get(access_level, 0):
             access_level = level
+    matched_scopes = {level for level in SCOPED_PERMISSIONS if roles.intersection(ROLE_CONFIG[level])}
+    if access_level in ("", "viewer") and matched_scopes:
+        access_level = "scoped_operator"
     if not access_level:
         raise HTTPException(403, "Your Rancher global role is not authorized to access KVM hosts")
-    return AuthorizationContext(str(user_id or user.get("id") or "unknown"), frozenset(roles), access_level)
+    rank = ROLE_RANK[access_level]
+    permissions = {"viewer"}
+    if rank >= ROLE_RANK["vm_operator"]:
+        permissions.add("vm_operator")
+    if rank >= ROLE_RANK["host_operator"]:
+        permissions.update(SCOPED_PERMISSIONS | {"host_resources"})
+    else:
+        permissions.update(matched_scopes)
+    if rank >= ROLE_RANK["host_admin"]:
+        permissions.add("host_admin")
+    return AuthorizationContext(str(user_id or user.get("id") or "unknown"), frozenset(roles), access_level, frozenset(permissions))
 
 
 def require_permission(permission: str):
@@ -388,6 +519,8 @@ def require_permission(permission: str):
         cookie: str | None = Header(default=None),
     ) -> AuthorizationContext:
         context = authenticate_request(authorization, cookie)
+        if permission in RESOURCE_PERMISSIONS and permission in context.permissions:
+            return context
         if ROLE_RANK[context.access_level] < required_rank:
             role_name = "host operator" if permission == "host_resources" else permission.replace("_", " ")
             raise HTTPException(403, f"The {role_name} role is required for this KVM operation")
@@ -402,6 +535,73 @@ def record_audit(actor: str, action: str, target: str, outcome: str = "success",
             "INSERT INTO audit_events (id,occurred_at,actor,action,target,outcome,detail) VALUES (?,?,?,?,?,?,?)",
             (str(uuid.uuid4()), now(), actor[:255], action[:80], target[:255], outcome[:40], detail[:500] if detail else None),
         )
+
+
+def operation_job_snapshot(job_id: str) -> dict[str, Any] | None:
+    with connect_db() as db:
+        row = db.execute("SELECT * FROM operation_jobs WHERE id=?", (job_id,)).fetchone()
+    if not row:
+        return None
+    return {"job_id": row["id"], "kind": row["kind"], "status": row["status"],
+            "results": json.loads(row["results_json"]), "created_at": row["created_at"],
+            "updated_at": row["updated_at"]}
+
+
+def update_operation_job(job_id: str, *, status: str | None = None, results: list[dict[str, Any]] | None = None) -> None:
+    with OPERATION_JOB_LOCK, connect_db() as db:
+        if results is None:
+            db.execute("UPDATE operation_jobs SET status=?,updated_at=? WHERE id=?", (status, now(), job_id))
+        else:
+            db.execute("UPDATE operation_jobs SET status=COALESCE(?,status),results_json=?,updated_at=? WHERE id=?",
+                       (status, json.dumps(results), now(), job_id))
+
+
+def create_operation_job(kind: str, actor: str, hosts: list[dict[str, Any]], operation) -> dict[str, Any]:
+    job_id = str(uuid.uuid4())
+    results = [{"host_id": host["id"], "host_name": host.get("hostname") or host.get("name"),
+                "status": "queued"} for host in hosts]
+    with connect_db() as db:
+        db.execute("DELETE FROM operation_jobs WHERE created_at < ?",
+                   ((datetime.now(timezone.utc) - timedelta(days=30)).isoformat(),))
+        db.execute("INSERT INTO operation_jobs (id,actor,kind,status,results_json,created_at,updated_at) VALUES (?,?,?,?,?,?,?)",
+                   (job_id, actor, kind, "queued", json.dumps(results), now(), now()))
+
+    def execute() -> None:
+        update_operation_job(job_id, status="running")
+
+        def run_host(index: int, host: dict[str, Any]) -> None:
+            with OPERATION_JOB_LOCK:
+                current = operation_job_snapshot(job_id)
+                if not current:
+                    return
+                items = current["results"]
+                items[index] = {**items[index], "status": "running"}
+                update_operation_job(job_id, results=items)
+            try:
+                result = operation(host)
+                outcome = result.get("status", "completed")
+                item = {**results[index], **result, "status": outcome}
+            except Exception as exc:
+                item = {**results[index], "status": "error", "error": str(exc)[:600]}
+            with OPERATION_JOB_LOCK:
+                current = operation_job_snapshot(job_id)
+                if not current:
+                    return
+                items = current["results"]
+                items[index] = item
+                update_operation_job(job_id, results=items)
+
+        with ThreadPoolExecutor(max_workers=min(3, len(hosts)), thread_name_prefix="kvm-host-operation") as executor:
+            list(executor.map(lambda entry: run_host(*entry), enumerate(hosts)))
+        final = operation_job_snapshot(job_id)
+        statuses = [item.get("status") for item in (final or {}).get("results", [])]
+        job_status = "succeeded" if statuses and all(value not in ("error", "failed") for value in statuses) else "partial"
+        if statuses and all(value in ("error", "failed") for value in statuses):
+            job_status = "failed"
+        update_operation_job(job_id, status=job_status)
+
+    OPERATION_JOB_EXECUTOR.submit(execute)
+    return operation_job_snapshot(job_id) or {"job_id": job_id, "kind": kind, "status": "queued", "results": results}
 
 
 def public_host(row: sqlite3.Row) -> dict[str, Any]:
@@ -1024,6 +1224,85 @@ async def vm_console_websocket(host_id: str, websocket: WebSocket) -> None:
             pass
 
 
+@app.websocket("/kvm-api/hosts/{host_id}/terminal")
+async def host_terminal_websocket(host_id: str, websocket: WebSocket) -> None:
+    """Relay an authenticated interactive SSH shell to an imported KVM host."""
+    if websocket.headers.get("origin") != RANCHER_PUBLIC_ORIGIN:
+        await websocket.close(code=4403)
+        return
+    try:
+        actor = await asyncio.to_thread(
+            require_permission("host_admin"), websocket.headers.get("authorization"), websocket.headers.get("cookie")
+        )
+    except HTTPException as exc:
+        await websocket.close(code=4403 if exc.status_code == 403 else 4401)
+        return
+    try:
+        host = await asyncio.to_thread(cockpit_host_record, host_id)
+    except HTTPException as exc:
+        await websocket.close(code=4404 if exc.status_code == 404 else 1011)
+        return
+
+    await websocket.accept()
+    client: paramiko.SSHClient | None = None
+    channel: paramiko.Channel | None = None
+    outcome = "failure"
+    detail = "Interactive SSH session closed before the shell opened"
+    try:
+        client = await asyncio.to_thread(ssh_client_for_host, host)
+        channel = await asyncio.to_thread(client.invoke_shell, term="xterm-256color", width=100, height=30)
+        await websocket.send_text("KVM_CONTROL:" + json.dumps({"type": "status", "status": "connected"}))
+        outcome = "success"
+        detail = "Interactive SSH shell opened; terminal input is not stored"
+        while True:
+            if channel.recv_ready():
+                data = await asyncio.to_thread(channel.recv, 65536)
+                if not data:
+                    break
+                await websocket.send_bytes(data)
+            elif channel.exit_status_ready():
+                break
+
+            try:
+                message = await asyncio.wait_for(websocket.receive(), timeout=0.04)
+            except asyncio.TimeoutError:
+                continue
+            if message["type"] == "websocket.disconnect":
+                break
+            if message.get("bytes") is not None:
+                await asyncio.to_thread(channel.sendall, message["bytes"])
+                continue
+            data = message.get("text", "")
+            if data.startswith("KVM_CONTROL:"):
+                try:
+                    control = json.loads(data[len("KVM_CONTROL:"):])
+                except (json.JSONDecodeError, TypeError):
+                    control = None
+                if isinstance(control, dict) and control.get("type") == "resize":
+                    cols, rows = control.get("cols"), control.get("rows")
+                    if isinstance(cols, int) and isinstance(rows, int):
+                        await asyncio.to_thread(channel.resize_pty, width=max(20, min(cols, 300)), height=max(5, min(rows, 120)))
+                    continue
+            await asyncio.to_thread(channel.sendall, data.encode("utf-8"))
+    except Exception as exc:
+        detail = str(exc)[:500] or "Could not open the host SSH terminal"
+        try:
+            await websocket.send_text("KVM_CONTROL:" + json.dumps({"type": "error", "message": "Could not establish the SSH terminal. Check host connectivity and SSH access."}))
+        except Exception:
+            pass
+    finally:
+        if channel is not None:
+            channel.close()
+        if client is not None:
+            client.close()
+        try:
+            await asyncio.to_thread(record_audit, actor.user_id, "host.terminal", host_id, outcome, detail)
+        except Exception:
+            pass
+        try:
+            await websocket.close(code=1000)
+        except Exception:
+            pass
 def probe(
     host: dict[str, Any], pinned_host_key: str | None = None,
     accept_new_host_key: bool = False,
@@ -1124,7 +1403,7 @@ def list_hosts() -> list[dict[str, Any]]:
         return [public_host(row) for row in db.execute("SELECT * FROM hosts ORDER BY name")]
 
 
-HA_READINESS_SCRIPT = r'''import json,re,shutil,subprocess
+HA_READINESS_SCRIPT = r'''import hashlib,json,re,shutil,subprocess,xml.etree.ElementTree as ET
 from datetime import datetime,timezone
 def run(args, timeout=15):
     try:
@@ -1139,37 +1418,454 @@ if shutil.which('SUSEConnect'):
     if code:
         extension_error=text
     else:
+        text=re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]','',text)
         label=''
         for line in text.splitlines():
             item=line.strip()
-            match=re.search(r'SUSEConnect\s+(-d\s+)?-p\s+(\S+)(.*)$',item)
+            match=re.search(r'\bsuseconnect\s+(.*)$',item,re.I)
             if match:
-                product=match.group(2)
+                command=match.group(1)
+                product_match=re.search(r'(?:^|\s)-p\s+(\S+)',command)
+                if not product_match: continue
+                product=product_match.group(1)
                 if product.startswith('sle-ha/'):
-                    extensions.append({'product':product,'active':bool(match.group(1)),'name':label.strip()})
+                    extensions.append({'product':product,'active':bool(re.search(r'(?:^|\s)-d(?:\s|$)',command)) or bool(re.search(r'\(Activated\)',label,re.I)),'name':re.sub(r'\s*\(Activated\)\s*','',label,flags=re.I).strip()})
                 label=''
             elif item.upper().startswith(('AVAILABLE EXTENSIONS','REMARKS','MORE INFORMATION')):
                 label=''
-            elif item and not item.startswith(('Activate with:','Deactivate with:','(')):
+            elif item and not re.match(r'^(Activate|Deactivate) with:',item,re.I) and not item.startswith('('):
                 label=item
 ha=next((item for item in extensions if item['active']),None)
 available=next(iter(extensions),None)
 services={}
-for name in ('pacemaker','corosync','hawk'):
+for name in ('pacemaker','corosync','hawk','hawk-backend'):
     code,text=run(['systemctl','is-active',name],8)
     services[name]=text.splitlines()[0] if text else ('missing' if code==4 else 'unknown')
 commands={name:shutil.which(name) is not None for name in ('crm','crm_mon','corosync-cfgtool','stonith_admin')}
 cluster_status=''
 cluster_detected=False
+cluster_name=''
+cluster_members=[]
+try:
+    for line in open('/etc/corosync/corosync.conf',encoding='utf-8'):
+        if line.strip().startswith('cluster_name:'):
+            cluster_name=line.split(':',1)[1].strip().strip('"')
+            break
+except OSError: pass
 if commands['crm_mon'] and services['pacemaker']=='active':
     code,cluster_status=run(['crm_mon','-1','-r'],15)
-    cluster_detected=code==0
+    cluster_detected=code==0 and bool(re.search(r'Current DC:|\bOnline:|nodes configured',cluster_status,re.I))
+    xml_code,xml_text=run(['crm_mon','--one-shot','--output-as=xml'],20)
+    if xml_code==0:
+        try:
+            root=ET.fromstring(xml_text)
+            cluster_members=sorted({node.get('name','').strip().lower() for node in root.findall('.//nodes/node') if node.get('name','').strip()})
+        except Exception: pass
+cluster_identity=hashlib.sha256((cluster_name.strip().lower()+'\0'+'\0'.join(cluster_members)).encode()).hexdigest()[:20] if cluster_detected and cluster_members else ''
 print(json.dumps({'suseconnect_available':bool(shutil.which('SUSEConnect')),'ha_available':available is not None,
     'ha_active':ha is not None,'ha_product':(ha or available or {}).get('product',''),
     'ha_product_name':(ha or available or {}).get('name',''),'extension_error':extension_error,
-    'commands':commands,'services':services,'cluster_detected':cluster_detected,
+    'commands':commands,'services':services,'cluster_detected':cluster_detected,'cluster_name':cluster_name,'cluster_identity':cluster_identity,'cluster_members':cluster_members,
     'checked_at':datetime.now(timezone.utc).isoformat(),
     'cluster_summary':'\n'.join(cluster_status.splitlines()[:8]) if cluster_status else ''}))
+'''
+
+
+HA_PREFLIGHT_SCRIPT = r'''import glob,json,platform,re,shutil,subprocess,xml.etree.ElementTree as ET
+def run(args, timeout=8):
+    try:
+        result=subprocess.run(args,capture_output=True,text=True,timeout=timeout)
+        return result.returncode,(result.stdout or result.stderr).strip()
+    except Exception as error:
+        return 127,str(error)
+release={}
+try:
+    for line in open('/etc/os-release',encoding='utf-8'):
+        if '=' in line:
+            key,value=line.rstrip().split('=',1)
+            release[key]=value.strip().strip('"')
+except OSError:
+    pass
+ha_code,ha_output=run(['SUSEConnect','--list-extensions'],25) if shutil.which('SUSEConnect') else (127,'SUSEConnect is not installed')
+ha_active=False
+if ha_code==0:
+    ha_output=re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]','',ha_output)
+    label=''
+    for line in ha_output.splitlines():
+        item=line.strip()
+        match=re.search(r'\bSUSEConnect\s+(.*)$',item,re.I)
+        if match:
+            command=match.group(1)
+            product=re.search(r'(?:^|\s)-p\s+(\S+)',command)
+            if product and product.group(1).startswith('sle-ha/'):
+                ha_active=bool(re.search(r'(?:^|\s)-d(?:\s|$)',command)) or bool(re.search(r'\(Activated\)',label,re.I))
+                if ha_active: break
+            label=''
+        elif item and not re.match(r'^(Activate|Deactivate) with:',item,re.I) and not item.startswith('('):
+            label=item
+tools={name:bool(shutil.which(name)) for name in ('crm','crm_mon','corosync-cfgtool','stonith_admin')}
+supported_releases={'15.3','15.4','15.5','15.6','15.7','15-SP3','15-SP4','15-SP5','15-SP6','15-SP7','16.0'}
+compatibility_supported=release.get('ID','').lower()=='sles' and release.get('VERSION_ID','') in supported_releases
+ntp_code,ntp=run(['timedatectl','show','-p','NTPSynchronized','--value'])
+time_synced=ntp_code==0 and ntp.strip().lower()=='yes'
+services={}
+for name in ('chronyd','chrony'):
+    code,state=run(['systemctl','is-active',name])
+    if code in (0,3,4): services[name]=state.splitlines()[0] if state else 'unknown'
+ip_code,ip_json=run(['ip','-j','address','show'])
+interfaces=[]
+if ip_code==0:
+    try:
+        for item in json.loads(ip_json):
+            if item.get('ifname')=='lo' or 'UP' not in item.get('flags',[]): continue
+            addresses=[address.get('local','') for address in item.get('addr_info',[]) if address.get('scope')!='host']
+            interfaces.append({'name':item.get('ifname',''),'addresses':addresses})
+    except Exception: pass
+watchdogs=sorted(path for path in glob.glob('/dev/watchdog*') if __import__('os').path.exists(path))
+resource_agents=[]
+for vendor in ('heartbeat','suse'):
+    for root in ('/usr/lib/ocf/resource.d','/usr/lib64/ocf/resource.d'):
+        for path in glob.glob(root+'/'+vendor+'/*'):
+            if __import__('os').path.isfile(path) and __import__('os').access(path,__import__('os').X_OK):
+                resource_agents.append(vendor+':'+path.rsplit('/',1)[-1])
+resource_agents=sorted(set(resource_agents))
+pool_code,pool_output=run(['virsh','-c','qemu:///system','pool-list','--all','--name']) if shutil.which('virsh') else (127,'virsh is not installed')
+libvirt_pools=[line.strip() for line in pool_output.splitlines() if line.strip()] if pool_code==0 else []
+libvirt_pool_details=[]
+for pool_name in libvirt_pools[:8]:
+    code,pool_xml=run(['virsh','-c','qemu:///system','pool-dumpxml',pool_name],2)
+    if code!=0: continue
+    try:
+        root=ET.fromstring(pool_xml)
+        source=root.find('source')
+        target=root.find('target')
+        libvirt_pool_details.append({'name':pool_name,'type':root.get('type','unknown'),
+            'target_path':target.findtext('path','') if target is not None else '',
+            'source_path':source.findtext('dir','') if source is not None else '',
+            'source_devices':[item.get('path','') for item in source.findall('device') if item.get('path')] if source is not None else [],
+            'source_hosts':[item.get('name','') for item in source.findall('host') if item.get('name')] if source is not None else []})
+    except Exception: pass
+workload_services={}
+for name in ('apache2','nfsserver','nfs-server'):
+    load_code,load_state=run(['systemctl','show','-p','LoadState','--value',name+'.service'])
+    active_code,active_state=run(['systemctl','is-active',name+'.service'])
+    workload_services[name]=(load_code==0 and load_state.strip()=='loaded' and active_code==0 and active_state.strip()=='active')
+workload_services['nfsserver']=workload_services.get('nfsserver',False) or workload_services.get('nfs-server',False)
+print(json.dumps({'hostname':platform.node(),'os_id':release.get('ID',''),'os_name':release.get('PRETTY_NAME',''),'os_version':release.get('VERSION_ID',''),'architecture':platform.machine(),
+ 'compatibility_supported':compatibility_supported,'ha_active':ha_active,'ha_check_error':ha_output[:300] if ha_code else '', 'tools':tools,'time_synchronized':time_synced,'time_sync_state':ntp.strip() if ntp_code==0 else 'unknown',
+ 'time_services':services,'workload_services':workload_services,'interfaces':interfaces,'watchdog_devices':watchdogs,'resource_agents':resource_agents,'libvirt_pools':libvirt_pools,'libvirt_pool_details':libvirt_pool_details,'fencing':'requires_configuration','inter_node_connectivity':'not_checked'}))
+'''
+
+
+HA_CLUSTER_STATUS_SCRIPT = r'''import json,shutil,subprocess,xml.etree.ElementTree as ET
+if not shutil.which('crm_mon') or not shutil.which('crm'):
+    raise SystemExit('SLE HA cluster tools are not installed. Install the SUSE ha_sles pattern first.')
+command=['crm_mon','--one-shot','--show-node-attributes','--output-as=xml']
+try:
+    result=subprocess.run(command,capture_output=True,text=True,timeout=25)
+except Exception as error:
+    raise SystemExit('Could not query Pacemaker status: '+str(error))
+if result.returncode:
+    raise SystemExit((result.stderr or result.stdout or 'crm_mon could not read cluster status').strip()[:500])
+try: root=ET.fromstring(result.stdout)
+except Exception as error: raise SystemExit('crm_mon returned invalid status data: '+str(error))
+truth=lambda value: str(value).lower() in ('true','1','yes')
+summary=root.find('summary')
+nodes=[]
+for item in root.findall('.//nodes/node'):
+    nodes.append({'name':item.get('name',''),'id':item.get('id',''),'online':truth(item.get('online')),'standby':truth(item.get('standby')),'maintenance':truth(item.get('maintenance')),'unclean':truth(item.get('unclean')),'pending':item.get('pending','')})
+resources=[]
+for item in root.findall('.//resources/resource'):
+    running=[]
+    for node in item.findall('.//node'):
+        name=node.get('name') or node.get('uname')
+        if name and node.get('running')!='false': running.append(name)
+    resources.append({'id':item.get('id',''),'agent':item.get('resource_agent') or item.get('type',''),'role':item.get('role','Stopped'),'active':truth(item.get('active')),'failed':truth(item.get('failed')),'managed':item.get('managed','true').lower() not in ('false','0','no'),'nodes':running})
+cluster_name=''
+try:
+    for line in open('/etc/corosync/corosync.conf',encoding='utf-8'):
+        if line.strip().startswith('cluster_name:'): cluster_name=line.split(':',1)[1].strip().strip('"')
+except OSError: pass
+quorum={}
+if shutil.which('corosync-quorumtool'):
+    q=subprocess.run(['corosync-quorumtool','-s'],capture_output=True,text=True,timeout=10)
+    quorum_text=(q.stdout or q.stderr).strip()
+    quorum={'available':q.returncode==0,'quorate':bool(__import__('re').search(r'Quorate:\s+Yes',quorum_text,__import__('re').I)),'summary':quorum_text[:2000]}
+fencing={}
+if shutil.which('stonith_admin'):
+    f=subprocess.run(['stonith_admin','-L'],capture_output=True,text=True,timeout=10)
+    fence_text=(f.stdout or f.stderr).strip()
+    fencing={'available':f.returncode==0,'configured':f.returncode==0 and bool(fence_text) and not bool(__import__('re').search(r'no\s+(?:stonith\s+)?devices?\s+configured',fence_text,__import__('re').I)),'summary':fence_text[:2000]}
+print(json.dumps({'cluster_name':cluster_name,'nodes':nodes,'resources':resources,'node_count':len(nodes),'online_count':sum(1 for n in nodes if n['online']),'resource_count':len(resources),'quorum':quorum,'fencing':fencing,'checked_at':__import__('datetime').datetime.now(__import__('datetime').timezone.utc).isoformat(),'summary':(summary.findtext('current_dc') if summary is not None else '')}))
+'''
+
+
+HA_CLUSTER_DIAGNOSTICS_SCRIPT = r'''import json,re,shutil,subprocess
+def run(args, timeout=12):
+ try:
+  result=subprocess.run(args,capture_output=True,text=True,timeout=timeout)
+  return result.returncode,(result.stdout or result.stderr).strip()
+ except Exception as error: return 127,str(error)
+constraints={}
+for key,selector in (('location','location'),('ordering','order'),('colocation','colocation')):
+ code,text=run(['crm','configure','show','type:'+selector]) if shutil.which('crm') else (127,'crmsh is not installed')
+ # Only return the requested constraint classes; never expose resource parameter values.
+ lines=[]
+ for line in text.splitlines():
+  line=line.strip()
+  if not line or line.startswith(('#','property','rsc_defaults','op_defaults','primitive','group','clone','ms','bundle','template','node')): continue
+  if re.match(r'^(location|order|colocation)\s+',line): lines.append(line[:500])
+ constraints[key]={'available':code==0,'items':lines[:100],'error':text[:240] if code else ''}
+code,rings=run(['corosync-cfgtool','-s']) if shutil.which('corosync-cfgtool') else (127,'corosync-cfgtool is not installed')
+jcode,events=run(['journalctl','-u','pacemaker','-u','corosync','--since','24 hours ago','-n','80','--no-pager','-o','short-iso'],15)
+if jcode==0:
+ events=re.sub(r'(?i)(password|token|secret|credential)(\s*[=:]\s*)\S+',r'\1\2[REDACTED]',events)
+ events='\n'.join(events.splitlines()[-80:])[:12000]
+print(json.dumps({'constraints':constraints,'corosync':{'available':code==0,'summary':rings[:5000],'error':rings[:240] if code else ''},'activity':{'available':jcode==0,'summary':events if jcode==0 else '', 'error':events[:240] if jcode else ''}}))
+'''
+
+
+HA_CLUSTER_ACTION_SCRIPT = r'''import re,subprocess,sys
+action,target=sys.argv[1:3]
+if not re.fullmatch(r'[A-Za-z0-9_.:@-]{1,255}',target): raise SystemExit('Invalid cluster object name')
+commands={
+ 'node_standby':['crm','--wait','node','standby',target],
+ 'node_online':['crm','node','online',target],
+ 'node_maintenance':['crm','node','maintenance',target],
+ 'node_ready':['crm','node','ready',target],
+ 'resource_start':['crm','resource','start',target],
+ 'resource_stop':['crm','resource','stop',target],
+ 'resource_cleanup':['crm','resource','cleanup',target],
+}
+if action not in commands: raise SystemExit('Unsupported cluster operation')
+try: result=subprocess.run(commands[action],capture_output=True,text=True,timeout=125 if action=='node_standby' else 60)
+except subprocess.TimeoutExpired: raise SystemExit('The cluster operation timed out. Refresh status before retrying.')
+if result.returncode: raise SystemExit((result.stderr or result.stdout or 'crmsh rejected the operation').strip()[:500])
+print((result.stdout or result.stderr or 'Operation completed').strip()[:500])
+'''
+
+
+HA_RESOURCE_AGENTS_SCRIPT = r'''import json,re,subprocess,sys
+def run(args):
+ result=subprocess.run(args,capture_output=True,text=True,timeout=20)
+ if result.returncode: raise SystemExit((result.stderr or result.stdout or 'crmsh command failed').strip()[:400])
+ return result.stdout
+agents=[]
+classes=[line.strip().lower() for line in run(['crm','ra','classes']).splitlines() if line.strip()]
+for klass in ('ocf','systemd'):
+ if klass not in classes: continue
+ output=run(['crm','ra','list',klass])
+ for line in output.splitlines():
+  for token in line.split():
+   token=token.strip(',')
+   if klass=='ocf' and re.fullmatch(r'[A-Za-z0-9_.+-]+:[A-Za-z0-9_.+-]+',token): agents.append('ocf:'+token)
+   elif klass=='systemd' and re.fullmatch(r'[A-Za-z0-9_.@+-]+\.service',token): agents.append('systemd:'+token)
+print(json.dumps({'agents':sorted(set(agents))}))
+'''
+
+
+HA_RESOURCE_AGENT_INFO_SCRIPT = r'''import re,subprocess,sys
+agent=sys.argv[1]
+if not re.fullmatch(r'(?:ocf:[A-Za-z0-9_.+-]+:[A-Za-z0-9_.+-]+|systemd:[A-Za-z0-9_.@+-]+\.service)',agent): raise SystemExit('Unsupported resource agent identifier')
+result=subprocess.run(['crm','ra','info',agent],capture_output=True,text=True,timeout=20)
+if result.returncode: raise SystemExit((result.stderr or result.stdout or 'crmsh could not describe this resource agent').strip()[:400])
+print((result.stdout or '').strip()[:12000])
+'''
+
+
+HA_RESOURCE_MUTATION_SCRIPT = r'''import json,re,subprocess,sys,tempfile,xml.etree.ElementTree as ET,os
+payload=json.loads(sys.stdin.read())
+action=payload['action']; resource_id=payload['resource_id']
+if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,127}',resource_id): raise SystemExit('Use a resource ID with letters, numbers, dots, underscores, or hyphens; start with a letter or number.')
+def run(args,timeout=30):
+ result=subprocess.run(args,capture_output=True,text=True,timeout=timeout)
+ if result.returncode: raise SystemExit((result.stderr or result.stdout or 'crmsh operation failed').strip()[:500])
+ return result.stdout
+def resource_element():
+ xml=run(['cibadmin','-Q','-o','resources'])
+ root=ET.fromstring(xml)
+ for item in root.iter():
+  if item.get('id')==resource_id and item.tag in ('primitive','group','clone','bundle','master'):
+   return item
+ return None
+def check_primitive():
+ item=resource_element()
+ if item is None: raise SystemExit('Resource not found in the Pacemaker configuration.')
+ if item.tag!='primitive': raise SystemExit('This action currently supports primitive resources only; groups and clones require their own workflow.')
+ if item.get('class')=='stonith': raise SystemExit('Fencing resources must be changed in the dedicated fencing workflow.')
+ return item
+def quote(value):
+ if not isinstance(value,str) or len(value)>2048 or any(ord(ch)<32 for ch in value): raise SystemExit('Resource values must be printable single-line text up to 2048 characters.')
+ return '"'+value.replace('\\','\\\\').replace('"','\\"')+'"'
+if action=='create':
+ agent=payload.get('agent') or ''
+ if not re.fullmatch(r'(?:ocf:[A-Za-z0-9_.+-]+:[A-Za-z0-9_.+-]+|systemd:[A-Za-z0-9_.@+-]+\.service)',agent): raise SystemExit('Choose an installed OCF or systemd resource agent.')
+ params=payload.get('parameters') or {}
+ if len(params)>40: raise SystemExit('A primitive resource can have at most 40 parameters in this form.')
+ lines=[]
+ for key,value in sorted(params.items()):
+  if not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_.-]{0,63}',key): raise SystemExit('Invalid resource parameter name.')
+  lines.append(f'  {key}={quote(value)}')
+ if resource_element() is not None: raise SystemExit('A resource with this ID already exists.')
+ info=subprocess.run(['crm','ra','info',agent],capture_output=True,text=True,timeout=20)
+ if info.returncode: raise SystemExit((info.stderr or info.stdout or 'The selected resource agent is not available on this host.').strip()[:400])
+ config=f'primitive {resource_id} {agent}'
+ if lines: config+=' \\\n  params '+' '.join(lines)
+ config+=' \\\n  meta target-role="Stopped"\n'
+ fd,path=tempfile.mkstemp(prefix='rancher-kvm-resource-',suffix='.crm')
+ try:
+  with os.fdopen(fd,'w',encoding='utf-8') as handle: handle.write(config)
+  run(['crm','configure','load','update',path],timeout=60)
+ finally:
+  try: os.unlink(path)
+  except OSError: pass
+ print('Primitive resource created in Stopped state. Review its parameters, then start it when the service is ready on the cluster nodes.')
+elif action in ('set_param','delete_param','set_meta','delete_meta'):
+ check_primitive()
+ key=payload.get('key') or ''
+ if not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_.-]{0,63}',key): raise SystemExit('Invalid parameter or meta attribute name.')
+ group='param' if action.endswith('param') else 'meta'
+ if action.startswith('delete_'): run(['crm','resource',group,resource_id,'delete',key])
+ else:
+  value=payload.get('value')
+  if value is None: raise SystemExit('Provide a value for this attribute.')
+  run(['crm','resource',group,resource_id,'set',key,value])
+ print('Resource configuration updated.')
+elif action=='delete':
+ item=check_primitive()
+ status=ET.fromstring(run(['crm_mon','--one-shot','--output-as=xml'],timeout=25))
+ state=next((entry for entry in status.findall('.//resources/resource') if entry.get('id')==resource_id),None)
+ if state is None: raise SystemExit('Pacemaker did not return a current state for this resource. Refresh cluster status and verify that it is stopped before deleting it.')
+ if state is not None and state.get('failed','false').lower() in ('true','1','yes'): raise SystemExit('The resource is failed. Clean up its failed state before deleting it.')
+ if state is not None and state.get('active','false').lower() in ('true','1','yes'): raise SystemExit('Stop the resource first, then retry deletion.')
+ run(['crm','configure','delete',resource_id],timeout=60)
+ print('Resource removed from the Pacemaker configuration.')
+else: raise SystemExit('Unsupported resource operation')
+'''
+
+
+HA_CONSTRAINT_MUTATION_SCRIPT = r'''import json,re,subprocess,sys,xml.etree.ElementTree as ET
+payload=json.loads(sys.stdin.read())
+action=payload['action']; constraint_id=payload['constraint_id']
+identifier=re.compile(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,127}')
+if not identifier.fullmatch(constraint_id): raise SystemExit('Constraint IDs must start with a letter or number and contain only letters, numbers, dots, underscores, or hyphens.')
+def run(args,timeout=30):
+ result=subprocess.run(args,capture_output=True,text=True,timeout=timeout)
+ if result.returncode: raise SystemExit((result.stderr or result.stdout or 'crmsh operation failed').strip()[:500])
+ return result.stdout
+def resources():
+ root=ET.fromstring(run(['cibadmin','-Q','-o','resources']))
+ return {item.get('id') for item in root.iter() if item.get('id')}
+def constraints():
+ root=ET.fromstring(run(['cibadmin','-Q','-o','constraints']))
+ return {item.get('id') for item in root.iter() if item.get('id')}
+if action=='delete':
+ if constraint_id not in constraints(): raise SystemExit('Constraint not found in the Pacemaker configuration.')
+ run(['crm','configure','delete',constraint_id],60)
+ print('Constraint removed from the Pacemaker configuration.')
+ raise SystemExit(0)
+known=resources(); resource=payload.get('resource') or ''
+if not identifier.fullmatch(resource) or resource not in known: raise SystemExit('Choose a resource that exists in the current Pacemaker configuration.')
+if constraint_id in constraints(): raise SystemExit('A constraint with this ID already exists.')
+if action=='create_location':
+ node=payload.get('node') or ''; score=payload.get('score') or ''
+ if not identifier.fullmatch(node): raise SystemExit('Choose a valid cluster node name.')
+ if score not in ('INFINITY','-INFINITY') and not re.fullmatch(r'-?\d{1,9}',score): raise SystemExit('Location score must be an integer or INFINITY / -INFINITY.')
+ score={'INFINITY':'inf','-INFINITY':'-inf'}.get(score,score)
+ nodes=ET.fromstring(run(['crm_mon','--one-shot','--output-as=xml'],25))
+ known_nodes={item.get('name') for item in nodes.findall('.//nodes/node') if item.get('name')}
+ if node not in known_nodes: raise SystemExit('The selected node is not currently reported by this cluster.')
+ run(['crm','configure','location',constraint_id,resource,score+':',node],60)
+elif action=='create_order':
+ other=payload.get('other_resource') or ''; kind=payload.get('order_kind') or 'Mandatory'
+ if not identifier.fullmatch(other) or other not in known: raise SystemExit('Choose a second resource that exists in the current Pacemaker configuration.')
+ if resource==other: raise SystemExit('An order constraint must reference two different resources.')
+ if kind not in ('Mandatory','Optional','Serialize'): raise SystemExit('Unsupported order constraint kind.')
+ run(['crm','configure','order',constraint_id,kind+':',resource,other],60)
+elif action=='create_colocation':
+ other=payload.get('other_resource') or ''; score=payload.get('score') or ''
+ if not identifier.fullmatch(other) or other not in known: raise SystemExit('Choose a second resource that exists in the current Pacemaker configuration.')
+ if resource==other: raise SystemExit('A colocation constraint must reference two different resources.')
+ if score not in ('INFINITY','-INFINITY') and not re.fullmatch(r'-?\d{1,9}',score): raise SystemExit('Colocation score must be an integer or INFINITY / -INFINITY.')
+ score={'INFINITY':'inf','-INFINITY':'-inf'}.get(score,score)
+ run(['crm','configure','colocation',constraint_id,score+':',resource,other],60)
+else: raise SystemExit('Unsupported constraint operation.')
+print('Constraint created in the live Pacemaker configuration.')
+'''
+
+
+HA_INSTALL_STACK_SCRIPT = r'''import json,os,re,shutil,subprocess
+if not shutil.which('SUSEConnect'): raise SystemExit('SUSEConnect is unavailable; verify the SLES registration first.')
+result=subprocess.run(['SUSEConnect','--list-extensions'],capture_output=True,text=True,timeout=30)
+if result.returncode: raise SystemExit('Could not verify SLE HA registration: '+(result.stderr or result.stdout).strip()[:300])
+text=re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]','',result.stdout)
+active=False; label=''
+for line in text.splitlines():
+ item=line.strip(); match=re.search(r'\bSUSEConnect\s+(.*)$',item,re.I)
+ if match:
+  product=re.search(r'(?:^|\s)-p\s+(\S+)',match.group(1))
+  if product and product.group(1).startswith('sle-ha/') and (re.search(r'(?:^|\s)-d(?:\s|$)',match.group(1)) or re.search(r'\(Activated\)',label,re.I)):
+   active=True; break
+  label=''
+ elif item and not re.match(r'^(Activate|Deactivate) with:',item,re.I) and not item.startswith('('): label=item
+if not active: raise SystemExit('The SLE HA extension is not active on this host. Activate it before installing the HA pattern.')
+if not shutil.which('zypper'): raise SystemExit('zypper is unavailable on this host.')
+result=subprocess.run(['zypper','--non-interactive','install','-t','pattern','ha_sles'],capture_output=True,text=True,timeout=900)
+if result.returncode: raise SystemExit((result.stderr or result.stdout or 'zypper could not install the ha_sles pattern').strip()[-800:])
+units=('pacemaker','corosync','hawk','hawk-backend')
+services={}
+for name in units:
+ active=subprocess.run(['systemctl','is-active',name],capture_output=True,text=True,timeout=8)
+ enabled=subprocess.run(['systemctl','is-enabled',name],capture_output=True,text=True,timeout=8)
+ services[name]={'active':(active.stdout or active.stderr).strip() or 'unknown','enabled':(enabled.stdout or enabled.stderr).strip() or 'unknown'}
+cluster_configured=os.path.isfile('/etc/corosync/corosync.conf')
+print(json.dumps({'services':services,'cluster_configured':cluster_configured,
+ 'message':('SLE HA packages installed. Cluster services are managed by the supported crm cluster init workflow.' if not cluster_configured else 'SLE HA packages installed. Existing cluster service state was left unchanged.'),
+ 'package_output':(result.stdout or 'The ha_sles pattern was installed.').strip()[-500:]}))
+'''
+
+
+TEMPLATE_TIME_SYNC_SCRIPT = r'''import pathlib,re,subprocess
+loaded=subprocess.run(['systemctl','show','-p','LoadState','--value','chronyd.service'],capture_output=True,text=True,timeout=15)
+if loaded.returncode or loaded.stdout.strip()!='loaded':
+ refresh=subprocess.run(['zypper','--non-interactive','refresh'],capture_output=True,text=True,timeout=300)
+ if refresh.returncode: raise SystemExit((refresh.stderr or refresh.stdout or 'Could not refresh SUSE repositories').strip()[-500:])
+ install=subprocess.run(['zypper','--non-interactive','install','--no-recommends','chrony'],capture_output=True,text=True,timeout=600)
+ if install.returncode: raise SystemExit((install.stderr or install.stdout or 'Could not install the SUSE chrony package').strip()[-600:])
+config_files=[pathlib.Path('/etc/chrony.conf'),*pathlib.Path('/etc/chrony.d').glob('*.conf')]
+sources=[]
+for path in config_files:
+ if path.is_file():
+  sources.extend(line.strip() for line in path.read_text(errors='replace').splitlines() if re.match(r'^\s*(server|pool|peer)\s+\S+',line) and not line.lstrip().startswith('#'))
+if not sources: raise SystemExit('The chrony package is ready, but no NTP server or pool is configured. Add a trusted source in /etc/chrony.conf or /etc/chrony.d before synchronization can start.')
+result=subprocess.run(['systemctl','enable','--now','chronyd.service'],capture_output=True,text=True,timeout=45)
+if result.returncode: raise SystemExit((result.stderr or result.stdout or 'Could not enable chronyd.service').strip()[-500:])
+print('chronyd is enabled and running. Synchronization status will update after it contacts a configured source.')
+'''
+
+
+TEMPLATE_WORKLOAD_PACKAGE_SCRIPT = r'''import pathlib,subprocess,sys
+kind=sys.argv[1]
+packages={'web':('apache2',('apache2.service',)),'nfs':('nfs-kernel-server',('nfsserver.service','nfs-server.service'))}
+if kind not in packages: raise SystemExit('Unsupported SUSE workload package')
+package,units=packages[kind]
+def run(args,timeout=900):
+ result=subprocess.run(args,capture_output=True,text=True,timeout=timeout)
+ if result.returncode: raise SystemExit((result.stderr or result.stdout or 'zypper operation failed').strip()[-700:])
+ return result
+returncode=subprocess.run(['rpm','-q',package],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode
+if returncode: run(['zypper','--non-interactive','refresh'],300); run(['zypper','--non-interactive','install','--no-recommends',package])
+unit=next((name for name in units if subprocess.run(['systemctl','show','-p','LoadState','--value',name],capture_output=True,text=True,timeout=15).stdout.strip()=='loaded'),None)
+if not unit: raise SystemExit(f'{package} installed, but no expected service unit was found ({", ".join(units)}). Check the enabled SUSE repositories and package contents.')
+config=pathlib.Path('/etc/corosync/corosync.conf')
+if config.is_file() and config.stat().st_size:
+ active=subprocess.run(['systemctl','is-active',unit],capture_output=True,text=True,timeout=15)
+ if active.returncode!=0 or active.stdout.strip()!='active':
+  raise SystemExit(f'{unit} is managed as a cluster workload on a host with Corosync configuration. Start or recover it through Pacemaker after reviewing the cluster resource; this action will not start it directly.')
+result=run(['systemctl','enable','--now',unit],45)
+active=subprocess.run(['systemctl','is-active',unit],capture_output=True,text=True,timeout=15)
+if active.returncode!=0 or active.stdout.strip()!='active': raise SystemExit((active.stderr or active.stdout or f'{unit} did not become active after enable --now').strip()[-500:])
+print(f'{package} is installed and {unit} is enabled and active. Configure the workload and its SUSE Pacemaker resource separately before production use.')
 '''
 
 
@@ -1196,15 +1892,642 @@ def get_cluster_readiness() -> list[dict[str, Any]]:
         return list(executor.map(inspect,rows))
 
 
+@app.post("/kvm-api/clusters/preflight", dependencies=[Depends(require_permission("viewer"))])
+def run_cluster_preflight(payload: ClusterPreflightRequest) -> list[dict[str, Any]]:
+    """Run bounded, read-only HA prerequisites checks on selected hosts."""
+    if len(set(payload.host_ids)) != len(payload.host_ids):
+        raise HTTPException(422, "Select each host only once")
+    placeholders=','.join('?' for _ in payload.host_ids)
+    with connect_db() as db:
+        rows=[dict(row) for row in db.execute(f"SELECT * FROM hosts WHERE id IN ({placeholders})", payload.host_ids)]
+    by_id={row['id']:row for row in rows}
+    if len(by_id) != len(payload.host_ids):
+        raise HTTPException(404, "One or more selected KVM hosts were not found")
+
+    def inspect_preflight(host_id: str) -> dict[str, Any]:
+        row=by_id[host_id]
+        result={'host_id':host_id,'host_name':row.get('hostname') or row.get('name'),'status':'error'}
+        try:
+            row['password']=cipher.decrypt(row['password'].encode()).decode()
+            decrypt_host_credentials(row)
+            result['checks']=json.loads(run_sudo_python(row,HA_PREFLIGHT_SCRIPT,timeout=45) or '{}')
+            result['status']='checked'
+        except Exception as error:
+            result['error']=str(error)[:300]
+        result['checked_at']=datetime.now(timezone.utc).isoformat()
+        return result
+
+    with ThreadPoolExecutor(max_workers=min(3,len(payload.host_ids))) as executor:
+        return list(executor.map(inspect_preflight,payload.host_ids))
+
+
+def managed_cluster_view(db: sqlite3.Connection, row: sqlite3.Row) -> dict[str, Any]:
+    host_ids = json.loads(row["host_ids_json"])
+    members = []
+    for host_id in host_ids:
+        member = db.execute("SELECT * FROM hosts WHERE id=?", (host_id,)).fetchone()
+        if member:
+            members.append(public_host(member))
+    return {"id": row["id"], "name": row["name"], "type": row["cluster_type"],
+            "state": row["state"], "host_ids": host_ids, "members": members,
+            "template_id": row["template_id"], "capabilities": json.loads(row["capabilities_json"]),
+            "created_at": row["created_at"], "updated_at": row["updated_at"],
+            "last_checked_at": row["last_checked_at"]}
+
+
+@app.get("/kvm-api/managed-clusters", dependencies=[Depends(require_permission("viewer"))])
+def list_managed_clusters() -> list[dict[str, Any]]:
+    with connect_db() as db:
+        rows = db.execute("SELECT * FROM managed_clusters ORDER BY name COLLATE NOCASE").fetchall()
+        return [managed_cluster_view(db, row) for row in rows]
+
+
+@app.post("/kvm-api/managed-clusters", status_code=201)
+def create_managed_kvm_cluster(payload: ManagedKvmClusterInput,
+                               access: AuthorizationContext = Depends(require_permission("cluster_admin"))) -> dict[str, Any]:
+    name = payload.name.strip()
+    if len(name) < 2 or len(set(payload.host_ids)) != len(payload.host_ids):
+        raise HTTPException(422, "Enter a cluster name and select each host only once")
+    placeholders = ",".join("?" for _ in payload.host_ids)
+    with connect_db() as db:
+        db.execute("BEGIN IMMEDIATE")
+        hosts = db.execute(f"SELECT * FROM hosts WHERE id IN ({placeholders})", payload.host_ids).fetchall()
+        if len(hosts) != len(payload.host_ids):
+            raise HTTPException(404, "One or more selected KVM hosts were not found")
+        unavailable = [row["hostname"] or row["name"] for row in hosts if row["status"] != "ready"]
+        if unavailable:
+            raise HTTPException(409, "All selected hosts must be connected and ready: " + ", ".join(unavailable))
+        existing = db.execute("SELECT id,host_ids_json FROM managed_clusters").fetchall()
+        claimed = {host_id for row in existing for host_id in json.loads(row["host_ids_json"])}
+        overlap = [row["hostname"] or row["name"] for row in hosts if row["id"] in claimed]
+        if overlap:
+            raise HTTPException(409, "These hosts already belong to a KVM host group: " + ", ".join(overlap))
+        cluster_id = str(uuid.uuid4())
+        timestamp = now()
+        # This is an extension-managed host group. It deliberately does not claim
+        # shared storage, live migration, workload balancing, or HA readiness.
+        capabilities = {"cross_host_inventory": False, "shared_storage_verified": False,
+                        "common_networks_verified": False, "live_migration": False,
+                        "automatic_placement": False, "ha": False}
+        db.execute("INSERT INTO managed_clusters (id,name,cluster_type,state,host_ids_json,template_id,created_by,created_at,updated_at,last_checked_at,capabilities_json) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                   (cluster_id, name, "kvm-virtualization", "setup", json.dumps(payload.host_ids),
+                    "kvm-virtualization", access.user_id, timestamp, timestamp, timestamp,
+                    json.dumps(capabilities)))
+        row = db.execute("SELECT * FROM managed_clusters WHERE id=?", (cluster_id,)).fetchone()
+        result = managed_cluster_view(db, row)
+    record_audit(access.user_id, "cluster.kvm_group.create", cluster_id,
+                 detail=f"hosts={len(payload.host_ids)}; state=setup")
+    return result
+
+
+@app.delete("/kvm-api/managed-clusters/{cluster_id}", status_code=204)
+def delete_managed_kvm_cluster(cluster_id: str,
+                               access: AuthorizationContext = Depends(require_permission("cluster_admin"))) -> Response:
+    try:
+        cluster_id = str(uuid.UUID(cluster_id))
+    except ValueError as exc:
+        raise HTTPException(404, "KVM host group not found") from exc
+    with connect_db() as db:
+        row = db.execute("SELECT id FROM managed_clusters WHERE id=?", (cluster_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "KVM host group not found")
+        db.execute("DELETE FROM managed_clusters WHERE id=?", (cluster_id,))
+    record_audit(access.user_id, "cluster.kvm_group.delete", cluster_id)
+    return Response(status_code=204)
+
+
+@app.get("/kvm-api/managed-clusters/{cluster_id}", dependencies=[Depends(require_permission("viewer"))])
+def get_managed_kvm_cluster(cluster_id: str) -> dict[str, Any]:
+    try:
+        cluster_id = str(uuid.UUID(cluster_id))
+    except ValueError as exc:
+        raise HTTPException(404, "KVM host group not found") from exc
+    with connect_db() as db:
+        row = db.execute("SELECT * FROM managed_clusters WHERE id=?", (cluster_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "KVM host group not found")
+        return managed_cluster_view(db, row)
+
+
+@app.get("/kvm-api/managed-clusters/{cluster_id}/inventory", dependencies=[Depends(require_permission("viewer"))])
+def get_managed_kvm_cluster_inventory(cluster_id: str) -> dict[str, Any]:
+    try:
+        cluster_id = str(uuid.UUID(cluster_id))
+    except ValueError as exc:
+        raise HTTPException(404, "KVM host group not found") from exc
+    with connect_db() as db:
+        cluster = db.execute("SELECT * FROM managed_clusters WHERE id=?", (cluster_id,)).fetchone()
+        if not cluster:
+            raise HTTPException(404, "KVM host group not found")
+        member_ids = json.loads(cluster["host_ids_json"])
+        placeholders = ",".join("?" for _ in member_ids)
+        rows = [dict(row) for row in db.execute(f"SELECT * FROM hosts WHERE id IN ({placeholders})", member_ids)]
+    by_id = {row["id"]: row for row in rows}
+    rows = [by_id[host_id] for host_id in member_ids if host_id in by_id]
+
+    def inventory(row: dict[str, Any]) -> dict[str, Any]:
+        name = row.get("hostname") or row.get("name")
+        try:
+            data = get_host_cloud_native(row["id"])
+            return {"host_id": row["id"], "host_name": name, "status": "ready",
+                    "metrics": data.get("system", {}), "vms": data.get("vms", []),
+                    "network_interfaces": data.get("network", {}).get("interfaces", []),
+                    "libvirt_networks": data.get("libvirt_networks", []),
+                    "storage_pools": data.get("storage_pools", []), "checked_at": now()}
+        except Exception as exc:
+            return {"host_id": row["id"], "host_name": name, "status": "error",
+                    "error": str(exc)[:400], "vms": [], "checked_at": now()}
+
+    with ThreadPoolExecutor(max_workers=min(3, len(rows))) as executor:
+        hosts = list(executor.map(inventory, rows))
+    vms = [{**vm, "host_id": host["host_id"], "host_name": host["host_name"]}
+           for host in hosts for vm in host.get("vms", [])]
+    return {"cluster_id": cluster_id, "checked_at": now(), "hosts": hosts, "vms": vms,
+            "capabilities": json.loads(cluster["capabilities_json"])}
+
+
+def backup_destination_view(row: sqlite3.Row) -> dict[str, Any]:
+    return {"id": row["id"], "name": row["name"], "endpoint_url": row["endpoint_url"],
+            "region": row["region"], "bucket": row["bucket"], "prefix": row["prefix"],
+            "auth": row["auth"], "path_style": bool(row["path_style"]),
+            "encryption": row["encryption"], "kms_key_id": row["kms_key_id"],
+            "has_credentials": bool(row["access_key_id_enc"] and row["secret_access_key_enc"]),
+            "created_at": row["created_at"]}
+
+
+def backup_s3_client(destination: sqlite3.Row):
+    kwargs: dict[str, Any] = {
+        "service_name": "s3", "region_name": destination["region"],
+        "endpoint_url": destination["endpoint_url"] or None,
+        "config": BotoConfig(connect_timeout=8, read_timeout=90, retries={"max_attempts": 3},
+                              s3={"addressing_style": "path" if destination["path_style"] else "auto"}),
+    }
+    if destination["auth"] == "access-key":
+        if not destination["access_key_id_enc"] or not destination["secret_access_key_enc"]:
+            raise RuntimeError("The destination is missing its access key credentials")
+        kwargs["aws_access_key_id"] = cipher.decrypt(destination["access_key_id_enc"].encode()).decode()
+        kwargs["aws_secret_access_key"] = cipher.decrypt(destination["secret_access_key_enc"].encode()).decode()
+    return boto3.client(**kwargs)
+
+
+def backup_object_key(destination: sqlite3.Row, backup_id: str, vm_name: str) -> str:
+    safe_name = re.sub(r"[^A-Za-z0-9_.-]+", "_", vm_name).strip("._") or "vm"
+    return "/".join(part.strip("/") for part in (destination["prefix"], backup_id, safe_name + ".tar") if part.strip("/"))
+
+
+@app.get("/kvm-api/backups/destinations", dependencies=[Depends(require_permission("viewer"))])
+def list_backup_destinations() -> list[dict[str, Any]]:
+    with connect_db() as db:
+        return [backup_destination_view(row) for row in db.execute("SELECT * FROM backup_destinations ORDER BY name COLLATE NOCASE")]
+
+
+@app.post("/kvm-api/backups/destinations", status_code=201)
+def create_backup_destination(payload: BackupDestinationInput,
+                              access: AuthorizationContext = Depends(require_permission("storage_admin"))) -> dict[str, Any]:
+    name, prefix = payload.name.strip(), payload.prefix.strip().strip("/")
+    endpoint = payload.endpoint_url.strip().rstrip("/") if payload.endpoint_url else None
+    if endpoint:
+        parsed = urlsplit(endpoint)
+        if parsed.scheme != "https" or not parsed.netloc or parsed.username or parsed.password or parsed.query or parsed.fragment:
+            raise HTTPException(422, "The S3 endpoint must be an HTTPS URL without embedded credentials")
+    if not re.fullmatch(r"[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]", payload.bucket) or ".." in payload.bucket:
+        raise HTTPException(422, "Enter a valid S3 bucket name")
+    if any(part == ".." for part in prefix.split("/")) or "\\" in prefix or "\0" in prefix:
+        raise HTTPException(422, "The object prefix cannot contain parent path segments")
+    if payload.auth == "access-key" and (not payload.access_key_id or not payload.secret_access_key):
+        raise HTTPException(422, "Provide both the access key ID and secret access key")
+    if payload.auth == "workload-identity" and (payload.access_key_id or payload.secret_access_key):
+        raise HTTPException(422, "Do not send static keys when using workload identity")
+    if payload.encryption == "sse-kms" and not (payload.kms_key_id or "").strip():
+        raise HTTPException(422, "Provide a KMS key identifier for SSE-KMS")
+    destination_id, timestamp = str(uuid.uuid4()), now()
+    with connect_db() as db:
+        db.execute("INSERT INTO backup_destinations (id,name,endpoint_url,region,bucket,prefix,auth,access_key_id_enc,secret_access_key_enc,path_style,encryption,kms_key_id,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                   (destination_id, name, endpoint, payload.region.strip(), payload.bucket, prefix, payload.auth,
+                    cipher.encrypt(payload.access_key_id.encode()).decode() if payload.access_key_id else None,
+                    cipher.encrypt(payload.secret_access_key.encode()).decode() if payload.secret_access_key else None,
+                    int(payload.path_style), payload.encryption, payload.kms_key_id, access.user_id, timestamp, timestamp))
+        row = db.execute("SELECT * FROM backup_destinations WHERE id=?", (destination_id,)).fetchone()
+        result = backup_destination_view(row)
+    record_audit(access.user_id, "backup.destination.create", destination_id)
+    return result
+
+
+@app.post("/kvm-api/backups/destinations/{destination_id}/test")
+def test_backup_destination(destination_id: str,
+                            access: AuthorizationContext = Depends(require_permission("storage_admin"))) -> dict[str, Any]:
+    with connect_db() as db:
+        destination = db.execute("SELECT * FROM backup_destinations WHERE id=?", (destination_id,)).fetchone()
+    if not destination:
+        raise HTTPException(404, "Backup destination not found")
+    try:
+        backup_s3_client(destination).head_bucket(Bucket=destination["bucket"])
+    except Exception as exc:
+        performance_logger.warning("backup_destination_test_failed id=%s class=%s", destination_id, type(exc).__name__)
+        raise HTTPException(502, "Could not access the S3 bucket. Check endpoint, credentials, region, and bucket permissions.") from exc
+    record_audit(access.user_id, "backup.destination.test", destination_id)
+    return {"success": True, "message": "S3 bucket access verified"}
+
+
+@app.delete("/kvm-api/backups/destinations/{destination_id}", status_code=204)
+def delete_backup_destination(destination_id: str,
+                             access: AuthorizationContext = Depends(require_permission("storage_admin"))) -> Response:
+    with connect_db() as db:
+        if not db.execute("SELECT 1 FROM backup_destinations WHERE id=?", (destination_id,)).fetchone():
+            raise HTTPException(404, "Backup destination not found")
+        if db.execute("SELECT 1 FROM vm_backups WHERE destination_id=? LIMIT 1", (destination_id,)).fetchone():
+            raise HTTPException(409, "Delete this destination's backup archives before removing it")
+        db.execute("DELETE FROM backup_destinations WHERE id=?", (destination_id,))
+    record_audit(access.user_id, "backup.destination.delete", destination_id)
+    return Response(status_code=204)
+
+
+def stream_vm_backup_tar(host: dict[str, Any], vm_name: str, result: dict[str, Any], timeout: int = 7200):
+    encoded = base64.b64encode(vm_name.encode()).decode()
+    script = r'''import base64,json,os,subprocess,sys,tarfile,time,xml.etree.ElementTree as ET
+name=base64.b64decode(sys.argv[1]).decode()
+def run(args):
+ p=subprocess.run(args,capture_output=True,text=True,timeout=60)
+ if p.returncode: raise RuntimeError(p.stderr.strip() or p.stdout.strip() or 'libvirt command failed')
+ return p.stdout
+state=run(['virsh','-c','qemu:///system','domstate',name]).strip().lower()
+if state!='shut off': raise RuntimeError('For a consistent archive, shut down the VM first; current state: '+state)
+xml=run(['virsh','-c','qemu:///system','dumpxml','--inactive',name])
+root=ET.fromstring(xml); disks=[]
+for disk in root.findall('./devices/disk'):
+ if disk.get('device')!='disk': continue
+ source=disk.find('source'); target=disk.find('target')
+ path=source.get('file') if source is not None else None
+ if not path or not os.path.isfile(path) or os.path.islink(path): raise RuntimeError('Only regular file-backed VM disks are supported by this backup version')
+ info=json.loads(run(['qemu-img','info','--output=json',path]))
+ if info.get('backing-filename'): raise RuntimeError('VM disk has a backing chain; flatten it before backing up')
+ if info.get('format') not in ('qcow2','raw'): raise RuntimeError('Only qcow2 and raw disk formats are supported')
+ disks.append({'path':path,'name':'disks/disk-%d.%s'%(len(disks)+1,info['format']),'target':target.get('dev') if target is not None else None,'format':info['format'],'virtual_size':info.get('virtual-size',0)})
+if not disks: raise RuntimeError('No supported VM disks were found')
+manifest={'format_version':1,'vm_name':name,'uuid':root.findtext('uuid'),'created_at':time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),'consistency':'powered-off','disks':[{k:v for k,v in d.items() if k!='path'} for d in disks]}
+with tarfile.open(fileobj=sys.stdout.buffer,mode='w|') as archive:
+ data=json.dumps(manifest,sort_keys=True,indent=2).encode(); info=tarfile.TarInfo('manifest.json');info.size=len(data);archive.addfile(info,__import__('io').BytesIO(data))
+ data=xml.encode(); info=tarfile.TarInfo('domain.xml');info.size=len(data);archive.addfile(info,__import__('io').BytesIO(data))
+ for disk in disks: archive.add(disk['path'],arcname=disk['name'],recursive=False)
+'''
+    client = ssh_client_for_host(host)
+    channel = None
+    digest = hashlib.sha256()
+    total = 0
+    deadline = time.monotonic() + timeout
+    try:
+        command = f"sudo -S -p '' python3 -c {shlex.quote(script)} {shlex.quote(encoded)}"
+        channel = client.get_transport().open_session(timeout=10)
+        channel.settimeout(2.0)
+        channel.exec_command(command)
+        channel.send((host["password"] + "\n").encode())
+        digest = hashlib.sha256()
+        while True:
+            if channel.recv_ready():
+                chunk = channel.recv(1024 * 1024)
+                if chunk:
+                    digest.update(chunk)
+                    total += len(chunk)
+                    yield chunk
+            if channel.recv_stderr_ready():
+                # Keep stderr drained to prevent SSH channel back-pressure; do not return remote paths/details to clients.
+                channel.recv_stderr(65536)
+            if channel.exit_status_ready() and not channel.recv_ready() and not channel.recv_stderr_ready():
+                break
+            if time.monotonic() > deadline:
+                raise TimeoutError("The VM backup exceeded the operation time limit")
+        code = channel.recv_exit_status()
+        if code:
+            raise RuntimeError("The host could not create a supported VM backup archive")
+        result.update(sha256=digest.hexdigest(), size_bytes=total)
+    finally:
+        if channel:
+            channel.close()
+        client.close()
+
+
+@app.get("/kvm-api/backups", dependencies=[Depends(require_permission("viewer"))])
+def list_vm_backups() -> list[dict[str, Any]]:
+    with connect_db() as db:
+        rows = db.execute("SELECT * FROM vm_backups ORDER BY created_at DESC").fetchall()
+    return [{"id": row["id"], "destination_id": row["destination_id"], "host_id": row["host_id"],
+             "host_name": row["host_name"], "vm_name": row["vm_name"], "size_bytes": row["size_bytes"],
+             "sha256": row["sha256"], "created_at": row["created_at"]} for row in rows]
+
+
+@app.post("/kvm-api/backups/jobs")
+def start_vm_backup(payload: BackupJobInput,
+                    access: AuthorizationContext = Depends(require_permission("storage_admin"))) -> dict[str, Any]:
+    host = cockpit_host_record(payload.host_id)
+    if host["status"] != "ready":
+        raise HTTPException(409, "The selected KVM host is not connected and ready")
+    with connect_db() as db:
+        destination = db.execute("SELECT * FROM backup_destinations WHERE id=?", (payload.destination_id,)).fetchone()
+    if not destination:
+        raise HTTPException(404, "Backup destination not found")
+    if destination["auth"] == "access-key" and not destination["secret_access_key_enc"]:
+        raise HTTPException(409, "The S3 destination has no saved secret access key")
+    backup_id, created_at = str(uuid.uuid4()), now()
+    object_key = backup_object_key(destination, backup_id, payload.vm_name)
+
+    def perform(selected_host: dict[str, Any]) -> dict[str, Any]:
+        client = backup_s3_client(destination)
+        extra: dict[str, Any] = {}
+        if destination["encryption"] == "sse-s3":
+            extra["ServerSideEncryption"] = "AES256"
+        elif destination["encryption"] == "sse-kms":
+            extra.update(ServerSideEncryption="aws:kms", SSEKMSKeyId=destination["kms_key_id"])
+        multipart = client.create_multipart_upload(Bucket=destination["bucket"], Key=object_key, **extra)
+        upload_id = multipart["UploadId"]
+        parts, part_number, buffer = [], 1, bytearray()
+        try:
+            stream_info: dict[str, Any] = {}
+            for chunk in stream_vm_backup_tar(selected_host, payload.vm_name, stream_info):
+                buffer.extend(chunk)
+                while len(buffer) >= 8 * 1024 * 1024:
+                    body = bytes(buffer[:8 * 1024 * 1024]); del buffer[:8 * 1024 * 1024]
+                    result = client.upload_part(Bucket=destination["bucket"], Key=object_key,
+                                                UploadId=upload_id, PartNumber=part_number, Body=body)
+                    parts.append({"PartNumber": part_number, "ETag": result["ETag"]}); part_number += 1
+            if buffer:
+                result = client.upload_part(Bucket=destination["bucket"], Key=object_key,
+                                            UploadId=upload_id, PartNumber=part_number, Body=bytes(buffer))
+                parts.append({"PartNumber": part_number, "ETag": result["ETag"]})
+            if not parts:
+                raise RuntimeError("The KVM host returned an empty archive")
+            client.complete_multipart_upload(Bucket=destination["bucket"], Key=object_key, UploadId=upload_id,
+                                             MultipartUpload={"Parts": parts})
+        except Exception:
+            try:
+                client.abort_multipart_upload(Bucket=destination["bucket"], Key=object_key, UploadId=upload_id)
+            except Exception:
+                pass
+            raise
+        digest = stream_info.get("sha256")
+        size = stream_info.get("size_bytes")
+        if not digest or not size:
+            client.delete_object(Bucket=destination["bucket"], Key=object_key)
+            raise RuntimeError("The host backup stream did not complete successfully")
+        with connect_db() as db:
+            db.execute("INSERT INTO vm_backups (id,destination_id,host_id,host_name,vm_name,object_key,size_bytes,sha256,created_by,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                       (backup_id, destination["id"], selected_host["id"], selected_host.get("hostname") or selected_host["name"],
+                        payload.vm_name, object_key, size, digest, access.user_id, created_at))
+        return {"status": "completed", "backup_id": backup_id, "size_bytes": size, "sha256": digest}
+
+    record_audit(access.user_id, "backup.vm.start", f"{payload.host_id}/{payload.vm_name}", detail="manual powered-off VM archive")
+    return create_operation_job("vm_backup", access.user_id, [host], perform)
+
+
+@app.get("/kvm-api/backups/{backup_id}/download", dependencies=[Depends(require_permission("viewer"))])
+def download_vm_backup(backup_id: str) -> StreamingResponse:
+    with connect_db() as db:
+        backup = db.execute("SELECT b.*,d.* FROM vm_backups b JOIN backup_destinations d ON d.id=b.destination_id WHERE b.id=?", (backup_id,)).fetchone()
+    if not backup:
+        raise HTTPException(404, "Backup archive not found")
+    try:
+        body = backup_s3_client(backup).get_object(Bucket=backup["bucket"], Key=backup["object_key"])["Body"]
+    except Exception as exc:
+        raise HTTPException(502, "Could not retrieve the backup archive from object storage") from exc
+    filename = re.sub(r"[^A-Za-z0-9_.-]+", "_", backup["vm_name"]).strip("._") or "vm"
+    return StreamingResponse(body.iter_chunks(chunk_size=1024 * 1024), media_type="application/x-tar",
+                             headers={"Content-Disposition": f'attachment; filename="{filename}-{backup_id[:8]}.tar"',
+                                      "Content-Length": str(backup["size_bytes"]), "X-KVM-Backup-SHA256": backup["sha256"]})
+
+
+@app.delete("/kvm-api/backups/{backup_id}", status_code=204)
+def delete_vm_backup(backup_id: str,
+                     access: AuthorizationContext = Depends(require_permission("storage_admin"))) -> Response:
+    with connect_db() as db:
+        row = db.execute("SELECT b.*,d.* FROM vm_backups b JOIN backup_destinations d ON d.id=b.destination_id WHERE b.id=?", (backup_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Backup archive not found")
+    try:
+        backup_s3_client(row).delete_object(Bucket=row["bucket"], Key=row["object_key"])
+    except Exception as exc:
+        raise HTTPException(502, "Could not delete the archive from object storage; its catalog record was kept") from exc
+    with connect_db() as db:
+        db.execute("DELETE FROM vm_backups WHERE id=?", (backup_id,))
+    record_audit(access.user_id, "backup.vm.delete", backup_id)
+    return Response(status_code=204)
+
+
+@app.get("/kvm-api/clusters/{host_id}/status")
+def get_ha_cluster_status(host_id: str, access: AuthorizationContext = Depends(require_permission("viewer"))) -> dict[str, Any]:
+    host = cockpit_host_record(host_id)
+    try:
+        result = json.loads(run_sudo_python(host, HA_CLUSTER_STATUS_SCRIPT, timeout=35) or '{}')
+    except Exception as exc:
+        raise HTTPException(502, f"Could not read SUSE HA cluster status from {host.get('hostname') or host.get('name')}: {str(exc)[:400]}") from exc
+    record_audit(access.user_id, "cluster.status", f"{host_id}")
+    result['source_host_id'] = host_id
+    result['source_host_name'] = host.get('hostname') or host.get('name')
+    return result
+
+
+@app.get("/kvm-api/clusters/{host_id}/diagnostics")
+def get_ha_cluster_diagnostics(host_id: str, access: AuthorizationContext = Depends(require_permission("viewer"))) -> dict[str, Any]:
+    """Return read-only constraint, Corosync-link, and recent service-log diagnostics."""
+    host = cockpit_host_record(host_id)
+    try:
+        result = json.loads(run_sudo_python(host, HA_CLUSTER_DIAGNOSTICS_SCRIPT, timeout=45) or '{}')
+    except Exception as exc:
+        raise HTTPException(502, f"Could not read SUSE HA diagnostics from {host.get('hostname') or host.get('name')}: {str(exc)[:350]}") from exc
+    record_audit(access.user_id, "cluster.diagnostics", host_id)
+    address = str(host.get('address') or '').strip()
+    try:
+        parsed_address = ipaddress.ip_address(address)
+        authority = f"[{address}]" if parsed_address.version == 6 else address
+    except ValueError:
+        hostname_pattern = r"(?=.{1,253}$)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)(?:\.(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?))*\.?"
+        authority = address if re.fullmatch(hostname_pattern, address) else ''
+    result['hawk_url'] = f"https://{authority}:{host.get('hawk_port') or 7630}/" if authority else ''
+    result['checked_at'] = datetime.now(timezone.utc).isoformat()
+    return result
+
+
+@app.post("/kvm-api/clusters/{host_id}/actions", dependencies=[Depends(require_permission("cluster_admin"))])
+def control_ha_cluster(host_id: str, payload: ClusterAction, access: AuthorizationContext = Depends(require_permission("cluster_admin"))) -> dict[str, Any]:
+    host = cockpit_host_record(host_id)
+    # Actions are only allowed when Pacemaker reports an initialized cluster.
+    try:
+        json.loads(run_sudo_python(host, HA_CLUSTER_STATUS_SCRIPT, timeout=35) or '{}')
+    except Exception as exc:
+        raise HTTPException(409, f"Cluster actions are unavailable because SUSE HA status could not be verified: {str(exc)[:350]}") from exc
+    try:
+        output = run_sudo_python(host, HA_CLUSTER_ACTION_SCRIPT, [payload.action, payload.target], timeout=130)
+    except Exception as exc:
+        record_audit(access.user_id, f"cluster.{payload.action}", f"{host_id}/{payload.target}", "failure", str(exc))
+        raise HTTPException(502, f"SUSE HA operation '{payload.action}' failed for '{payload.target}': {str(exc)[:350]}") from exc
+    record_audit(access.user_id, f"cluster.{payload.action}", f"{host_id}/{payload.target}")
+    return {"success": True, "message": output}
+
+
+@app.get("/kvm-api/clusters/{host_id}/resource-agents")
+def list_cluster_resource_agents(host_id: str, access: AuthorizationContext = Depends(require_permission("viewer"))) -> dict[str, Any]:
+    host = cockpit_host_record(host_id)
+    try:
+        result = json.loads(run_sudo_python(host, HA_RESOURCE_AGENTS_SCRIPT, timeout=35) or "{}")
+    except Exception as exc:
+        raise HTTPException(502, f"Could not list installed Pacemaker resource agents: {str(exc)[:350]}") from exc
+    record_audit(access.user_id, "cluster.resource_agents", host_id)
+    return result
+
+
+@app.get("/kvm-api/clusters/{host_id}/resource-agent-info")
+def get_cluster_resource_agent_info(host_id: str, agent: str, access: AuthorizationContext = Depends(require_permission("viewer"))) -> dict[str, str]:
+    host = cockpit_host_record(host_id)
+    try:
+        info = run_sudo_python(host, HA_RESOURCE_AGENT_INFO_SCRIPT, [agent], timeout=30)
+    except Exception as exc:
+        raise HTTPException(422, f"Could not read resource-agent guidance: {str(exc)[:350]}") from exc
+    record_audit(access.user_id, "cluster.resource_agent_info", f"{host_id}/{agent}")
+    return {"agent": agent, "info": info}
+
+
+@app.post("/kvm-api/clusters/{host_id}/resources/config")
+def mutate_cluster_resource(host_id: str, payload: ClusterResourceMutation, access: AuthorizationContext = Depends(require_permission("cluster_admin"))) -> dict[str, Any]:
+    if payload.action == "create":
+        if not payload.agent:
+            raise HTTPException(422, "Select an installed OCF or systemd resource agent.")
+        if len(payload.parameters) > 40:
+            raise HTTPException(422, "A primitive resource can have at most 40 parameters in this form.")
+    if payload.action in ("set_param", "delete_param", "set_meta", "delete_meta") and not payload.key:
+        raise HTTPException(422, "Provide a parameter or meta-attribute name.")
+    host = cockpit_host_record(host_id)
+    safe_payload = payload.model_dump()
+    try:
+        output = run_sudo_python(host, HA_RESOURCE_MUTATION_SCRIPT, timeout=90, stdin_data=json.dumps(safe_payload))
+    except Exception as exc:
+        safe_error = str(exc)
+        for value in list(payload.parameters.values()) + ([payload.value] if payload.value else []):
+            if value:
+                safe_error = safe_error.replace(value, "[redacted]")
+        # Resource parameters can contain credentials; keep their values out of audit details.
+        record_audit(access.user_id, f"cluster.resource.{payload.action}", f"{host_id}/{payload.resource_id}", "failure")
+        raise HTTPException(422, f"Pacemaker resource operation failed: {safe_error[:400]}") from exc
+    record_audit(access.user_id, f"cluster.resource.{payload.action}", f"{host_id}/{payload.resource_id}")
+    return {"success": True, "message": output}
+
+
+@app.post("/kvm-api/clusters/{host_id}/constraints/config")
+def mutate_cluster_constraint(host_id: str, payload: ClusterConstraintMutation, access: AuthorizationContext = Depends(require_permission("cluster_admin"))) -> dict[str, Any]:
+    if payload.action != "delete" and not payload.resource:
+        raise HTTPException(422, "Choose a Pacemaker resource for this constraint.")
+    if payload.action in ("create_order", "create_colocation") and not payload.other_resource:
+        raise HTTPException(422, "Choose the second Pacemaker resource.")
+    if payload.action == "create_location" and (not payload.node or not payload.score):
+        raise HTTPException(422, "Choose a cluster node and a location score.")
+    if payload.action == "create_colocation" and not payload.score:
+        raise HTTPException(422, "Choose a colocation score.")
+    host = cockpit_host_record(host_id)
+    try:
+        output = run_sudo_python(host, HA_CONSTRAINT_MUTATION_SCRIPT, timeout=90, stdin_data=json.dumps(payload.model_dump()))
+    except Exception as exc:
+        record_audit(access.user_id, f"cluster.constraint.{payload.action}", f"{host_id}/{payload.constraint_id}", "failure")
+        raise HTTPException(422, f"Pacemaker constraint operation failed: {str(exc)[:400]}") from exc
+    record_audit(access.user_id, f"cluster.constraint.{payload.action}", f"{host_id}/{payload.constraint_id}")
+    return {"success": True, "message": output}
+
+
+@app.post("/kvm-api/clusters/install-stack")
+def install_ha_stack(payload: ClusterInstallRequest, access: AuthorizationContext = Depends(require_permission("cluster_admin"))) -> dict[str, Any]:
+    if len(set(payload.host_ids)) != len(payload.host_ids):
+        raise HTTPException(422, "Select each host only once")
+    placeholders = ','.join('?' for _ in payload.host_ids)
+    with connect_db() as db:
+        rows = [dict(row) for row in db.execute(f"SELECT * FROM hosts WHERE id IN ({placeholders})", payload.host_ids)]
+    by_id = {row['id']: row for row in rows}
+    if len(by_id) != len(payload.host_ids):
+        raise HTTPException(404, "One or more selected KVM hosts were not found")
+    def install(row: dict[str, Any]) -> dict[str, Any]:
+        host_id = row["id"]
+        result = {"host_id": host_id, "host_name": row.get('hostname') or row.get('name'), "status": "error"}
+        try:
+            row['password'] = cipher.decrypt(row['password'].encode()).decode()
+            decrypt_host_credentials(row)
+            output = run_sudo_python(row, HA_INSTALL_STACK_SCRIPT, timeout=930)
+            result.update(json.loads(output or '{}'))
+            result['status'] = "installed"
+            record_audit(access.user_id, "cluster.install_ha_stack", host_id)
+        except Exception as exc:
+            result['error'] = str(exc)[:500]
+            record_audit(access.user_id, "cluster.install_ha_stack", host_id, "failure", str(exc))
+        return result
+    return create_operation_job("ha_stack_install", access.user_id, rows, install)
+
+
+@app.post("/kvm-api/clusters/templates/resolve-prerequisite")
+def resolve_template_prerequisite(payload: ClusterPrerequisiteResolution, access: AuthorizationContext = Depends(require_permission("cluster_admin"))) -> dict[str, Any]:
+    if len(set(payload.host_ids)) != len(payload.host_ids):
+        raise HTTPException(422, "Select each host only once")
+    placeholders = ','.join('?' for _ in payload.host_ids)
+    with connect_db() as db:
+        rows = [dict(row) for row in db.execute(f"SELECT * FROM hosts WHERE id IN ({placeholders})", payload.host_ids)]
+    by_id = {row['id']: row for row in rows}
+    if len(by_id) != len(payload.host_ids):
+        raise HTTPException(404, "One or more selected KVM hosts were not found")
+
+    def resolve(row: dict[str, Any]) -> dict[str, Any]:
+        host_id = row["id"]
+        name = row.get('hostname') or row.get('name')
+        result: dict[str, Any] = {"host_id": host_id, "host_name": name, "action": payload.action, "status": "error"}
+        try:
+            row['password'] = cipher.decrypt(row['password'].encode()).decode()
+            decrypt_host_credentials(row)
+            readiness = json.loads(run_sudo_python(row, HA_READINESS_SCRIPT, timeout=55) or '{}')
+            if not readiness.get('ha_active'):
+                raise RuntimeError("Activate the SLE HA extension on this host before resolving workload prerequisites.")
+            if payload.action == "enable_time_sync":
+                output = run_sudo_python(row, TEMPLATE_TIME_SYNC_SCRIPT, timeout=930)
+            else:
+                workload = "web" if payload.action == "install_web_package" else "nfs"
+                # The supported ha_sles pattern provides the SUSE cluster tooling and agents.
+                # Workload services are prepared for the template, unless Corosync config
+                # indicates Pacemaker should retain control of service lifecycle.
+                run_sudo_python(row, HA_INSTALL_STACK_SCRIPT, timeout=930)
+                output = run_sudo_python(row, TEMPLATE_WORKLOAD_PACKAGE_SCRIPT, [workload], timeout=930)
+            result.update({"status": "resolved", "message": output or "Prerequisite resolved."})
+            record_audit(access.user_id, f"cluster.template.{payload.action}", host_id)
+        except Exception as exc:
+            result["error"] = str(exc)[:600]
+            record_audit(access.user_id, f"cluster.template.{payload.action}", host_id, "failure", str(exc))
+        return result
+
+    return create_operation_job(f"template_{payload.action}", access.user_id, rows, resolve)
+
+
+@app.get("/kvm-api/operations/{job_id}")
+def get_operation_job(job_id: str, access: AuthorizationContext = Depends(require_permission("viewer"))) -> dict[str, Any]:
+    try:
+        job_id = str(uuid.UUID(job_id))
+    except ValueError as exc:
+        raise HTTPException(422, "Invalid operation ID") from exc
+    job = operation_job_snapshot(job_id)
+    if not job:
+        raise HTTPException(404, "Operation was not found or has expired")
+    with connect_db() as db:
+        row = db.execute("SELECT actor FROM operation_jobs WHERE id=?", (job_id,)).fetchone()
+    if row["actor"] != access.user_id and access.access_level != "host_admin":
+        raise HTTPException(403, "Only the user who started this operation or a KVM administrator can view its progress")
+    return job
+
+
 @app.get("/kvm-api/permissions")
 def get_permissions(access: AuthorizationContext = Depends(require_permission("viewer"))) -> dict[str, bool | str]:
     rank = ROLE_RANK[access.access_level]
     return {
         "accessLevel": access.access_level,
         "canView": True,
-        "canOperateVms": rank >= PERMISSION_RANK["vm_operator"],
-        "canManageHostResources": rank >= PERMISSION_RANK["host_resources"],
-        "canAdministerHost": rank >= PERMISSION_RANK["host_admin"],
+        "canOperateVms": "vm_operator" in access.permissions,
+        "canManageHostResources": "host_resources" in access.permissions,
+        "canManageNetwork": "network_admin" in access.permissions,
+        "canManageStorage": "storage_admin" in access.permissions,
+        "canManageRepositories": "software_admin" in access.permissions,
+        "canManageSubscriptions": "subscription_admin" in access.permissions,
+        "canManageAccounts": "account_admin" in access.permissions,
+        "canManageServices": "service_admin" in access.permissions,
+        "canManageClusters": "cluster_admin" in access.permissions,
+        "canAdministerHost": "host_admin" in access.permissions,
     }
 
 
@@ -1278,6 +2601,91 @@ def probe_host(payload: HostInput, access: AuthorizationContext = Depends(requir
     except Exception as exc:
         checks.append({"id": "optional", "status": "warning", "message": f"Optional capability check unavailable: {str(exc)[:250]}"})
     return {"ok": True, "checks": checks, "facts": {k: facts[k] for k in ("hostname", "cpu_count", "memory_total_bytes", "status", "os_id", "os_version", "libvirt_version", "compatibility_supported")}}
+
+
+@app.post("/kvm-api/hosts/prepare-import")
+def prepare_and_import_host(payload: HostInput, access: AuthorizationContext = Depends(require_permission("host_admin"))) -> dict[str, Any]:
+    """Prepare an existing SLES machine over SSH, then save it as an imported host."""
+    if not payload.password:
+        raise HTTPException(422, "An SSH password is required to prepare the host")
+    if not re.fullmatch(r"[A-Za-z0-9_.:-]+", payload.address):
+        raise HTTPException(422, "Enter a valid IPv4 address, IPv6 address, or DNS name")
+    with connect_db() as db:
+        duplicate = db.execute("SELECT id FROM hosts WHERE address=? AND port=?", (payload.address, payload.port)).fetchone()
+        if duplicate:
+            raise HTTPException(409, "This address is already imported. Open the existing host or update its credentials.")
+
+    host = payload.model_dump() | {"private_key": None, "key_passphrase": None}
+    client = paramiko.SSHClient()
+    if payload.accept_new_host_key:
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    else:
+        if not Path(KNOWN_HOSTS).is_file():
+            raise HTTPException(422, "SSH host key is not trusted. Select the host-key acceptance option for this first connection.")
+        client.load_host_keys(KNOWN_HOSTS)
+        client.set_missing_host_key_policy(paramiko.RejectPolicy())
+    try:
+        connect_ssh(client, host)
+        remote_key = client.get_transport().get_remote_server_key()
+        ssh_host_key = f"{remote_key.get_name()} {remote_key.get_base64()}"
+        _stdin, os_stdout, _stderr = client.exec_command(". /etc/os-release 2>/dev/null; printf '%s|%s\\n' \"${ID:-unknown}\" \"${VERSION_ID:-unknown}\"", timeout=10)
+        os_id, _, os_version = os_stdout.read().decode("utf-8", "replace").strip().partition("|")
+        if os_id.lower() not in {"sles", "sle_hpc", "sled"}:
+            raise HTTPException(422, f"Detected {os_id or 'an unknown operating system'} {os_version}; this preparation flow currently supports SUSE Linux Enterprise only.")
+
+        # Fixed script and argv only; no user-provided form text enters a shell command.
+        preparation_script = r'''import shutil, subprocess
+def run(args, timeout=900):
+    result = subprocess.run(args, text=True, capture_output=True, timeout=timeout)
+    if result.returncode:
+        detail = (result.stderr or result.stdout or 'command failed').strip()[-1000:]
+        raise SystemExit(detail)
+def installed(*packages):
+    return all(shutil.which('rpm') and subprocess.run(['rpm','-q',p], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0 for p in packages)
+run(['zypper','--non-interactive','refresh'], 300)
+if not installed('qemu-kvm','libvirt-client'):
+    run(['zypper','--non-interactive','install','-t','pattern','kvm_server','kvm_tools'])
+if not installed('cockpit','cockpit-machines'):
+    run(['zypper','--non-interactive','install','--no-recommends','cockpit','cockpit-machines'])
+units = subprocess.run(['systemctl','list-unit-files','--type=socket','--no-legend'], text=True, capture_output=True, timeout=20).stdout
+libvirt_socket = next((name for name in ('libvirtd.socket','virtqemud.socket') if name in units), None)
+if not libvirt_socket:
+    raise SystemExit('KVM packages are installed, but neither libvirtd.socket nor virtqemud.socket is available')
+run(['systemctl','enable','--now',libvirt_socket], 60)
+run(['systemctl','enable','--now','cockpit.socket'], 60)
+print('KVM and Cockpit packages are ready; libvirt and cockpit sockets are enabled.')
+'''
+        command = f"sudo -S -p '' python3 -c {shlex.quote(preparation_script)}"
+        stdin, stdout, stderr = client.exec_command(command, timeout=1100, get_pty=True)
+        stdin.write(payload.password + "\n"); stdin.flush(); stdin.channel.shutdown_write()
+        output = stdout.read().decode("utf-8", "replace").strip()
+        error = stderr.read().decode("utf-8", "replace").strip()
+        if stdout.channel.recv_exit_status():
+            raise HTTPException(502, f"Host preparation failed: {(error or output or 'sudo or zypper returned an error')[-1000:]}")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(422, f"Could not prepare this machine over SSH: {str(exc)[:500]}") from exc
+    finally:
+        client.close()
+
+    host["private_key"] = None
+    try:
+        facts = probe(host, pinned_host_key=ssh_host_key)
+    except Exception as exc:
+        raise HTTPException(502, f"Packages were prepared, but the host did not pass the libvirt import check: {str(exc)[:500]}") from exc
+    host_id = str(uuid.uuid4())
+    with connect_db() as db:
+        db.execute(
+            "INSERT INTO hosts (id,name,address,port,username,password,hostname,status,cpu_count,memory_total_bytes,last_checked_at,last_error,ssh_host_key,ssh_private_key_enc,ssh_key_passphrase_enc) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (host_id, payload.name, payload.address, payload.port, payload.username,
+             cipher.encrypt(payload.password.encode()).decode(), facts["hostname"], facts["status"],
+             facts["cpu_count"], facts["memory_total_bytes"], facts["last_checked_at"], None,
+             facts["ssh_host_key"], None, None),
+        )
+        created = public_host(read_host(db, host_id))
+    record_audit(access.user_id, "host.prepare_import", host_id, detail=f"{payload.name} ({payload.address}:{payload.port}); {os_id} {os_version}")
+    return created
 
 
 @app.put("/kvm-api/hosts/{host_id}")
@@ -1522,10 +2930,14 @@ except Exception:
 for snapshot_name in filter(str.strip,snapshot_names):
     try:
         snapshot_xml = ET.fromstring(run(['virsh','-c','qemu:///system','snapshot-dumpxml',name,snapshot_name]))
+        raw_description=snapshot_xml.findtext('./description','')
+        version_match=re.search(r'(?m)^Rancher-KVM-Version: (v[0-9TZ.-]+)$',raw_description)
+        version=version_match.group(1) if version_match else 'legacy-'+snapshot_xml.findtext('./creationTime','')
+        description=re.sub(r'(?m)^Rancher-KVM-Version: v[0-9TZ.-]+\s*$', '', raw_description).strip()
         snapshots.append({'name':snapshot_name.strip(),'state':snapshot_xml.findtext('./state','unknown'),
-            'created_at':snapshot_xml.findtext('./creationTime',''),'description':snapshot_xml.findtext('./description','')})
+            'created_at':snapshot_xml.findtext('./creationTime',''),'description':description,'version':version})
     except Exception:
-        snapshots.append({'name':snapshot_name.strip(),'state':'unknown','created_at':'','description':''})
+        snapshots.append({'name':snapshot_name.strip(),'state':'unknown','created_at':'','description':'','version':'legacy'})
 snapshot_disks = [disk for disk in (config_domain.findall('./devices/disk')) if disk.get('device','disk') == 'disk' and disk.find('./readonly') is None]
 snapshot_supported = bool(snapshot_disks) and all((disk.find('./driver').get('type','').lower() == 'qcow2') if disk.find('./driver') is not None else False for disk in snapshot_disks)
 os_node=config_domain.find('./os')
@@ -1582,11 +2994,20 @@ def parse_info(name):
                     if address not in addresses: addresses.append(address)
             if addresses: break
         except Exception: continue
+    network_interfaces=[]
+    try:
+        for line in run(['virsh','-c','qemu:///system','domiflist',name]).splitlines():
+            parts=line.split(None,4)
+            if len(parts)==5 and parts[0] not in ('Interface','-'):
+                network_interfaces.append({'name':parts[0],'type':parts[1],'source':parts[2],'model':parts[3],'mac':parts[4]})
+    except Exception as error:
+        errors.append('VM network '+name+': '+str(error))
     return {'name':name,'uuid':info.get('uuid',''),'state':state,'ip_addresses':addresses,
         'vcpus':int(info.get('cpu(s)','0') or '0'),'current_vcpus':int(vcpu.get('current_live',vcpu.get('current_config','0')) or '0'),
         'max_vcpus':int(vcpu.get('maximum_live',vcpu.get('maximum_config','0')) or '0'),
         'memory_kib':int(info.get('max memory','0').split()[0] or '0'),'used_memory_kib':int(info.get('used memory','0').split()[0] or '0'),
-        'persistent':info.get('persistent','unknown'),'autostart':info.get('autostart','unknown')}
+        'persistent':info.get('persistent','unknown'),'autostart':info.get('autostart','unknown'),
+        'network_interfaces':network_interfaces}
 vms=[]
 try:
     names=run(['virsh','-c','qemu:///system','list','--all','--name']).splitlines()
@@ -1673,8 +3094,14 @@ try:
     if result.returncode: raise RuntimeError(result.stderr.strip() or result.stdout.strip())
     xml=ET.fromstring(result.stdout)
     for repo in xml.iter('repo'):
+        raw_uri=repo.findtext('url') or repo.findtext('uri') or repo.get('url') or repo.get('uri') or ''
+        # Some SUSE repository URLs contain short-lived entitlement tokens in
+        # the query string. Keep the useful endpoint visible without returning
+        # those credentials to the Rancher browser.
+        safe_uri=raw_uri.split('#',1)[0]
+        if '?' in safe_uri: safe_uri=safe_uri.split('?',1)[0]+'?[redacted]'
         repositories.append({'alias':repo.get('alias',''),'name':repo.get('name',''),'enabled':repo.get('enabled','0')=='1',
-            'autorefresh':repo.get('autorefresh','0')=='1','uri':repo.get('url') or repo.get('uri') or ''})
+            'autorefresh':repo.get('autorefresh','0')=='1','uri':safe_uri})
 except Exception as error: errors.append('repositories: '+str(error))
 selinux={'available':False,'mode':'unavailable','policy':'','apparmor':'unavailable'}
 try:
@@ -1691,8 +3118,66 @@ except Exception as error: errors.append('security status: '+str(error))
 subscription={'available':False,'status':'SUSEConnect is not installed'}
 try:
     if shutil.which('SUSEConnect'):
-        result=subprocess.run(['SUSEConnect','--status-text'],capture_output=True,text=True,timeout=30)
-        subscription={'available':True,'status':(result.stdout or result.stderr).strip(),'return_code':result.returncode}
+        products=[]
+        result=subprocess.run(['SUSEConnect','--status'],capture_output=True,text=True,timeout=30)
+        overall_status=''
+        if result.returncode==0:
+            try:
+                status_data=json.loads(result.stdout or '{}')
+                overall_status=str(status_data.get('status','')) if isinstance(status_data,dict) else ''
+                records=status_data if isinstance(status_data,list) else status_data.get('products',status_data.get('installed_products',[])) if isinstance(status_data,dict) else []
+                if isinstance(records,dict): records=list(records.values())
+                for item in records if isinstance(records,list) else []:
+                    if not isinstance(item,dict): continue
+                    identifier=str(item.get('identifier') or item.get('product') or item.get('product_id') or '')
+                    if not identifier: continue
+                    status_value=str(item.get('status') or item.get('current_status') or '')
+                    raw_name=str(item.get('friendly_name') or item.get('product_name') or item.get('display_name') or item.get('name') or '')
+                    subscription_data=item.get('subscription') or {}
+                    if isinstance(subscription_data,str): subscription_name=subscription_data
+                    elif isinstance(subscription_data,dict): subscription_name=str(subscription_data.get('name') or subscription_data.get('subscription_name') or '')
+                    else: subscription_name=''
+                    if not subscription_name and 'subscription' in raw_name.lower(): subscription_name=raw_name
+                    product_names={'SLES':'SUSE Linux Enterprise Server','SLES_SAP':'SUSE Linux Enterprise Server for SAP Applications'}
+                    product_name=raw_name if raw_name and 'subscription' not in raw_name.lower() else product_names.get(identifier,identifier)
+                    product_version=str(item.get('version') or '')
+                    product_arch=str(item.get('arch') or item.get('architecture') or '')
+                    product_label=' '.join(part for part in (product_name,product_version,product_arch) if part)
+                    expires_value=(subscription_data.get('expires_at') or subscription_data.get('expires at')) if isinstance(subscription_data,dict) else (item.get('expires_at') or item.get('expires at'))
+                    starts_value=(subscription_data.get('starts_at') or subscription_data.get('starts at') or subscription_data.get('registered_at') or subscription_data.get('registered at')) if isinstance(subscription_data,dict) else (item.get('starts_at') or item.get('starts at') or item.get('registered_at') or item.get('registered at'))
+                    products.append({'name':product_label,
+                        'product':identifier,'active':status_value.lower() in ('registered','active','activated'),
+                        'subscription_name':subscription_name,
+                        'subscription_status':str(subscription_data.get('status') or item.get('subscription_status') or '') if isinstance(subscription_data,dict) else str(item.get('subscription_status') or ''),
+                        'subscription_type':str(subscription_data.get('type') or item.get('subscription_type') or '') if isinstance(subscription_data,dict) else str(item.get('subscription_type') or ''),
+                        'starts_at':str(starts_value or ''),'expires_at':str(expires_value or '')})
+            except Exception: pass
+        if not products:
+            # Older SUSEConnect builds may not provide structured product data.
+            # Parse the text locally and return only safe, display-ready fields.
+            text_result=subprocess.run(['SUSEConnect','--status-text'],capture_output=True,text=True,timeout=30)
+            status_text=(text_result.stdout or text_result.stderr).strip()
+            for block in re.split(r'(?m)^\s*-{5,}\s*$',status_text):
+                lines=[line.strip() for line in block.splitlines() if line.strip()]
+                product_index=next((i for i,line in enumerate(lines) if re.fullmatch(r'\([^()]+/[^()]+/[^()]+\)',line)),None)
+                if product_index is None: continue
+                identifier=lines[product_index][1:-1]
+                subscription_start=next((i for i,line in enumerate(lines) if line.lower()=='subscription:'),None)
+                subscription_fields={}
+                if subscription_start is not None:
+                    for line in lines[subscription_start+1:]:
+                        if ':' in line:
+                            key,value=line.split(':',1)
+                            if key.strip().lower()!='regcode': subscription_fields[key.strip().lower()]=value.strip()
+                registered=any(line.lower()=='registered' for line in lines[product_index+1:subscription_start if subscription_start is not None else None])
+                products.append({'name':lines[0],'product':identifier,'active':registered,
+                    'subscription_name':subscription_fields.get('name',''),'subscription_status':subscription_fields.get('status',''),
+                    'subscription_type':subscription_fields.get('type',''),'starts_at':subscription_fields.get('starts at',subscription_fields.get('registered at','')),'expires_at':subscription_fields.get('expires at','')})
+            if result.returncode and text_result.returncode==0: result=text_result
+        registered=bool(result.returncode==0 and (any(item['active'] for item in products) or overall_status.lower()=='registered'))
+        subscription={'available':True,'status':'Registered' if registered else 'Not registered',
+            'registration_status':'registered' if registered else 'not_registered','products':products,
+            'return_code':result.returncode}
 except Exception as error: errors.append('subscription status: '+str(error))
 network_connections=[]
 try:
@@ -1759,6 +3244,30 @@ def list_vms(host_id: str) -> list[dict[str, Any]]:
         return json.loads(output or "[]")
     except Exception as exc:
         raise HTTPException(502, f"Could not query virtual machines: {exc}") from exc
+
+
+@app.get("/kvm-api/hosts/{host_id}/activity", dependencies=[Depends(require_permission("viewer"))])
+def list_host_activity(host_id: str, vm_name: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
+    """Return a bounded, host-scoped activity list without exposing audit details."""
+    limit = min(max(limit, 1), 100)
+    with connect_db() as db:
+        read_host(db, host_id)
+        if vm_name:
+            if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}", vm_name):
+                raise HTTPException(422, "Invalid virtual machine name")
+            prefix = f"{host_id}/{vm_name}"
+            rows = db.execute(
+                "SELECT occurred_at,action,target,outcome FROM audit_events "
+                "WHERE target=? OR target LIKE ? ORDER BY occurred_at DESC LIMIT ?",
+                (prefix, prefix + "/%", limit),
+            )
+        else:
+            rows = db.execute(
+                "SELECT occurred_at,action,target,outcome FROM audit_events "
+                "WHERE target=? OR target LIKE ? ORDER BY occurred_at DESC LIMIT ?",
+                (host_id, host_id + "/%", limit),
+            )
+        return [dict(row) for row in rows]
 
 
 @app.post("/kvm-api/hosts/{host_id}/vms/create")
@@ -1929,7 +3438,7 @@ def control_vm_snapshot(host_id: str, payload: VMSnapshotAction, vm_name: str, a
         raise HTTPException(422, "Snapshot names may contain letters, numbers, dots, underscores, or hyphens")
     host = cockpit_host_record(host_id)
     encoded_name = base64.b64encode(vm_name.encode()).decode()
-    snapshot_script = r'''import base64,re,subprocess,sys,xml.etree.ElementTree as ET
+    snapshot_script = r'''import base64,datetime,re,subprocess,sys,xml.etree.ElementTree as ET
 domain=base64.b64decode(sys.argv[1]).decode(); action,name,description=sys.argv[2:]
 base=['virsh','-c','qemu:///system']
 def run(args):
@@ -1946,7 +3455,9 @@ if action=='create':
  root=ET.fromstring(run(base+['dumpxml','--inactive',domain]))
  disks=[disk for disk in root.findall('./devices/disk') if disk.get('device','disk')=='disk' and disk.find('./readonly') is None]
  if not disks or any(disk.find('./driver') is None or disk.find('./driver').get('type','').lower()!='qcow2' for disk in disks): raise SystemExit('Internal snapshots require every writable VM disk to use qcow2 format')
- run(base+['snapshot-create-as',domain,'--name',name,'--description',description or 'Created from Rancher KVM extension','--atomic'])
+ version='v'+datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
+ snapshot_description=(description.strip()+'\n' if description.strip() else '')+'Rancher-KVM-Version: '+version
+ run(base+['snapshot-create-as',domain,'--name',name,'--description',snapshot_description,'--atomic'])
 elif action=='delete':
  if name not in names: raise SystemExit('Snapshot not found')
  run(base+['snapshot-delete',domain,name])
@@ -1963,6 +3474,157 @@ print('Snapshot action completed')
         raise HTTPException(502, "Could not complete the snapshot action. Confirm the VM is shut down and its writable disks use qcow2 format.") from exc
     record_audit(access.user_id, f"vm.snapshot.{payload.action}", f"{host_id}/{vm_name}/{payload.name}")
     return {"success": True}
+
+
+@app.get("/kvm-api/hosts/{host_id}/vms/snapshots", dependencies=[Depends(require_permission("viewer"))])
+def list_vm_snapshots(host_id: str) -> list[dict[str, Any]]:
+    host = cockpit_host_record(host_id)
+    script = r'''import datetime,json,re,subprocess,xml.etree.ElementTree as ET
+base=['virsh','-c','qemu:///system']
+def run(args):
+ r=subprocess.run(args,capture_output=True,text=True,timeout=25)
+ if r.returncode: raise RuntimeError(r.stderr.strip() or r.stdout.strip() or 'Libvirt query failed')
+ return r.stdout
+names=[line.strip() for line in run(base+['list','--all','--name']).splitlines() if line.strip()]
+items=[]
+for domain in names:
+ try: snapshot_names=[line.strip() for line in run(base+['snapshot-list',domain,'--name']).splitlines() if line.strip()]
+ except Exception: continue
+ for name in snapshot_names:
+  try:
+   root=ET.fromstring(run(base+['snapshot-dumpxml',domain,name])); raw=root.findtext('./description','')
+   match=re.search(r'(?m)^Rancher-KVM-Version: (v[0-9TZ.-]+)$',raw)
+   created=root.findtext('./creationTime','')
+   version=match.group(1) if match else ('legacy-'+created if created else 'legacy')
+   description=re.sub(r'(?m)^Rancher-KVM-Version: v[0-9TZ.-]+\s*$', '', raw).strip()
+   items.append({'vm_name':domain,'name':name,'state':root.findtext('./state','unknown'),'created_at':created,'description':description,'version':version})
+  except Exception: continue
+items.sort(key=lambda item:(item['vm_name'].lower(),int(item['created_at'] or 0),item['name'].lower()),reverse=False)
+print(json.dumps(items))
+'''
+    try:
+        return json.loads(run_sudo_python(host, script, timeout=90) or "[]")
+    except Exception as exc:
+        raise HTTPException(502, f"Could not list VM snapshots: {exc}") from exc
+
+
+@app.get("/kvm-api/hosts/{host_id}/vms/snapshots/download")
+def download_vm_snapshot(host_id: str, vm_name: str, snapshot_name: str, access: AuthorizationContext = Depends(require_permission("vm_operator"))) -> StreamingResponse:
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}", snapshot_name):
+        raise HTTPException(422, "Invalid snapshot name")
+    host = cockpit_host_record(host_id)
+    script = r'''import json,os,re,shutil,subprocess,sys,tarfile,tempfile,xml.etree.ElementTree as ET
+domain,snapshot=sys.argv[1:]
+base=['virsh','-c','qemu:///system']
+def run(args,timeout=60):
+ r=subprocess.run(args,capture_output=True,text=True,timeout=timeout)
+ if r.returncode: raise RuntimeError(r.stderr.strip() or r.stdout.strip() or 'Snapshot export failed')
+ return r.stdout
+if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,63}',domain) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,63}',snapshot): raise SystemExit('Invalid VM or snapshot name')
+if domain not in [line.strip() for line in run(base+['list','--all','--name']).splitlines()]: raise SystemExit('Virtual machine not found')
+if snapshot not in [line.strip() for line in run(base+['snapshot-list',domain,'--name']).splitlines()]: raise SystemExit('Snapshot not found')
+state=run(base+['domstate',domain]).strip().lower()
+if 'shut off' not in state and 'shutoff' not in state: raise SystemExit('Shut down the VM before exporting a snapshot')
+root=ET.fromstring(run(base+['dumpxml','--inactive',domain]))
+disks=[]
+for disk in root.findall('./devices/disk'):
+ if disk.get('device','disk')!='disk' or disk.find('./readonly') is not None: continue
+ driver=disk.find('./driver'); source=disk.find('./source'); target=disk.find('./target')
+ if driver is None or driver.get('type','').lower()!='qcow2' or source is None or not source.get('file'):
+  raise SystemExit('Snapshot export requires writable qcow2 file-backed disks')
+ target_name=target.get('dev','disk') if target is not None else 'disk'
+ if not re.fullmatch(r'[A-Za-z0-9_.-]{1,32}',target_name): raise SystemExit('The VM contains a disk with an unsupported device name')
+ disks.append((source.get('file'),target_name))
+if not disks: raise SystemExit('No writable VM disks were found')
+if not shutil.which('qemu-img'): raise SystemExit('qemu-img is unavailable on the KVM host')
+with tempfile.TemporaryDirectory(prefix='rancher-kvm-snapshot-') as temp:
+ required=0
+ for source,target in disks:
+  measured=subprocess.run(['qemu-img','measure','--output=json','-f','qcow2','-O','qcow2','-l','snapshot.name='+snapshot,source],capture_output=True,text=True,timeout=60)
+  if measured.returncode: raise SystemExit(measured.stderr.strip() or 'Could not estimate snapshot export space')
+  try: required+=int(json.loads(measured.stdout).get('required',0))
+  except (ValueError,TypeError): raise SystemExit('Could not estimate snapshot export space')
+ if shutil.disk_usage(temp).free < int(required*1.05): raise SystemExit('Not enough free space on the KVM host to prepare this snapshot export')
+ entries=[]
+ for index,(source,target) in enumerate(disks):
+  if not os.path.isfile(source): raise SystemExit('A snapshot disk is not an accessible regular file')
+  output=os.path.join(temp,'disk-'+str(index+1)+'.qcow2')
+  run(['qemu-img','convert','-f','qcow2','-O','qcow2','-l','snapshot.name='+snapshot,source,output],timeout=3600)
+  entries.append((output,target+'.qcow2'))
+ sys.stdout.buffer.write(b'KVM_SNAPSHOT_ARCHIVE_START\n'); sys.stdout.buffer.flush()
+ with tarfile.open(fileobj=sys.stdout.buffer,mode='w|gz') as archive:
+  manifest=('VM: '+domain+'\nSnapshot: '+snapshot+'\nDisks: '+str(len(entries))+'\n').encode()
+  import io
+  info=tarfile.TarInfo('manifest.txt'); info.size=len(manifest); archive.addfile(info,io.BytesIO(manifest))
+  for path,filename in entries: archive.add(path,arcname=filename,recursive=False)
+'''
+    client = ssh_client_for_host(host)
+    channel = None
+    try:
+        command = f"sudo -S -p '' python3 -c {shlex.quote(script)} {shlex.quote(vm_name)} {shlex.quote(snapshot_name)}"
+        _stdin, stdout, stderr = client.exec_command(command, timeout=3700)
+        channel = stdout.channel
+        _stdin.write(host["password"] + "\n")
+        _stdin.flush()
+        _stdin.channel.shutdown_write()
+        marker = b"KVM_SNAPSHOT_ARCHIVE_START\n"
+        preamble = bytearray()
+        initial = b""
+        deadline = time.monotonic() + 3700
+        while marker not in preamble:
+            if time.monotonic() > deadline:
+                raise HTTPException(504, "Snapshot export timed out while preparing the archive")
+            if channel.recv_ready():
+                preamble.extend(channel.recv(65536))
+                if len(preamble) > 65536 and marker not in preamble:
+                    raise HTTPException(502, "The KVM host returned an invalid snapshot archive response")
+                continue
+            if channel.exit_status_ready():
+                detail = stderr.read().decode("utf-8", "replace").strip()
+                raise HTTPException(502, detail or "Could not prepare the snapshot archive on the KVM host")
+            time.sleep(0.05)
+        marker_at = preamble.index(marker)
+        initial = bytes(preamble[marker_at + len(marker):])
+        if preamble[:marker_at].strip():
+            raise HTTPException(502, "The KVM host returned an invalid snapshot archive response")
+    except HTTPException:
+        if channel:
+            channel.close()
+        client.close()
+        raise
+    except Exception as exc:
+        if channel:
+            channel.close()
+        client.close()
+        raise HTTPException(502, f"Could not start snapshot export: {exc}") from exc
+
+    def stream_archive():
+        try:
+            if initial:
+                yield initial
+            while True:
+                if channel.recv_ready():
+                    yield channel.recv(65536)
+                    continue
+                if channel.exit_status_ready():
+                    if channel.recv_ready():
+                        continue
+                    status = channel.recv_exit_status()
+                    if status:
+                        performance_logger.warning("snapshot_export_stream_failed host=%s vm=%s snapshot=%s status=%s", host_id, vm_name, snapshot_name, status)
+                    break
+                time.sleep(0.05)
+        finally:
+            channel.close()
+            client.close()
+
+    filename = f"{vm_name}-{snapshot_name}.tar.gz"
+    safe_filename = re.sub(r"[^A-Za-z0-9_.-]", "_", filename)
+    record_audit(access.user_id, "vm.snapshot.download", f"{host_id}/{vm_name}/{snapshot_name}")
+    return StreamingResponse(stream_archive(), media_type="application/gzip", headers={
+        "Content-Disposition": f'attachment; filename="{safe_filename}"',
+        "Cache-Control": "no-store",
+    })
 
 
 @app.get("/kvm-api/hosts/{host_id}/services", dependencies=[Depends(require_permission("viewer"))])
@@ -2099,7 +3761,7 @@ def list_storage_volumes(host_id: str) -> list[dict[str, Any]]:
 
 
 @app.post("/kvm-api/hosts/{host_id}/storage-volumes")
-def configure_storage_volume(host_id: str, payload: StorageVolumeConfig, access: AuthorizationContext = Depends(require_permission("host_resources"))) -> dict[str, Any]:
+def configure_storage_volume(host_id: str, payload: StorageVolumeConfig, access: AuthorizationContext = Depends(require_permission("storage_admin"))) -> dict[str, Any]:
     if not re.fullmatch(r"[A-Za-z0-9_.+-]{1,128}", payload.name):
         raise HTTPException(422, "Volume name may contain letters, numbers, dot, underscore, plus, and hyphen")
     host = cockpit_host_record(host_id)
@@ -2113,7 +3775,7 @@ def configure_storage_volume(host_id: str, payload: StorageVolumeConfig, access:
 
 
 @app.post("/kvm-api/hosts/{host_id}/repositories/actions")
-def control_repository(host_id: str, payload: RepositoryAction, access: AuthorizationContext = Depends(require_permission("host_resources"))) -> dict[str, bool]:
+def control_repository(host_id: str, payload: RepositoryAction, access: AuthorizationContext = Depends(require_permission("software_admin"))) -> dict[str, bool]:
     if payload.alias != "*" and not re.fullmatch(r"[A-Za-z0-9_.:-]+", payload.alias):
         raise HTTPException(422, "Invalid repository alias")
     host = cockpit_host_record(host_id)
@@ -2122,6 +3784,10 @@ def control_repository(host_id: str, payload: RepositoryAction, access: Authoriz
         if not payload.name or not payload.uri or parsed_uri.scheme not in ("http", "https", "ftp", "file") or (parsed_uri.scheme in ("http", "https", "ftp") and not parsed_uri.hostname):
             raise HTTPException(422, "Enter a repository name and a valid HTTP, HTTPS, FTP, or file URL")
         args = ["zypper", "--non-interactive", "addrepo", "--name", payload.name, payload.uri, payload.alias]
+    elif payload.action == "edit":
+        if not payload.name or not payload.name.strip():
+            raise HTTPException(422, "Enter a descriptive repository name")
+        args = ["zypper", "--non-interactive", "modifyrepo", "--name", payload.name.strip(), payload.alias]
     elif payload.action == "remove":
         args = ["zypper", "--non-interactive", "removerepo", payload.alias]
     elif payload.action == "refresh":
@@ -2139,18 +3805,34 @@ def control_repository(host_id: str, payload: RepositoryAction, access: Authoriz
 
 
 @app.post("/kvm-api/hosts/{host_id}/subscriptions/actions")
-def control_subscription(host_id: str, payload: SubscriptionAction, access: AuthorizationContext = Depends(require_permission("host_resources"))) -> dict[str, bool]:
+def control_subscription(host_id: str, payload: SubscriptionAction, access: AuthorizationContext = Depends(require_permission("subscription_admin"))) -> dict[str, bool]:
     host = cockpit_host_record(host_id)
     if payload.action in ("activate_extension", "deactivate_extension"):
-        if not payload.product or not re.fullmatch(r"[A-Za-z0-9_.+-]+/[A-Za-z0-9_.+-]+/[A-Za-z0-9_.+-]+", payload.product):
-            raise HTTPException(422, "Choose a valid product identifier returned by SUSEConnect")
+        if not payload.product or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.+-]*/[A-Za-z0-9][A-Za-z0-9_.+-]*/[A-Za-z0-9][A-Za-z0-9_.+-]*", payload.product):
+            raise HTTPException(422, "Enter a valid SUSEConnect product identifier in name/version/architecture format")
         args = [payload.action, payload.product]
-        extension_input = json.dumps({"regcode": (payload.regcode or "").strip()}) + "\n"
+        # No-code products (such as Package Hub) must not enter the interactive
+        # stdin handshake. Some SUSEConnect builds inherit stdin and otherwise
+        # consume that payload before the helper reads it.
+        extension_input = json.dumps({"regcode": payload.regcode.strip()}) + "\n" if payload.regcode and payload.regcode.strip() else None
         try:
             run_sudo_python(host, SUBSCRIPTION_EXTENSION_SCRIPT, args, timeout=240, stdin_data=extension_input)
         except Exception as exc:
             record_audit(access.user_id, f"subscription.{payload.action}", f"{host_id}/{payload.product}", "failure", "SUSEConnect add-on operation failed")
-            raise HTTPException(502, f"Could not {payload.action.replace('_', ' ')}: {exc}") from exc
+            safe_error = str(exc)
+            secrets_to_hide = [payload.regcode, host.get("password"), host.get("private_key"), host.get("key_passphrase")]
+            for secret in secrets_to_hide:
+                if secret:
+                    safe_error = safe_error.replace(secret, "[redacted]")
+            safe_diagnostic = re.sub(r"\s+", " ", safe_error).strip()[:600]
+            performance_logger.error(
+                "subscription_extension_failed action=%s host_id=%s product=%s diagnostic=%s",
+                payload.action,
+                host_id,
+                payload.product,
+                safe_diagnostic,
+            )
+            raise HTTPException(502, f"Could not {payload.action.replace('_', ' ')}: {safe_diagnostic}") from exc
         record_audit(access.user_id, f"subscription.{payload.action}", f"{host_id}/{payload.product}")
         return {"success": True}
     if payload.action in ("register", "replace"):
@@ -2184,7 +3866,12 @@ print(result.stdout.strip())
         run_sudo_python(host, script, args, timeout=210, stdin_data=subscription_input)
     except Exception as exc:
         record_audit(access.user_id, f"subscription.{payload.action}", host_id, "failure", "SUSEConnect operation failed")
-        raise HTTPException(502, f"Could not {payload.action} the SUSE subscription. Check host connectivity and the SUSEConnect response on the host.") from exc
+        safe_error = str(exc).strip() or "The remote command failed without returning a diagnostic"
+        secrets_to_hide = [payload.regcode, payload.email, host.get("password"), host.get("private_key"), host.get("key_passphrase")]
+        for secret in secrets_to_hide:
+            if secret:
+                safe_error = safe_error.replace(secret, "[redacted]")
+        raise HTTPException(502, f"Could not {payload.action} the SUSE subscription: {safe_error}") from exc
     record_audit(access.user_id, f"subscription.{payload.action}", host_id)
     return {"success": True}
 
@@ -2195,21 +3882,25 @@ action=sys.argv[1]
 product=sys.argv[2] if len(sys.argv)>2 else ''
 listed=subprocess.run(['SUSEConnect','--list-extensions'],capture_output=True,text=True,timeout=60)
 if listed.returncode: raise SystemExit(listed.stderr.strip() or listed.stdout.strip() or 'Could not list available SUSE extensions')
+listing_text=re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]','',listed.stdout)
 items=[]; label=''
-for line in listed.stdout.splitlines():
+for line in listing_text.splitlines():
  text=line.strip()
  if not text: continue
- match=re.search(r'SUSEConnect\s+(-d\s+)?-p\s+(\S+)(.*)$',text)
+ match=re.search(r'\bsuseconnect\s+(.*)$',text,re.I)
  if match:
-  identifier=match.group(2)
+  command=match.group(1)
+  product_match=re.search(r'(?:^|\s)-p\s+(\S+)',command)
+  if not product_match: continue
+  identifier=product_match.group(1)
   if not re.fullmatch(r'[A-Za-z0-9_.+-]+/[A-Za-z0-9_.+-]+/[A-Za-z0-9_.+-]+',identifier): continue
-  active=bool(match.group(1))
-  name=re.sub(r'\s*\(Activated\)\s*','',label).strip()
+  active=bool(re.search(r'(?:^|\s)-d(?:\s|$)',command)) or bool(re.search(r'\(Activated\)',label,re.I))
+  name=re.sub(r'\s*\(Activated\)\s*','',label,flags=re.I).strip()
   if not name or name.startswith(('AVAILABLE EXTENSIONS','REMARKS','MORE INFORMATION')): name=identifier.split('/')[0].replace('-',' ').title()
-  items.append({'product':identifier,'name':name,'active':active,'requires_regcode':not active and bool(re.search(r'\-r\s+(?:ADDITIONAL|<)',match.group(3),re.I)),'protected':identifier.startswith(('sle-module-basesystem/','sle-module-server-applications/'))})
+  items.append({'product':identifier,'name':name,'active':active,'requires_regcode':not active and bool(re.search(r'\-r\s+(?:ADDITIONAL|<)',command,re.I)),'protected':identifier.startswith(('sle-module-basesystem/','sle-module-server-applications/'))})
   label=''
  elif text.upper().startswith(('AVAILABLE EXTENSIONS','REMARKS','MORE INFORMATION')): label=''
- elif not text.startswith(('Activate with:','Deactivate with:','(')): label=text
+ elif not re.match(r'^(Activate|Deactivate) with:',text,re.I) and not text.startswith('('): label=text
 if action=='list':
  print(json.dumps(items)); raise SystemExit
 item=next((entry for entry in items if entry['product']==product),None)
@@ -2217,8 +3908,13 @@ if item is None: raise SystemExit('The selected product is not available for thi
 if action=='deactivate_extension' and item['protected']: raise SystemExit('This core SUSE module is protected from deactivation')
 if action=='activate_extension' and item['active']: raise SystemExit('This extension is already active')
 if action=='deactivate_extension' and not item['active']: raise SystemExit('This extension is not active')
-print('KVM_STDIN_READY',flush=True)
-data=json.loads(sys.stdin.readline() or '{}')
+data={}
+if action=='activate_extension' and item['requires_regcode']:
+ print('KVM_STDIN_READY',flush=True)
+ try:
+  data=json.loads(sys.stdin.readline())
+ except (json.JSONDecodeError, TypeError):
+  raise SystemExit('Could not read the SUSE registration code. Re-enter the code and retry.')
 if action=='activate_extension':
  args=['SUSEConnect','-p',product]
  if data.get('regcode'): args.extend(['-r',data['regcode']])
@@ -2240,7 +3936,7 @@ def list_subscription_extensions(host_id: str) -> list[dict[str, Any]]:
 
 
 @app.post("/kvm-api/hosts/{host_id}/security/selinux")
-def set_selinux_mode(host_id: str, payload: SecurityModeAction, access: AuthorizationContext = Depends(require_permission("host_resources"))) -> dict[str, bool]:
+def set_selinux_mode(host_id: str, payload: SecurityModeAction, access: AuthorizationContext = Depends(require_permission("service_admin"))) -> dict[str, bool]:
     host = cockpit_host_record(host_id)
     script = r'''import shutil,subprocess,sys
 if not shutil.which('setenforce'): raise SystemExit('SELinux is not available on this host')
@@ -2257,7 +3953,10 @@ if r.returncode: raise SystemExit(r.stderr.strip() or r.stdout.strip() or 'Could
 
 
 @app.post("/kvm-api/hosts/{host_id}/libvirt/{resource}/actions")
-def control_libvirt_resource(host_id: str, resource: Literal["storage-pools", "networks"], payload: NamedAdminAction, access: AuthorizationContext = Depends(require_permission("host_resources"))) -> dict[str, bool]:
+def control_libvirt_resource(host_id: str, resource: Literal["storage-pools", "networks"], payload: NamedAdminAction, access: AuthorizationContext = Depends(require_permission("viewer"))) -> dict[str, bool]:
+    required_scope = "storage_admin" if resource == "storage-pools" else "network_admin"
+    if required_scope not in access.permissions:
+        raise HTTPException(403, f"The {required_scope.replace('_', ' ')} role is required for this KVM operation")
     if not re.fullmatch(r"[A-Za-z0-9_.+-]+", payload.name):
         raise HTTPException(422, "Invalid libvirt resource name")
     host = cockpit_host_record(host_id)
@@ -2287,7 +3986,7 @@ if r.returncode: raise SystemExit(r.stderr.strip() or r.stdout.strip() or 'Libvi
 
 
 @app.post("/kvm-api/hosts/{host_id}/libvirt/networks/config")
-def configure_libvirt_network(host_id: str, payload: LibvirtNetworkConfig, access: AuthorizationContext = Depends(require_permission("host_resources"))) -> dict[str, bool]:
+def configure_libvirt_network(host_id: str, payload: LibvirtNetworkConfig, access: AuthorizationContext = Depends(require_permission("network_admin"))) -> dict[str, bool]:
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}", payload.name):
         raise HTTPException(422, "Use a network name with letters, numbers, dots, underscores, or hyphens")
     if payload.bridge and not re.fullmatch(r"[A-Za-z0-9_.-]{1,15}", payload.bridge):
@@ -2388,7 +4087,7 @@ print('Libvirt network definition saved')
 
 
 @app.post("/kvm-api/hosts/{host_id}/storage-pools/config")
-def configure_storage_pool(host_id: str, payload: StoragePoolConfig, access: AuthorizationContext = Depends(require_permission("host_resources"))) -> dict[str, bool]:
+def configure_storage_pool(host_id: str, payload: StoragePoolConfig, access: AuthorizationContext = Depends(require_permission("storage_admin"))) -> dict[str, bool]:
     if not re.fullmatch(r"[A-Za-z0-9_.+-]+", payload.name):
         raise HTTPException(422, "Invalid storage pool name")
     if payload.action in ("create", "edit") and (not payload.target or not payload.target.startswith("/") or "\x00" in payload.target):
@@ -2461,7 +4160,7 @@ def run_terminal_command(host_id: str, payload: TerminalCommand, access: Authori
 
 
 @app.post("/kvm-api/hosts/{host_id}/network-connections/actions")
-def control_network_connection(host_id: str, payload: NetworkConnectionAction, access: AuthorizationContext = Depends(require_permission("host_resources"))) -> dict[str, bool]:
+def control_network_connection(host_id: str, payload: NetworkConnectionAction, access: AuthorizationContext = Depends(require_permission("network_admin"))) -> dict[str, bool]:
     if not re.fullmatch(r"[A-Fa-f0-9-]{16,64}", payload.uuid):
         raise HTTPException(422, "Invalid NetworkManager connection ID")
     host = cockpit_host_record(host_id)
@@ -2483,7 +4182,7 @@ if r.returncode: raise SystemExit(r.stderr.strip() or r.stdout.strip() or 'Netwo
 
 
 @app.post("/kvm-api/hosts/{host_id}/network-connections/config")
-def configure_network_connection(host_id: str, payload: NetworkConnectionConfig, access: AuthorizationContext = Depends(require_permission("host_resources"))) -> dict[str, bool]:
+def configure_network_connection(host_id: str, payload: NetworkConnectionConfig, access: AuthorizationContext = Depends(require_permission("network_admin"))) -> dict[str, bool]:
     if not re.fullmatch(r"[A-Fa-f0-9-]{16,64}", payload.uuid):
         raise HTTPException(422, "Invalid NetworkManager connection ID")
     try:
@@ -2582,7 +4281,7 @@ if p.returncode: raise SystemExit('NetworkManager did not commit the checkpoint'
 
 
 @app.post("/kvm-api/hosts/{host_id}/accounts/actions")
-def control_account(host_id: str, payload: AccountAction, access: AuthorizationContext = Depends(require_permission("host_resources"))) -> dict[str, bool]:
+def control_account(host_id: str, payload: AccountAction, access: AuthorizationContext = Depends(require_permission("account_admin"))) -> dict[str, bool]:
     if not re.fullmatch(r"[a-z_][a-z0-9_-]{0,31}", payload.username):
         raise HTTPException(422, "Invalid account name")
     host = cockpit_host_record(host_id)
@@ -2658,7 +4357,7 @@ if result.returncode: raise SystemExit(result.stderr.strip() or result.stdout.st
 
 
 @app.post("/kvm-api/hosts/{host_id}/services/actions")
-def control_service(host_id: str, payload: ServiceAction, service_name: str, access: AuthorizationContext = Depends(require_permission("host_resources"))) -> dict[str, bool]:
+def control_service(host_id: str, payload: ServiceAction, service_name: str, access: AuthorizationContext = Depends(require_permission("service_admin"))) -> dict[str, bool]:
     if not re.fullmatch(r"[A-Za-z0-9_.@:-]+", service_name):
         raise HTTPException(422, "Invalid service name")
     host = cockpit_host_record(host_id)
@@ -2673,30 +4372,48 @@ def control_service(host_id: str, payload: ServiceAction, service_name: str, acc
 
 def run_sudo_python(host: dict[str, Any], script: str, args: list[str] | None = None, timeout: int = 30, stdin_data: str | None = None) -> str:
     client = ssh_client_for_host(host)
-    command = f"sudo -S -p '' python3 -c {shlex.quote(script)}"
-    if args:
-        command += " " + " ".join(shlex.quote(arg) for arg in args)
+    remote_input_path = None
+    sftp = None
     try:
+        remote_script = script
+        remote_args = list(args or [])
+        if stdin_data is not None:
+            # Keep sudo's password and operation payload on separate channels.
+            # Some sudo builds consume bytes beyond their password line when
+            # both are written to stdin. The short-lived, owner-only file is
+            # uploaded over the already pinned SSH connection and deleted in
+            # the finally block, including on command failure.
+            remote_input_path = f"/tmp/.rancher-kvm-input-{uuid.uuid4().hex}"
+            sftp = client.open_sftp()
+            with sftp.open(remote_input_path, "w") as remote_input:
+                remote_input.chmod(0o600)
+                remote_input.write(stdin_data)
+            remote_script = (
+                "import sys; _kvm_input_path=sys.argv.pop(); "
+                "sys.stdin=open(_kvm_input_path, 'r'); "
+                f"exec(compile({script!r}, '<kvm-remote>', 'exec'))"
+            )
+            remote_args.append(remote_input_path)
+        command = f"sudo -S -p '' python3 -c {shlex.quote(remote_script)}"
+        if remote_args:
+            command += " " + " ".join(shlex.quote(arg) for arg in remote_args)
         stdin, stdout, stderr = client.exec_command(command, timeout=timeout)
         stdin.write(host["password"] + "\n")
         stdin.flush()
-        prelude = ""
-        if stdin_data:
-            ready, _, _ = select.select([stdout.channel], [], [], 8)
-            if not ready:
-                raise RuntimeError("The remote account command did not request its password input")
-            prelude = stdout.channel.recv(4096).decode("utf-8", "replace")
-            if "KVM_STDIN_READY" not in prelude:
-                raise RuntimeError("The remote account command did not reach its password prompt")
-            stdin.write(stdin_data)
-            stdin.flush()
         stdin.channel.shutdown_write()
-        output = (prelude + stdout.read().decode("utf-8", "replace")).strip()
+        output = stdout.read().decode("utf-8", "replace").replace("KVM_STDIN_READY\n", "").strip()
         error = stderr.read().decode("utf-8", "replace").strip()
         if stdout.channel.recv_exit_status():
             raise RuntimeError(error or output or "Could not run the remote command with sudo")
         return output
     finally:
+        if sftp and remote_input_path:
+            try:
+                sftp.remove(remote_input_path)
+            except OSError:
+                performance_logger.warning("temporary_ssh_input_cleanup_failed host=%s", host.get("id", "unknown"))
+        if sftp:
+            sftp.close()
         client.close()
 
 

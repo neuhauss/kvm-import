@@ -16,6 +16,9 @@ Use SUSE-provided and SUSE-supported components for the cluster workflow. The ta
 - Preserve the SUSE-supported `crm cluster init` and `crm cluster join` workflow. Avoid hand-building Corosync or Pacemaker configuration as a substitute for the SUSE tooling.
 - Treat Hawk as a complementary native administration surface. Link or proxy it only after HA is detected, and only with an explicit secure authentication design.
 - Make unsupported states clear. A green “connected” host status must never imply quorum, fencing, or HA readiness.
+- Design the HA flow for operators with limited cluster experience: clear submenus, a visible stepper, plain-language topology diagrams/summaries, and contextual recommendations before each decision.
+- Surface best practices when they matter. For even-sized clusters, especially two-node clusters, recommend QDevice/QNetd and explain quorum behavior and split-brain risk. Do not treat two nodes as inherently invalid: SUSE documents a two-node setup with QDevice/QNetd and fencing. Place the QNetd witness outside the cluster and preferably in a separate network or failure domain.
+- Before any future mutation, show a review summary of nodes, quorum witness, Corosync links, fencing, expected changes, and blockers. Separate informational guidance from hard requirements and never present connectivity as HA readiness.
 
 ## Recommended experience
 
@@ -28,9 +31,15 @@ The new page starts with registered hosts and their SSH reachability. Future clu
 1. **Select hosts:** select at least two compatible SLES hosts, display OS/release/architecture and connection freshness, and warn when hosts are already members of a cluster.
 2. **HA entitlement and packages:** report SLES registration and the SLE HA extension state. Let the operator activate the SUSE extension using a one-time registration code where licensing permits. Preview package changes and repositories before applying them.
 3. **Read-only preflight:** check supported release compatibility, stable hostname and static addressing, time synchronization, inter-node SSH, required firewall reachability, candidate Corosync interfaces/subnets, and watchdog/fencing capabilities. Separate blockers from warnings.
-4. **Topology and quorum:** select Corosync communication links, fencing method, and QDevice/QNetd placement. Explain votes and expected failure behavior in plain language. For a two-node cluster, explicitly plan a QNetd witness server outside the cluster; SUSE recommends QDevice/QNetd for even-sized clusters, especially two-node clusters.
+4. **Topology and quorum:** select Corosync communication links, fencing method, and QDevice/QNetd placement. Explain votes and expected failure behavior in plain language. For a two-node cluster, visibly recommend a QNetd witness outside the cluster, ideally on a separate network or failure domain; SUSE recommends QDevice/QNetd for even-sized clusters, especially two-node clusters.
 5. **Review and bootstrap:** produce a human-readable change plan. Run first-node `crm cluster init`, then `crm cluster join` on additional selected nodes as distinct operations, showing progress and per-node output. Require confirmation before every operation that changes a host.
 6. **Verify and hand off:** verify node membership, Pacemaker/Corosync health, quorum, fencing, and Hawk service. Save the cluster only after the cluster reports the expected state.
+
+### 2a. Workload templates
+
+The extension provides read-only workload profiles for an existing service with a virtual IP, KVM virtual-machine failover, a web service, and highly available NFS. The operator selects candidate nodes and runs the same bounded SUSE preflight. Per-profile compatibility requires supported and matching SLES release/architecture, active SLE HA, `crm`/`crm_mon`, synchronized clocks, and the relevant installed SUSE OCF agents. The web and NFS profiles additionally inspect their systemd unit files; the VM profile inspects libvirt storage pool definitions and reports host-local pool details.
+
+“Candidate” means only that these discovered prerequisites match. It does not establish fencing, quorum witness, redundant Corosync reachability, application configuration, shared storage, or production readiness. A pool listed by libvirt is not treated as shared storage. The selected profile carries into the cluster planner and shows a resource/order/dependency preview in its topology and review steps. Workload resource creation remains a separate reviewed operation after cluster membership is verified; the template does not install applications or apply Pacemaker mutations.
 
 ### 3. Cluster operations
 
@@ -61,6 +70,14 @@ The cluster detail view should prioritize node membership, quorum, Corosync link
 3. HA extension activation and controlled `crm cluster init/join`, after review of generated API operations and recovery paths.
 4. Verified cluster inventory, status, quorum, fencing, Hawk access, and audit trail.
 5. SUSE resource management and lifecycle operations, introduced only after the node and resource workflows are testable on supported SLES/HA versions.
+
+## Current extension preparation
+
+The Clusters page separates **Existing clusters**, **Plan cluster**, and **Host readiness**. The planner supports an on-demand, bounded read-only preflight for selected nodes. It reports OS/release, architecture, hostname, SLE HA activation, HA command availability, time synchronization, active interfaces, and visible watchdog devices. It records cluster name, quorum approach, and fencing approach as a plan, then provides SUSE `crm cluster init` and `crm cluster join` commands and opens the extension's host SSH terminal for the selected node. SUSE's interactive prompts remain visible to the operator. The extension does not answer prompts or initialize a cluster automatically. Network reachability, stable addressing, fencing configuration, and actual cluster compatibility remain manual checks.
+
+For a verified cluster, the extension exposes node standby/online/maintenance actions, resource start/stop/failure cleanup, quorum and fencing status, Corosync link diagnostics, Pacemaker location/order/colocation constraints, filtered recent Pacemaker/Corosync journal output, and a direct link to Hawk. Mutating actions are permission-checked, reviewed in the UI, and audit logged. Constraint editing, resource creation, and fencing-device creation remain out of scope until there are strongly typed, device-specific forms and a supported validation flow.
+
+The overview metric is “Hosts reporting a cluster,” not “Detected clusters,” because readiness currently reports host-level observations and may count multiple hosts from the same cluster. Distinct cluster inventory requires verified cluster identity and membership discovery.
 
 ## References
 

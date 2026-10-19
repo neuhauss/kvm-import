@@ -1,6 +1,7 @@
 {{- if .Values.ingress.enabled }}
 {{- $origin := trimSuffix "/" .Values.rancher.publicOrigin -}}
 {{- $host := regexReplaceAll "^https?://([^/]+).*$" $origin "$1" -}}
+{{- $ipHost := or (regexMatch "^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+$" $host) (contains ":" $host) -}}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -18,7 +19,10 @@ spec:
   ingressClassName: {{ . | quote }}
   {{- end }}
   rules:
-    - host: {{ $host | quote }}
+    -
+{{ if not $ipHost }}
+      host: {{ $host | quote }}
+{{ end }}
       http:
         paths:
           - path: /kvm-api
@@ -33,13 +37,6 @@ spec:
             backend:
               service:
                 name: kvm-api
-                port:
-                  number: 8080
-          - path: /kvm-manager
-            pathType: Prefix
-            backend:
-              service:
-                name: kvm-extension-assets
                 port:
                   number: 8080
 {{- end }}
