@@ -20,7 +20,7 @@ In Rancher, add this Helm repository under **Apps > Repositories**:
 https://neuhauss.github.io/kvm-import
 ```
 
-Then find **KVM Manager** in **Apps > Charts** and install it. The chart installs the Rancher extension, API, and UI assets; set the Rancher URL and review storage and ingress values in the Rancher install form. See [INSTALLATION.md](INSTALLATION.md) for details. The manifests under `deploy/` are optional examples for maintainers and manual deployments.
+Then find **KVM Manager** in **Apps > Charts** and install it. The chart installs the Rancher extension, API, and UI assets; set the Rancher URL and review storage and ingress values in the Rancher install form. See [INSTALLATION.md](INSTALLATION.md) for details. The manifests under `deploy/` are maintainer examples; they are not required for the catalog installation.
 
 ## Security notes
 
@@ -62,4 +62,4 @@ Issues and pull requests are welcome. Keep changes inside this extension and its
 
 ## License
 
-No license has been selected for this repository yet. Until a license is added, copyright remains with the authors and reuse rights are not granted by default.
+This project is licensed under the MIT License. See [LICENSE](LICENSE).
