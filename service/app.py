@@ -3119,7 +3119,7 @@ subscription={'available':False,'status':'SUSEConnect is not installed'}
 try:
     if shutil.which('SUSEConnect'):
         products=[]
-        result=subprocess.run(['SUSEConnect','--status'],capture_output=True,text=True,timeout=30)
+        result=subprocess.run(['SUSEConnect','-s'],capture_output=True,text=True,timeout=30)
         overall_status=''
         if result.returncode==0:
             try:
@@ -3131,25 +3131,43 @@ try:
                     if not isinstance(item,dict): continue
                     identifier=str(item.get('identifier') or item.get('product') or item.get('product_id') or '')
                     if not identifier: continue
-                    status_value=str(item.get('status') or item.get('current_status') or '')
+                    registration_data=item.get('registration') or item.get('subscription') or {}
+                    if isinstance(registration_data,str): registration_name=registration_data
+                    elif isinstance(registration_data,dict): registration_name=str(registration_data.get('name') or registration_data.get('subscription_name') or '')
+                    else: registration_name=''
+                    # SUSEConnect -s returns these fields directly on each
+                    # product for current SLES releases. Older response
+                    # variants may instead nest them under registration or
+                    # subscription. Prefer a non-empty nested value, then
+                    # fall back to the product record.
+                    def subscription_field(*keys):
+                        if isinstance(registration_data,dict):
+                            for key in keys:
+                                value=registration_data.get(key)
+                                if value not in (None,''): return value
+                        for key in keys:
+                            value=item.get(key)
+                            if value not in (None,''): return value
+                        return ''
+                    status_value=str(item.get('status') or item.get('current_status') or (registration_data.get('status','') if isinstance(registration_data,dict) else ''))
                     raw_name=str(item.get('friendly_name') or item.get('product_name') or item.get('display_name') or item.get('name') or '')
-                    subscription_data=item.get('subscription') or {}
-                    if isinstance(subscription_data,str): subscription_name=subscription_data
-                    elif isinstance(subscription_data,dict): subscription_name=str(subscription_data.get('name') or subscription_data.get('subscription_name') or '')
-                    else: subscription_name=''
+                    subscription_data=registration_data
+                    subscription_name=registration_name
                     if not subscription_name and 'subscription' in raw_name.lower(): subscription_name=raw_name
                     product_names={'SLES':'SUSE Linux Enterprise Server','SLES_SAP':'SUSE Linux Enterprise Server for SAP Applications'}
                     product_name=raw_name if raw_name and 'subscription' not in raw_name.lower() else product_names.get(identifier,identifier)
                     product_version=str(item.get('version') or '')
                     product_arch=str(item.get('arch') or item.get('architecture') or '')
                     product_label=' '.join(part for part in (product_name,product_version,product_arch) if part)
-                    expires_value=(subscription_data.get('expires_at') or subscription_data.get('expires at')) if isinstance(subscription_data,dict) else (item.get('expires_at') or item.get('expires at'))
-                    starts_value=(subscription_data.get('starts_at') or subscription_data.get('starts at') or subscription_data.get('registered_at') or subscription_data.get('registered at')) if isinstance(subscription_data,dict) else (item.get('starts_at') or item.get('starts at') or item.get('registered_at') or item.get('registered at'))
+                    expires_value=subscription_field('expires_at','expires at')
+                    starts_value=subscription_field('starts_at','starts at','registered_at','registered at')
+                    registration_code=subscription_field('regcode','registration_code','registration code')
                     products.append({'name':product_label,
                         'product':identifier,'active':status_value.lower() in ('registered','active','activated'),
                         'subscription_name':subscription_name,
-                        'subscription_status':str(subscription_data.get('status') or item.get('subscription_status') or '') if isinstance(subscription_data,dict) else str(item.get('subscription_status') or ''),
-                        'subscription_type':str(subscription_data.get('type') or item.get('subscription_type') or '') if isinstance(subscription_data,dict) else str(item.get('subscription_type') or ''),
+                        'registration_code':str(registration_code or ''),
+                        'subscription_status':str(subscription_field('status','subscription_status')),
+                        'subscription_type':str(subscription_field('type','subscription_type')),
                         'starts_at':str(starts_value or ''),'expires_at':str(expires_value or '')})
             except Exception: pass
         if not products:
@@ -3168,10 +3186,10 @@ try:
                     for line in lines[subscription_start+1:]:
                         if ':' in line:
                             key,value=line.split(':',1)
-                            if key.strip().lower()!='regcode': subscription_fields[key.strip().lower()]=value.strip()
+                            subscription_fields[key.strip().lower()]=value.strip()
                 registered=any(line.lower()=='registered' for line in lines[product_index+1:subscription_start if subscription_start is not None else None])
                 products.append({'name':lines[0],'product':identifier,'active':registered,
-                    'subscription_name':subscription_fields.get('name',''),'subscription_status':subscription_fields.get('status',''),
+                    'subscription_name':subscription_fields.get('name',''),'registration_code':subscription_fields.get('regcode',subscription_fields.get('registration code','')),'subscription_status':subscription_fields.get('status',''),
                     'subscription_type':subscription_fields.get('type',''),'starts_at':subscription_fields.get('starts at',subscription_fields.get('registered at','')),'expires_at':subscription_fields.get('expires at','')})
             if result.returncode and text_result.returncode==0: result=text_result
         registered=bool(result.returncode==0 and (any(item['active'] for item in products) or overall_status.lower()=='registered'))
@@ -3664,12 +3682,18 @@ print(json.dumps({'cpu_count':os.cpu_count() or 0,'memory_total_kib':memory.get(
         raise HTTPException(502, f"Could not refresh host metrics: {exc}") from exc
 
 
-@app.get("/kvm-api/hosts/{host_id}/cloud-native", dependencies=[Depends(require_permission("viewer"))])
-def get_host_cloud_native(host_id: str) -> dict[str, Any]:
+@app.get("/kvm-api/hosts/{host_id}/cloud-native")
+def get_host_cloud_native(host_id: str, access: AuthorizationContext = Depends(require_permission("viewer"))) -> dict[str, Any]:
     host = cockpit_host_record(host_id)
     try:
         output = run_sudo_python(host, HOST_ADMIN_SCRIPT, timeout=90)
-        return json.loads(output or "{}")
+        inventory = json.loads(output or "{}")
+        if "subscription_admin" not in access.permissions:
+            # SUSEConnect's registration code is a credential. Keep it out of
+            # the viewer inventory response and expose it only to subscription admins.
+            for product in inventory.get("subscription", {}).get("products", []):
+                product.pop("registration_code", None)
+        return inventory
     except Exception as exc:
         raise HTTPException(502, f"Could not load host administration data: {exc}") from exc
 

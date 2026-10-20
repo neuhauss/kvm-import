@@ -114,12 +114,28 @@
       <button v-if="permissions.canAdministerHost" class="btn role-primary" @click="openAdd">{{ t('hosts.add') }}</button>
     </div>
     <div v-else class="table-wrap host-table-wrap">
+      <div class="hosts-filter-bar" role="search" :aria-label="t('hosts.filterHosts')">
+        <label class="hosts-search-field">
+          <span>{{ t('hosts.searchHosts') }}</span>
+          <input v-model.trim="hostSearch" class="search-input" type="search" :placeholder="t('hosts.searchHostsPlaceholder')" :aria-label="t('hosts.searchHosts')">
+        </label>
+        <label class="hosts-state-field">
+          <span>{{ t('hosts.filterByState') }}</span>
+          <select v-model="hostStateFilter" class="search-input" :aria-label="t('hosts.filterByState')">
+            <option value="all">{{ t('hosts.allStates') }}</option>
+            <option value="ready">{{ t('hosts.ready') }}</option>
+            <option value="unreachable">{{ t('hosts.unreachable') }}</option>
+            <option value="unknown">{{ t('hosts.unknown') }}</option>
+          </select>
+        </label>
+        <span class="hosts-filter-count" role="status">{{ t('hosts.hostFilterCount', { shown: filteredHosts.length, total: hosts.length }) }}</span>
+      </div>
       <table class="table">
-        <thead>
+        <thead class="hosts-table-head">
           <tr><th>{{ t('hosts.hostname') }}</th><th>{{ t('hosts.address') }}</th><th>{{ t('hosts.state') }}</th><th>{{ t('hosts.cpu') }}</th><th>{{ t('hosts.memory') }}</th><th>{{ t('hosts.lastCheck') }}</th></tr>
         </thead>
         <tbody>
-          <tr v-for="host in hosts" :key="host.id">
+          <tr v-for="host in filteredHosts" :key="host.id">
             <td :data-label="t('hosts.hostname')"><div class="host-identity"><div><strong>{{ host.hostname || host.name }}</strong><small>{{ host.name }}</small></div><div class="host-actions">
               <button class="btn role-secondary btn-sm host-ui-button" @click="openCloudNative(host)">{{ t('hosts.uiMenu') }}</button>
               <div v-if="permissions.canOperateVms || permissions.canAdministerHost" class="host-menu-wrap">
@@ -137,6 +153,7 @@
             <td :data-label="t('hosts.memory')">{{ memoryLabel(host.memory_total_bytes) }}</td>
             <td :data-label="t('hosts.lastCheck')"><span :class="{ stale: isHostStale(host) }">{{ dateLabel(host.last_checked_at) }}</span><small v-if="isHostStale(host)" class="stale-text">{{ t('hosts.dataStale') }}</small></td>
           </tr>
+          <tr v-if="!filteredHosts.length"><td colspan="6" class="hosts-filter-empty">{{ t('hosts.noHostMatches') }}</td></tr>
         </tbody>
       </table>
     </div>
@@ -168,7 +185,7 @@ export default defineComponent({
       saving: false, error: '', refreshWarning: '', formError: '', openMenu: '' as string, hostMenuStyle: {} as Record<string, string>,
       form: { name: '', address: '', port: 22, username: '', password: '', ssh_private_key: '', ssh_key_passphrase: '', remove_ssh_key: false, accept_new_host_key: false },
       showingAudit: false, auditEvents: [] as AuditEvent[], auditLoading: false, auditError: '', deployPrefill: false,
-      probeChecks: [] as { id: string; status: string; message: string; os_id?: string; os_version?: string; libvirt_version?: string }[], probeLoading: false, probeOk: false, probeSignature: '', auditSearch: '', auditHost: '', auditOutcome: '', refreshTimer: 0 as number, refreshingStale: false,
+      probeChecks: [] as { id: string; status: string; message: string; os_id?: string; os_version?: string; libvirt_version?: string }[], probeLoading: false, probeOk: false, probeSignature: '', auditSearch: '', auditHost: '', auditOutcome: '', refreshTimer: 0 as number, refreshingStale: false, hostSearch: '', hostStateFilter: 'all',
     };
   },
     mounted() {
@@ -336,6 +353,13 @@ export default defineComponent({
     dateLabel(value?: string) { const locale = (this as any).$store?.state?.i18n?.selected; return value ? new Date(value).toLocaleString(locale || undefined) : '—'; },
   },
   computed: {
+    filteredHosts(): Host[] {
+      const term = this.hostSearch.toLowerCase();
+      return this.hosts.filter((host) => {
+        const matchesTerm = !term || `${host.hostname || ''} ${host.name} ${host.address}`.toLowerCase().includes(term);
+        return matchesTerm && (this.hostStateFilter === 'all' || host.status === this.hostStateFilter);
+      }).sort((a, b) => (a.hostname || a.name).localeCompare(b.hostname || b.name));
+    },
     filteredAuditEvents(): AuditEvent[] {
       const term = this.auditSearch.toLowerCase().trim();
       return this.auditEvents.filter((event) => (!this.auditOutcome || event.outcome === this.auditOutcome) && (!this.auditHost || event.target === this.auditHost || event.target.startsWith(`${this.auditHost}/`)) && (!term || `${event.actor} ${event.action} ${event.target} ${event.detail || ''} ${event.outcome}`.toLowerCase().includes(term)));
@@ -354,6 +378,17 @@ small { display: block; font-size: 12px; margin-top: 4px; }
 .table-wrap { overflow-x: auto; }
 .table { width: 100%; border-collapse: collapse; color:var(--body-text); background:var(--input-bg, var(--body-bg)); }
 .table th, .table td { padding: 12px; color:var(--body-text); text-align: left; border-bottom: 1px solid var(--border, #d8dde6); white-space: nowrap; }
+.host-table-wrap { border:1px solid var(--border,#39414d); border-radius:6px; background:var(--body-bg,#252b33); }
+.hosts-filter-bar { display:flex; align-items:flex-end; gap:12px; flex-wrap:wrap; padding:14px 16px; border-bottom:1px solid var(--border,#39414d); background:var(--body-bg,#252b33); }
+.hosts-filter-bar label { display:grid; gap:5px; color:var(--muted,#929baa); font-size:12px; font-weight:600; }
+.hosts-search-field { flex:1 1 260px; min-width:190px; }
+.hosts-state-field { flex:0 1 200px; min-width:160px; }
+.hosts-filter-bar .search-input { width:100%; min-height:36px; padding:7px 10px; box-sizing:border-box; border:1px solid var(--input-border,var(--border,#4b5563)); border-radius:4px; color:var(--input-text,var(--body-text,#e5e7eb)); background:var(--input-bg,var(--body-bg,#252b33)); font:inherit; }
+.hosts-filter-bar .search-input:focus-visible { border-color:var(--primary,#53c99a); outline:2px solid color-mix(in srgb,var(--primary,#53c99a) 45%,transparent); outline-offset:1px; }
+.hosts-filter-count { margin:0 0 9px auto; color:var(--muted,#929baa); font-size:12px; white-space:nowrap; }
+.table thead.hosts-table-head { background:#20252b; }
+.table thead.hosts-table-head th { padding:12px; color:#e5e7eb; background:#20252b; border-bottom:1px solid #414852; font-size:12px; font-weight:600; }
+.hosts-filter-empty { padding:24px !important; color:var(--muted,#929baa) !important; text-align:center !important; }
 .state { display: inline-block; padding: 3px 9px; border-radius: 12px; background: #edf0f4; }
 .state.ready { background: #e3f5e8; color: #23733a; }
 .state.unreachable { background: #fde8e7; color: #a52822; }
@@ -411,6 +446,7 @@ small { display: block; font-size: 12px; margin-top: 4px; }
 .warning { background:color-mix(in srgb,#d99c30 18%,var(--body-bg,#252b33)); color:var(--body-text); }
 @media (max-width: 700px) { .kvm-page { padding: 16px; }.header { flex-direction: column; }.header-actions { width: 100%; flex-wrap: wrap; }.host-editor { min-height: calc(100vh - 120px); }.host-editor-header h1 { font-size: 21px; }.field-wide,.field-name,.field-address,.field-port { grid-column: 1 / -1; }.host-editor-footer { margin: auto -16px -16px; padding: 12px 16px; } }
 @container hosts-layout (max-width: 700px) { .kvm-page { padding:16px; }.header { align-items:flex-start; flex-direction:column; }.header-actions { width:100%; flex-wrap:wrap; }.host-editor { min-height:calc(100vh - 120px); }.host-editor-header h1 { font-size:21px; }.field-wide,.field-name,.field-address,.field-port { grid-column:1/-1; }.host-editor-footer { margin:auto -16px -16px; padding:12px 16px; }.host-editor-form,.host-editor-content { min-width:0; }.table-wrap { max-width:100%; min-width:0; overflow-x:auto; overscroll-behavior-x:contain; } }
+@container hosts-layout (max-width: 700px) { .hosts-filter-bar { align-items:stretch; padding:12px; }.hosts-search-field,.hosts-state-field { flex:1 1 100%; min-width:0; }.hosts-filter-count { margin:0; } }
 @container hosts-layout (max-width: 460px) { .header-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }.header-actions .btn { min-width:0; white-space:normal; }.host-form-section { padding:14px 12px; }.host-editor-footer { gap:8px; }.host-editor-footer .btn { flex:1 1 auto; }.audit-filters { display:grid; grid-template-columns:minmax(0,1fr); }.audit-filters .search-input { min-width:0; width:100%; box-sizing:border-box; } }
 @container hosts-layout (max-width: 920px) { .host-table-wrap { overflow:visible; border:0; background:transparent; }.host-table-wrap :deep(.table) { display:block; width:100%; border-collapse:separate; background:transparent; }.host-table-wrap :deep(.table thead) { position:absolute; width:1px; height:1px; padding:0; overflow:hidden; clip:rect(0,0,0,0); clip-path:inset(50%); white-space:nowrap; }.host-table-wrap :deep(.table tbody) { display:grid; gap:10px; }.host-table-wrap :deep(.table tbody tr) { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); min-width:0; overflow:hidden; border:1px solid var(--border,#394452); border-radius:8px; background:var(--body-bg,#252b33); }.host-table-wrap :deep(.table tbody td) { display:grid; align-content:start; gap:4px; min-width:0; padding:10px 12px; border:0; white-space:normal; overflow-wrap:anywhere; }.host-table-wrap :deep(.table tbody td::before) { content:attr(data-label); color:var(--muted,#8b95a5); font-size:10px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; }.host-table-wrap :deep(.table tbody td:first-child) { grid-column:1/-1; border-bottom:1px solid var(--border,#394452); }.host-table-wrap :deep(.host-identity) { min-width:0; flex-wrap:wrap; }.host-table-wrap :deep(.host-actions) { justify-content:flex-start; flex-wrap:wrap; }.host-table-wrap :deep(.host-actions .btn) { margin:0; }.host-ui-button { margin:0; }.host-menu { text-align:left; } }
 @container hosts-layout (max-width: 460px) { .host-table-wrap :deep(.table tbody tr) { grid-template-columns:minmax(0,1fr); }.host-table-wrap :deep(.table tbody td:first-child) { grid-column:1; } }

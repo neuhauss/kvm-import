@@ -13,6 +13,13 @@ kvmManager:
     cpu: "CPU"
     memory: "Memória"
     lastCheck: "Última verificação"
+    filterHosts: "Filtrar hosts KVM"
+    searchHosts: "Buscar hosts"
+    searchHostsPlaceholder: "Buscar por hostname, nome de exibição ou endereço"
+    filterByState: "Estado da conexão"
+    allStates: "Todos os estados"
+    hostFilterCount: "Exibindo {shown} de {total} hosts"
+    noHostMatches: "Nenhum host KVM corresponde a esses filtros."
     dataStale: Desatualizado · verificando a conexão do host...
     backgroundRefreshFailed: "Falha ao atualizar o host. O estado exibido é da última consulta salva; verifique o SSH e atualize novamente."
     preflightFailed: "A validação SSH/libvirt falhou. Confira o endereço, as credenciais SSH, a confiança da chave do host, o firewall e se o libvirt está ativo."
@@ -164,6 +171,15 @@ kvmManager:
     topologyEyebrow: MAPA DE CONEXÕES
     networkTopology: Topologia de rede
     networkTopologyHelp: Consulte interfaces do host, conexões do NetworkManager, redes libvirt e VMs conectadas em um só lugar.
+    topologyHost: Host e bridges
+    topologyLibvirt: Rede libvirt
+    topologyGuests: VMs conectadas
+    topologyNoBridge: Sem bridge configurada
+    topologyNoHostInterface: Nenhuma interface do host foi associada a esta bridge.
+    topologyBridgeInterface: Interface da bridge
+    topologyMemberOf: Membro de {bridge}
+    topologyNoVm: Nenhuma VM conectada a esta rede.
+    topologyOtherInterfaces: Outras interfaces do host sem vínculo com as redes libvirt
     hostNetworkLayer: Interfaces e conexões do host
     libvirtNetworkLayer: Redes libvirt e VMs
     bridgeMaster: bridge mestre
@@ -466,10 +482,16 @@ kvmManager:
     registrationStatus: Estado do registro
     subscriptionProducts: Produtos registrados e detalhes da subscrição
     subscription: Subscrição
+    subscriptionRegistrationCode: Código de registro SUSE
+    subscriptionCodeUnavailable: Não retornado pelo SUSEConnect
+    showSubscriptionCode: Mostrar código de registro
+    hideSubscriptionCode: Ocultar código de registro
+    dateNotProvided: Não informado
     registrationDate: Registrada em
     expirationDate: Expira em
     subscriptionActions: Ações da subscrição
     subscriptionActive: Ativa
+    subscriptionExpired: Expirada
     subscriptionInactive: Inativa
     subscriptionNameUnknown: Nome da subscrição indisponível
     subscriptionDetailsUnavailable: Nenhum detalhe adicional da subscrição foi retornado.
@@ -629,6 +651,15 @@ kvmManager:
     systemLogs: "Logs do sistema"
     lastJournal: "Últimas {count} entradas do journal."
     filterLogs: "Filtrar logs"
+    logQuickFilters: Filtros rápidos de logs
+    logsAll: Todos
+    logsErrors: Erros e falhas
+    logsWarnings: Avisos
+    logsKernel: Kernel
+    logsVirtualization: KVM e libvirt
+    logsAuth: SSH e autenticação
+    logsHa: Alta disponibilidade
+    logResultCount: "Exibindo {shown} de {total} entradas"
     noLogMatch: "Nenhum log corresponde a este filtro."
     systemInfo: "Identificação e versão do host"
     os: "Sistema operacional"

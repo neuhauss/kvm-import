@@ -81,3 +81,11 @@ Thumbs.db
 
 # Locally built assets (extensions)
 dist-pkg
+
+# Generated extension catalog assets are release/deployment outputs.
+# The one historical archive already tracked by Git remains available.
+/deploy/extension-catalog/*.tgz
+/deploy/extension-catalog/files.txt
+/deploy/extension-catalog/local-index.yaml
+/deploy/extension-catalog/plugin-index.yaml
+/deploy/extension-catalog/plugin/

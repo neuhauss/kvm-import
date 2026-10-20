@@ -56,7 +56,12 @@ entries[:] = [item for item in entries if str(item.get("version")) != version]
 entries.append(entry)
 unique_entries = {}
 for item in entries:
-    unique_entries[str(item.get("version"))] = item
+    item_version = str(item.get("version"))
+    # Rebuild every artifact URL from the public chart repository origin.
+    # This also cleans up stale or local preview URLs inherited from older
+    # indexes while retaining their published chart versions and digests.
+    item["urls"] = [f"{base_url}/{name}-{item_version}.tgz"]
+    unique_entries[item_version] = item
 entries[:] = list(unique_entries.values())
 entries.sort(key=lambda item: tuple(int(part) if part.isdigit() else part for part in str(item["version"]).replace("-", ".").split(".")), reverse=True)
 index["apiVersion"] = "v1"

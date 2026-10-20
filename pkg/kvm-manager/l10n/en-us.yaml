@@ -13,6 +13,13 @@ kvmManager:
     cpu: CPU
     memory: Memory
     lastCheck: Last check
+    filterHosts: Filter KVM hosts
+    searchHosts: Search hosts
+    searchHostsPlaceholder: Search by hostname, display name, or address
+    filterByState: Connection state
+    allStates: All states
+    hostFilterCount: "Showing {shown} of {total} hosts"
+    noHostMatches: No KVM hosts match these filters.
     dataStale: Stale · checking host connectivity...
     backgroundRefreshFailed: "Host refresh failed. The displayed state is the last saved check; verify SSH connectivity and refresh again."
     preflightFailed: "SSH/libvirt validation failed. Check the host address, SSH credentials, host key choice, firewall access, and whether libvirt is running."
@@ -164,6 +171,15 @@ kvmManager:
     topologyEyebrow: CONNECTION MAP
     networkTopology: Network topology
     networkTopologyHelp: See host interfaces, NetworkManager connections, libvirt networks, and VM attachments together.
+    topologyHost: Host and bridges
+    topologyLibvirt: Libvirt network
+    topologyGuests: Attached VMs
+    topologyNoBridge: No bridge configured
+    topologyNoHostInterface: No host interface is linked to this bridge.
+    topologyBridgeInterface: Bridge interface
+    topologyMemberOf: Member of {bridge}
+    topologyNoVm: No VM is attached to this network.
+    topologyOtherInterfaces: Other host interfaces not linked to libvirt networks
     hostNetworkLayer: Host interfaces and connections
     libvirtNetworkLayer: Libvirt networks and VMs
     bridgeMaster: bridge master
@@ -466,10 +482,16 @@ kvmManager:
     registrationStatus: Registration status
     subscriptionProducts: Registered products and subscription details
     subscription: Subscription
+    subscriptionRegistrationCode: SUSE registration code
+    subscriptionCodeUnavailable: Not returned by SUSEConnect
+    showSubscriptionCode: Show registration code
+    hideSubscriptionCode: Hide registration code
+    dateNotProvided: Not provided
     registrationDate: Registered
     expirationDate: Expires
     subscriptionActions: Subscription actions
     subscriptionActive: Active
+    subscriptionExpired: Expired
     subscriptionInactive: Inactive
     subscriptionNameUnknown: Subscription name unavailable
     subscriptionDetailsUnavailable: No additional subscription details were returned.
@@ -629,6 +651,15 @@ kvmManager:
     systemLogs: System logs
     lastJournal: "Latest {count} journal entries."
     filterLogs: Filter logs
+    logQuickFilters: Quick log filters
+    logsAll: All
+    logsErrors: Errors and failures
+    logsWarnings: Warnings
+    logsKernel: Kernel
+    logsVirtualization: KVM and libvirt
+    logsAuth: SSH and authentication
+    logsHa: High availability
+    logResultCount: "Showing {shown} of {total} entries"
     noLogMatch: No logs match this filter.
     systemInfo: Host identification and version
     os: Operating system
