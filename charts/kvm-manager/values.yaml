@@ -1,0 +1,62 @@
+# Public Rancher URL users open in the browser. Override this when installing.
+rancher:
+  publicOrigin: https://rancher.example.com
+  # Optional; defaults to publicOrigin. Must resolve and be trusted from the API pod.
+  apiUrl: ""
+  # Optional PEM CA bundle for a Rancher instance using a private CA.
+  caBundle: ""
+  # Rancher Global Role IDs. Empty roles inherit access only through higher tiers.
+  viewerGlobalRoles: []
+  vmOperatorGlobalRoles: []
+  networkOperatorGlobalRoles: []
+  storageOperatorGlobalRoles: []
+  softwareOperatorGlobalRoles: []
+  subscriptionOperatorGlobalRoles: []
+  accountOperatorGlobalRoles: []
+  serviceOperatorGlobalRoles: []
+  clusterOperatorGlobalRoles: []
+  # Users with this role can manage host settings such as network, storage and accounts.
+  hostOperatorGlobalRoles: []
+  # Kept for backwards compatibility; these users receive full host administration.
+  allowedGlobalRoles:
+    - admin
+  auditRetentionDays: 90
+  slowRequestThresholdMs: 1000
+
+backend:
+  namespace: rancher-kvm-registry
+  storage:
+    size: 1Gi
+    # Empty uses the cluster's default StorageClass.
+    storageClassName: ""
+  image:
+    repository: ghcr.io/neuhauss/rancher-kvm-api
+    tag: "" # Defaults to the chart appVersion.
+    pullPolicy: IfNotPresent
+  imagePullSecrets: []
+  resources:
+    requests:
+      cpu: 100m
+      memory: 192Mi
+    limits:
+      cpu: "1"
+      memory: 768Mi
+
+ingress:
+  enabled: true
+  className: traefik
+  annotations: {}
+
+assets:
+  image: httpd:2.4-alpine
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+plugin:
+  # Override only when the extension assets have a separate public HTTPS origin.
+  endpoint: ""

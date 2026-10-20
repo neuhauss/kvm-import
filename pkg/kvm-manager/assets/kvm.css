@@ -1,0 +1,8 @@
+.icon-kvm:before {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  content: "" !important;
+  vertical-align: -0.12em;
+  background: url("./kvm.svg") center / contain no-repeat;
+}

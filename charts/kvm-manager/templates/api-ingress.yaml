@@ -1,0 +1,42 @@
+{{- if .Values.ingress.enabled }}
+{{- $origin := trimSuffix "/" .Values.rancher.publicOrigin -}}
+{{- $host := regexReplaceAll "^https?://([^/]+).*$" $origin "$1" -}}
+{{- $ipHost := or (regexMatch "^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+$" $host) (contains ":" $host) -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: kvm-api
+  namespace: {{ .Values.backend.namespace }}
+  labels:
+    app.kubernetes.io/name: kvm-api
+    app.kubernetes.io/part-of: rancher-kvm
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . | quote }}
+  {{- end }}
+  rules:
+    -
+{{ if not $ipHost }}
+      host: {{ $host | quote }}
+{{ end }}
+      http:
+        paths:
+          - path: /kvm-api
+            pathType: Prefix
+            backend:
+              service:
+                name: kvm-api
+                port:
+                  number: 8080
+          - path: /kvm-cockpit
+            pathType: Prefix
+            backend:
+              service:
+                name: kvm-api
+                port:
+                  number: 8080
+{{- end }}
