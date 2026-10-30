@@ -1,6 +1,7 @@
 {{- if .Values.ingress.enabled }}
 {{- $origin := trimSuffix "/" .Values.rancher.publicOrigin -}}
-{{- $host := regexReplaceAll "^https?://([^/]+).*$" $origin "$1" -}}
+{{- $hostWithPort := regexReplaceAll "^https?://([^/]+).*$" $origin "$1" -}}
+{{- $host := regexReplaceAll "^([^:]+):[0-9]+$" $hostWithPort "$1" -}}
 {{- $ipHost := or (regexMatch "^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+$" $host) (contains ":" $host) -}}
 apiVersion: networking.k8s.io/v1
 kind: Ingress

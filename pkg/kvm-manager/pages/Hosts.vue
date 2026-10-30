@@ -20,7 +20,7 @@
             <div class="host-field-grid">
               <label class="rancher-field field-name">
                 <span>{{ t('hosts.displayName') }} <b aria-hidden="true">*</b></span>
-                <input v-model.trim="form.name" required maxlength="80" autocomplete="off" placeholder="kvm-prod-01">
+                <input v-model.trim="form.name" required maxlength="80" autocomplete="off" placeholder="kvm-host-01">
               </label>
               <label class="rancher-field field-address">
                 <span>{{ t('hosts.ipDns') }} <b aria-hidden="true">*</b></span>
@@ -45,7 +45,7 @@
               </label>
               <label class="rancher-field field-wide">
                 <span>{{ t('hosts.password') }}<b v-if="!editing" aria-hidden="true"> *</b></span>
-                <input v-model="form.password" type="password" :required="!editing" autocomplete="new-password" :placeholder="editing ? t('hosts.keepPassword') : ''">
+                <input v-model="form.password" type="password" :required="!editing && !form.ssh_private_key" autocomplete="new-password" :placeholder="editing ? t('hosts.keepPassword') : ''">
                 <small>{{ t('hosts.passwordHelp') }}</small>
               </label>
               <label class="rancher-field field-wide">
@@ -72,7 +72,7 @@
           </section>
 
           <section v-if="!editing" class="host-form-section preflight-section">
-            <div class="row-actions"><div><h2>{{ t('hosts.preflightTitle') }}</h2><p class="text-muted">{{ t('hosts.preflightHelp') }}</p><small>{{ t('hosts.compatibilityMatrix') }}</small></div><button type="button" class="btn role-secondary" :disabled="probeLoading || !form.address || !form.username || !form.password" @click="runProbe">{{ probeLoading ? t('hosts.probing') : t('hosts.testConnection') }}</button></div>
+            <div class="row-actions"><div><h2>{{ t('hosts.preflightTitle') }}</h2><p class="text-muted">{{ t('hosts.preflightHelp') }}</p><small>{{ t('hosts.compatibilityMatrix') }}</small></div><button type="button" class="btn role-secondary" :disabled="probeLoading || !form.address || !form.username || (!form.password && !form.ssh_private_key)" @click="runProbe">{{ probeLoading ? t('hosts.probing') : t('hosts.testConnection') }}</button></div>
             <ul v-if="probeChecks.length" class="preflight-checks"><li v-for="check in probeChecks" :key="check.id" :class="check.status"><strong aria-hidden="true">{{ check.status === 'success' ? '✓' : check.status === 'warning' ? '!' : '×' }}</strong><span>{{ check.id === 'compatibility' ? t(check.status === 'success' ? 'hosts.compatibilityOk' : 'hosts.compatibilityWarning', { os: `${check.os_id || 'unknown'} ${check.os_version || ''}`.trim(), libvirt: check.libvirt_version || 'unavailable' }) : check.status === 'failure' ? t('hosts.preflightFailed') : check.id === 'optional' ? t('hosts.optionalCheckUnavailable') : check.message }}</span></li></ul>
           </section>
 
@@ -91,12 +91,14 @@
       <div>
         <h1>{{ t('hosts.title') }}</h1>
         <p class="text-muted">{{ t('hosts.description') }}</p>
+        <small v-if="(loading && loaded) || refreshingStale" class="quiet-refresh" role="status" aria-live="polite"><i aria-hidden="true"></i>{{ t('hosts.refreshing') }}</small>
       </div>
       <div class="header-actions"><button v-if="permissions.canAdministerHost" class="btn role-secondary" @click="toggleAudit">{{ showingAudit ? t('hosts.title') : t('hosts.audit') }}</button><button v-if="permissions.canAdministerHost" class="btn role-primary" @click="openAdd">{{ t('hosts.add') }}</button></div>
     </div>
 
-    <div v-if="error" class="banner error" role="alert">{{ error }}</div>
-    <div v-if="refreshWarning" class="banner warning" role="status">{{ refreshWarning }}</div>
+    <div v-if="error" class="banner error actionable-error" role="alert"><span>{{ error }}</span><button type="button" class="btn role-secondary btn-sm" :disabled="loading" @click="load">{{ loading ? t('hosts.loading') : t('hosts.retry') }}</button></div>
+    <div v-if="refreshWarning" class="banner warning actionable-error" role="alert" aria-live="assertive"><span>{{ refreshWarning }}</span><button type="button" class="btn role-secondary btn-sm" :disabled="refreshingStale" @click="refreshStale">{{ refreshingStale ? t('hosts.refreshing') : t('hosts.refresh') }}</button></div>
+    <div v-if="refreshNotice" class="banner" :class="refreshNoticeKind" :role="refreshNoticeKind === 'error' ? 'alert' : 'status'" :aria-live="refreshNoticeKind === 'error' ? 'assertive' : 'polite'">{{ refreshNotice }}</div>
     <section v-if="showingAudit" class="table-wrap">
       <h2>{{ t('hosts.auditTitle') }}</h2>
       <p class="text-muted">{{ t('hosts.auditDescription') }}</p>
@@ -107,13 +109,23 @@
         <tbody><tr v-for="event in filteredAuditEvents" :key="`${event.occurred_at}-${event.action}-${event.target}`"><td>{{ dateLabel(event.occurred_at) }}</td><td>{{ event.actor }}</td><td>{{ event.action }}</td><td>{{ event.detail || event.target }}</td><td>{{ event.outcome }}</td></tr>
           <tr v-if="!filteredAuditEvents.length"><td colspan="5">{{ t('hosts.noAudit') }}</td></tr></tbody></table>
     </section>
-    <div v-else-if="loading" class="loading">{{ t('hosts.loading') }}</div>
+    <div v-else-if="loading && !loaded" class="loading">{{ t('hosts.loading') }}</div>
+    <div v-else-if="error" class="empty-state"><h2>{{ t('hosts.unableToLoadTitle') }}</h2><p>{{ t('hosts.unableToLoadHelp') }}</p><button class="btn role-secondary" :disabled="loading" @click="load">{{ t('hosts.retry') }}</button></div>
     <div v-else-if="hosts.length === 0" class="empty-state">
       <h2>{{ t('hosts.emptyTitle') }}</h2>
       <p>{{ t('hosts.emptyDescription') }}</p>
       <button v-if="permissions.canAdministerHost" class="btn role-primary" @click="openAdd">{{ t('hosts.add') }}</button>
     </div>
     <div v-else class="table-wrap host-table-wrap">
+      <section class="hosts-health" :aria-label="t('hosts.inventoryHealth')">
+        <h2>{{ t('hosts.inventoryHealth') }}</h2>
+        <div class="hosts-health-grid">
+          <button v-for="item in hostHealthTiles" :key="item.status" type="button" class="hosts-health-tile" :class="[{ active: hostStateFilter === item.status }, item.status]" :aria-pressed="hostStateFilter === item.status" @click="setHostStateFilter(item.status)">
+            <span>{{ t(`hosts.${item.status}`) }}</span><strong>{{ item.count }}</strong>
+          </button>
+        </div>
+        <div class="hosts-health-footer"><span role="status">{{ t('hosts.inventoryHealthSummary', { total: hostSummary.total, ready: hostSummary.ready, stale: hostSummary.stale }) }}</span><button v-if="permissions.canOperateVms" type="button" class="btn role-secondary btn-sm" :disabled="refreshingStale || hostSummary.stale === 0" @click="refreshStale(true)">{{ refreshingStale ? t('hosts.refreshing') : t('hosts.refreshStaleHosts') }}</button></div>
+      </section>
       <div class="hosts-filter-bar" role="search" :aria-label="t('hosts.filterHosts')">
         <label class="hosts-search-field">
           <span>{{ t('hosts.searchHosts') }}</span>
@@ -126,9 +138,11 @@
             <option value="ready">{{ t('hosts.ready') }}</option>
             <option value="unreachable">{{ t('hosts.unreachable') }}</option>
             <option value="unknown">{{ t('hosts.unknown') }}</option>
+            <option value="stale">{{ t('hosts.stale') }}</option>
           </select>
         </label>
         <span class="hosts-filter-count" role="status">{{ t('hosts.hostFilterCount', { shown: filteredHosts.length, total: hosts.length }) }}</span>
+        <button v-if="hasHostFilters" class="btn role-link btn-sm clear-filters-button" type="button" @click="clearHostFilters">{{ t('hosts.clearFilters') }}</button>
       </div>
       <table class="table">
         <thead class="hosts-table-head">
@@ -136,7 +150,7 @@
         </thead>
         <tbody>
           <tr v-for="host in filteredHosts" :key="host.id">
-            <td :data-label="t('hosts.hostname')"><div class="host-identity"><div><strong>{{ host.hostname || host.name }}</strong><small>{{ host.name }}</small></div><div class="host-actions">
+            <td :data-label="t('hosts.hostname')"><div class="host-identity"><div><strong>{{ hostIdentity(host).displayName }}</strong><small v-if="hostIdentity(host).detectedHostname" class="host-detected-name">{{ t('hosts.detectedHostname', { hostname: hostIdentity(host).detectedHostname }) }}</small></div><div class="host-actions">
               <button class="btn role-secondary btn-sm host-ui-button" @click="openCloudNative(host)">{{ t('hosts.uiMenu') }}</button>
               <div v-if="permissions.canOperateVms || permissions.canAdministerHost" class="host-menu-wrap">
                 <button :id="`host-actions-${host.id}`" class="btn role-link btn-sm host-menu-trigger" :aria-expanded="openMenu === host.id" aria-haspopup="menu" :aria-controls="`host-actions-menu-${host.id}`" :aria-label="`${t('hosts.moreActions')} ${host.hostname || host.name}`" @click.stop="toggleMenu(host, $event)"><span aria-hidden="true">⋮</span></button>
@@ -148,10 +162,10 @@
               </div>
             </div></div></td>
             <td :data-label="t('hosts.address')">{{ host.address }}:{{ host.port }}</td>
-            <td :data-label="t('hosts.state')"><span class="state" :class="host.status">{{ statusLabel(host.status) }}</span><small v-if="host.last_error">{{ t('hosts.hostUnreachableHelp') }}</small></td>
+            <td :data-label="t('hosts.state')"><span class="state" :class="host.status">{{ statusLabel(host.status) }}</span><small v-if="host.last_error" class="host-last-error">{{ host.last_error }}</small><small v-else-if="isHostStale(host)" class="stale-text">{{ t('hosts.hostUnreachableHelp') }}</small></td>
             <td :data-label="t('hosts.cpu')">{{ host.cpu_count ? `${host.cpu_count} vCPU` : '—' }}</td>
             <td :data-label="t('hosts.memory')">{{ memoryLabel(host.memory_total_bytes) }}</td>
-            <td :data-label="t('hosts.lastCheck')"><span :class="{ stale: isHostStale(host) }">{{ dateLabel(host.last_checked_at) }}</span><small v-if="isHostStale(host)" class="stale-text">{{ t('hosts.dataStale') }}</small></td>
+            <td :data-label="t('hosts.lastCheck')"><span :class="{ stale: isHostStale(host) }">{{ dateLabel(host.last_checked_at) }}</span><small>{{ t('hosts.metricsFromCheck') }}</small><small v-if="isHostStale(host)" class="stale-text">{{ t('hosts.dataStale') }}</small></td>
           </tr>
           <tr v-if="!filteredHosts.length"><td colspan="6" class="hosts-filter-empty">{{ t('hosts.noHostMatches') }}</td></tr>
         </tbody>
@@ -166,6 +180,16 @@
 <script lang="ts">
 import { defineComponent } from 'vue';
 import { apiErrorDetail } from '../utils/api-errors';
+import { filterHostInventory, hostIdentity, isHostInventoryStale, summarizeHostInventory } from '../utils/host-inventory';
+
+const HOST_FILTERS_KEY = 'rancher-kvm:host-filters';
+
+function readHostFilters(): { search: string; state: string } {
+  try {
+    const value = JSON.parse(window.sessionStorage.getItem(HOST_FILTERS_KEY) || '{}');
+    return { search: typeof value.search === 'string' ? value.search : '', state: ['all', 'ready', 'unreachable', 'unknown', 'stale'].includes(value.state) ? value.state : 'all' };
+  } catch { return { search: '', state: 'all' }; }
+}
 
 type Host = {
   id: string; name: string; address: string; port: number; username: string; hostname?: string;
@@ -180,12 +204,13 @@ const apiBase = (process.env.VUE_APP_KVM_API || '/kvm-api').replace(/\/$/, '');
 export default defineComponent({
   name: 'KvmHosts',
   data() {
+    const savedFilters = readHostFilters();
     return {
-      hosts: [] as Host[], permissions: { canOperateVms: false, canAdministerHost: false } as Permissions, loading: false, refreshing: '' as string, dialog: false, editing: '' as string,
-      saving: false, error: '', refreshWarning: '', formError: '', openMenu: '' as string, hostMenuStyle: {} as Record<string, string>,
+      hosts: [] as Host[], permissions: { canOperateVms: false, canAdministerHost: false } as Permissions, loading: false, loaded: false, refreshing: '' as string, dialog: false, editing: '' as string,
+      saving: false, error: '', refreshWarning: '', refreshNotice: '', refreshNoticeKind: 'success', formError: '', openMenu: '' as string, hostMenuStyle: {} as Record<string, string>,
       form: { name: '', address: '', port: 22, username: '', password: '', ssh_private_key: '', ssh_key_passphrase: '', remove_ssh_key: false, accept_new_host_key: false },
       showingAudit: false, auditEvents: [] as AuditEvent[], auditLoading: false, auditError: '', deployPrefill: false,
-      probeChecks: [] as { id: string; status: string; message: string; os_id?: string; os_version?: string; libvirt_version?: string }[], probeLoading: false, probeOk: false, probeSignature: '', auditSearch: '', auditHost: '', auditOutcome: '', refreshTimer: 0 as number, refreshingStale: false, hostSearch: '', hostStateFilter: 'all',
+      probeChecks: [] as { id: string; status: string; message: string; os_id?: string; os_version?: string; libvirt_version?: string }[], probeLoading: false, probeOk: false, probeSignature: '', auditSearch: '', auditHost: '', auditOutcome: '', refreshTimer: 0 as number, refreshingStale: false, hostSearch: savedFilters.search, hostStateFilter: savedFilters.state,
     };
   },
     mounted() {
@@ -242,10 +267,9 @@ export default defineComponent({
         this.refreshStale();
       }
       catch (e) {
-        this.hosts = [];
         this.error = `${this.t('hosts.cannotLoad')}: ${(e as Error).message}`;
       }
-      finally { this.loading = false; }
+      finally { this.loading = false; this.loaded = true; }
     },
     formSignature(): string { return JSON.stringify([this.form.address.trim(), Number(this.form.port), this.form.username.trim(), this.form.password, this.form.ssh_private_key, this.form.ssh_key_passphrase, this.form.accept_new_host_key]); },
     async runProbe() {
@@ -254,14 +278,25 @@ export default defineComponent({
       catch { this.probeChecks = [{ id: 'ssh_libvirt', status: 'failure', message: this.t('hosts.preflightFailed') }]; }
       finally { this.probeLoading = false; }
     },
-    async refreshStale() {
+    async refreshStale(manual = false) {
       if (this.refreshingStale || !this.hosts.length) return;
       this.refreshingStale = true;
-      try { this.hosts = await this.request('/hosts/refresh-stale?max_age_seconds=120&limit=10', { method: 'POST' }); this.refreshWarning = ''; }
-      catch { this.refreshWarning = this.t('hosts.backgroundRefreshFailed'); }
+      this.refreshNotice = '';
+      try {
+        this.hosts = await this.request('/hosts/refresh-stale?max_age_seconds=120&limit=10', { method: 'POST' });
+        this.refreshWarning = '';
+        if (manual) {
+          const summary = this.hostSummary;
+          this.refreshNoticeKind = summary.unreachable ? 'warning' : 'success';
+          this.refreshNotice = this.t('hosts.refreshComplete', { ready: summary.ready, unreachable: summary.unreachable, total: summary.total });
+        }
+      }
+      catch { this.refreshWarning = this.t('hosts.backgroundRefreshFailed'); this.refreshNotice = ''; }
       finally { this.refreshingStale = false; }
     },
-    isHostStale(host: Host): boolean { return !host.last_checked_at || Date.now() - Date.parse(host.last_checked_at) > 180000; },
+    isHostStale(host: Host): boolean { return isHostInventoryStale(host); },
+    hostIdentity(host: Host) { return hostIdentity(host); },
+    setHostStateFilter(state: string) { this.hostStateFilter = this.hostStateFilter === state ? 'all' : state; },
     openAdd() {
       this.editing = ''; this.formError = '';
       this.form = { name: '', address: '', port: 22, username: '', password: '', ssh_private_key: '', ssh_key_passphrase: '', remove_ssh_key: false, accept_new_host_key: false }; this.dialog = true; this.deployPrefill = false;
@@ -289,6 +324,7 @@ export default defineComponent({
     async save() {
       this.saving = true; this.formError = '';
       try {
+        const wasEditing = Boolean(this.editing);
         const payload: Record<string, unknown> = { ...this.form };
         if (!payload.password) delete payload.password;
         if (!payload.ssh_private_key) delete payload.ssh_private_key;
@@ -299,13 +335,21 @@ export default defineComponent({
         if (!this.editing) this.hosts.unshift(host);
         else Object.assign(this.hosts.find((item) => item.id === this.editing) || {}, host);
         this.closeForm();
+        this.refreshNoticeKind = 'success'; this.refreshNotice = this.t(wasEditing ? 'hosts.hostUpdated' : 'hosts.hostAdded', { name: host.name });
       } catch (e) { this.formError = (e as Error).message; }
       finally { this.saving = false; }
     },
     async refresh(host: Host) {
+      this.refreshNotice = '';
       this.refreshing = host.id;
-      try { Object.assign(host, await this.request(`/hosts/${host.id}/refresh`, { method: 'POST' })); }
-      catch (e) { this.error = `${this.t('hosts.refreshError', { name: host.name })}: ${(e as Error).message}`; }
+      try {
+        Object.assign(host, await this.request(`/hosts/${host.id}/refresh`, { method: 'POST' }));
+        this.refreshNoticeKind = host.status === 'ready' ? 'success' : 'warning';
+        this.refreshNotice = host.status === 'ready'
+          ? this.t('hosts.hostRefreshComplete', { name: host.name })
+          : this.t('hosts.hostRefreshUnreachable', { name: host.name, detail: host.last_error || this.t('hosts.hostUnreachableHelp') });
+      }
+      catch (e) { this.refreshNoticeKind = 'error'; this.refreshNotice = `${this.t('hosts.refreshError', { name: host.name })}: ${(e as Error).message}`; }
       finally { this.refreshing = ''; }
     },
     openCloudNative(host: Host) {
@@ -345,25 +389,34 @@ export default defineComponent({
     },
     vmStateClass(state: string) { return state.toLowerCase().includes('running') ? 'ready' : 'unreachable'; },
     async remove(host: Host) {
-      try { await this.request(`/hosts/${host.id}`, { method: 'DELETE' }); this.hosts = this.hosts.filter((item) => item.id !== host.id); }
-      catch (e) { this.error = `${this.t('hosts.removeError', { name: host.name })}: ${(e as Error).message}`; }
+      this.refreshNotice = '';
+      try { await this.request(`/hosts/${host.id}`, { method: 'DELETE' }); this.hosts = this.hosts.filter((item) => item.id !== host.id); this.refreshNoticeKind = 'success'; this.refreshNotice = this.t('hosts.hostRemoved', { name: host.name }); }
+      catch (e) { this.refreshNoticeKind = 'error'; this.refreshNotice = `${this.t('hosts.removeError', { name: host.name })}: ${(e as Error).message}`; }
     },
     statusLabel(status: string) { return this.t(`hosts.${status}`); },
     memoryLabel(bytes?: number) { return bytes ? `${(bytes / (1024 ** 3)).toFixed(1)} GiB` : '—'; },
     dateLabel(value?: string) { const locale = (this as any).$store?.state?.i18n?.selected; return value ? new Date(value).toLocaleString(locale || undefined) : '—'; },
+    saveHostFilters() {
+      try { window.sessionStorage.setItem(HOST_FILTERS_KEY, JSON.stringify({ search: this.hostSearch, state: this.hostStateFilter })); } catch { /* Storage may be unavailable in restricted browser modes. */ }
+    },
+    clearHostFilters() { this.hostSearch = ''; this.hostStateFilter = 'all'; },
   },
   computed: {
+    hostSummary() { return summarizeHostInventory(this.hosts); },
+    hostHealthTiles(): { status: string; count: number }[] { return [{ status: 'ready', count: this.hostSummary.ready }, { status: 'unreachable', count: this.hostSummary.unreachable }, { status: 'unknown', count: this.hostSummary.unknown }, { status: 'stale', count: this.hostSummary.stale }]; },
+    hasHostFilters(): boolean { return Boolean(this.hostSearch || this.hostStateFilter !== 'all'); },
     filteredHosts(): Host[] {
-      const term = this.hostSearch.toLowerCase();
-      return this.hosts.filter((host) => {
-        const matchesTerm = !term || `${host.hostname || ''} ${host.name} ${host.address}`.toLowerCase().includes(term);
-        return matchesTerm && (this.hostStateFilter === 'all' || host.status === this.hostStateFilter);
-      }).sort((a, b) => (a.hostname || a.name).localeCompare(b.hostname || b.name));
+      return filterHostInventory(this.hosts, this.hostSearch, this.hostStateFilter as 'all' | 'ready' | 'unreachable' | 'unknown' | 'stale')
+        .sort((a, b) => hostIdentity(a).displayName.localeCompare(hostIdentity(b).displayName));
     },
     filteredAuditEvents(): AuditEvent[] {
       const term = this.auditSearch.toLowerCase().trim();
       return this.auditEvents.filter((event) => (!this.auditOutcome || event.outcome === this.auditOutcome) && (!this.auditHost || event.target === this.auditHost || event.target.startsWith(`${this.auditHost}/`)) && (!term || `${event.actor} ${event.action} ${event.target} ${event.detail || ''} ${event.outcome}`.toLowerCase().includes(term)));
     },
+  },
+  watch: {
+    hostSearch() { this.saveHostFilters(); },
+    hostStateFilter() { this.saveHostFilters(); },
   },
 });
 </script>
@@ -372,6 +425,10 @@ export default defineComponent({
 .kvm-page { container-type:inline-size; container-name:hosts-layout; width:100%; min-width:0; max-width:100%; min-height:calc(100vh - 100px); padding:24px; box-sizing:border-box; }
 .header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 24px; }
 .header-actions { display: flex; gap: 8px; }
+.quiet-refresh { display:inline-flex; align-items:center; gap:7px; color:var(--muted,#929baa); font-size:11px; font-weight:400; }
+.quiet-refresh i { width:11px; height:11px; border:1.5px solid color-mix(in srgb,var(--muted,#929baa) 35%,transparent); border-top-color:var(--primary,#53c99a); border-radius:50%; animation:quiet-refresh-spin .85s linear infinite; }
+@keyframes quiet-refresh-spin { to { transform:rotate(360deg); } }
+@media (prefers-reduced-motion:reduce) { .quiet-refresh i { animation:none; } }
 h1 { margin: 0 0 6px; }
 .text-muted, small { color: var(--muted, #727b8a); }
 small { display: block; font-size: 12px; margin-top: 4px; }
@@ -379,6 +436,17 @@ small { display: block; font-size: 12px; margin-top: 4px; }
 .table { width: 100%; border-collapse: collapse; color:var(--body-text); background:var(--input-bg, var(--body-bg)); }
 .table th, .table td { padding: 12px; color:var(--body-text); text-align: left; border-bottom: 1px solid var(--border, #d8dde6); white-space: nowrap; }
 .host-table-wrap { border:1px solid var(--border,#39414d); border-radius:6px; background:var(--body-bg,#252b33); }
+.hosts-health { padding:16px; border-bottom:1px solid var(--border,#39414d); background:color-mix(in srgb,var(--body-text,#e5e7eb) 3%,var(--body-bg,#252b33)); }
+.hosts-health h2 { margin:0 0 12px; color:var(--body-text,#e5e7eb); font-size:14px; font-weight:650; }
+.hosts-health-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+.hosts-health-tile { display:flex; align-items:center; justify-content:space-between; gap:10px; min-width:0; padding:10px 12px; border:1px solid var(--border,#39414d); border-radius:5px; color:var(--body-text,#e5e7eb); background:var(--body-bg,#252b33); text-align:left; cursor:pointer; }
+.hosts-health-tile strong { font-size:18px; font-variant-numeric:tabular-nums; }
+.hosts-health-tile.ready strong { color:#43b879; }.hosts-health-tile.unreachable strong { color:#e47770; }.hosts-health-tile.unknown strong,.hosts-health-tile.stale strong { color:#d2a54e; }
+.hosts-health-tile.active { border-color:var(--primary,#53c99a); box-shadow:inset 0 0 0 1px var(--primary,#53c99a); }
+.hosts-health-tile:focus-visible { outline:2px solid var(--primary,#53c99a); outline-offset:2px; }
+.hosts-health-footer { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:12px; color:var(--muted,#929baa); font-size:12px; }
+.host-detected-name { overflow-wrap:anywhere; }
+.host-last-error { max-width:260px; color:var(--error,#d45b52); white-space:normal; overflow-wrap:anywhere; }
 .hosts-filter-bar { display:flex; align-items:flex-end; gap:12px; flex-wrap:wrap; padding:14px 16px; border-bottom:1px solid var(--border,#39414d); background:var(--body-bg,#252b33); }
 .hosts-filter-bar label { display:grid; gap:5px; color:var(--muted,#929baa); font-size:12px; font-weight:600; }
 .hosts-search-field { flex:1 1 260px; min-width:190px; }
@@ -386,13 +454,17 @@ small { display: block; font-size: 12px; margin-top: 4px; }
 .hosts-filter-bar .search-input { width:100%; min-height:36px; padding:7px 10px; box-sizing:border-box; border:1px solid var(--input-border,var(--border,#4b5563)); border-radius:4px; color:var(--input-text,var(--body-text,#e5e7eb)); background:var(--input-bg,var(--body-bg,#252b33)); font:inherit; }
 .hosts-filter-bar .search-input:focus-visible { border-color:var(--primary,#53c99a); outline:2px solid color-mix(in srgb,var(--primary,#53c99a) 45%,transparent); outline-offset:1px; }
 .hosts-filter-count { margin:0 0 9px auto; color:var(--muted,#929baa); font-size:12px; white-space:nowrap; }
+.clear-filters-button { margin-bottom:4px; }
+.actionable-error { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.actionable-error .btn { flex:0 0 auto; }
 .table thead.hosts-table-head { background:#20252b; }
 .table thead.hosts-table-head th { padding:12px; color:#e5e7eb; background:#20252b; border-bottom:1px solid #414852; font-size:12px; font-weight:600; }
 .hosts-filter-empty { padding:24px !important; color:var(--muted,#929baa) !important; text-align:center !important; }
-.state { display: inline-block; padding: 3px 9px; border-radius: 12px; background: #edf0f4; }
-.state.ready { background: #e3f5e8; color: #23733a; }
-.state.unreachable { background: #fde8e7; color: #a52822; }
+.state { display: inline-block; padding: 3px 9px; border-radius: 12px; color:var(--body-text,#243043); background:color-mix(in srgb,var(--muted,#8892a0) 12%,var(--body-bg,#fff)); }
+.state.ready { background:color-mix(in srgb,var(--success,#45a86d) 16%,var(--body-bg,#fff)); color:var(--success-text,var(--success,#287447)); }
+.state.unreachable { background:color-mix(in srgb,var(--error,#d45b52) 16%,var(--body-bg,#fff)); color:var(--error-text,var(--error,#a52822)); }
 .stale,.stale-text { color:var(--warning-text,var(--body-text)); font-weight:600; }
+.stale,.stale-text { color:var(--warning-text,var(--kvm-warning,var(--warning,#8b5a00))); }
 .actions { text-align: right !important; }
 .host-menu-wrap { position:relative; display:inline-flex; }
 .host-menu-trigger { display:inline-flex; align-items:center; justify-content:center; min-width:36px; font-size:18px; line-height:1; }
@@ -447,6 +519,9 @@ small { display: block; font-size: 12px; margin-top: 4px; }
 @media (max-width: 700px) { .kvm-page { padding: 16px; }.header { flex-direction: column; }.header-actions { width: 100%; flex-wrap: wrap; }.host-editor { min-height: calc(100vh - 120px); }.host-editor-header h1 { font-size: 21px; }.field-wide,.field-name,.field-address,.field-port { grid-column: 1 / -1; }.host-editor-footer { margin: auto -16px -16px; padding: 12px 16px; } }
 @container hosts-layout (max-width: 700px) { .kvm-page { padding:16px; }.header { align-items:flex-start; flex-direction:column; }.header-actions { width:100%; flex-wrap:wrap; }.host-editor { min-height:calc(100vh - 120px); }.host-editor-header h1 { font-size:21px; }.field-wide,.field-name,.field-address,.field-port { grid-column:1/-1; }.host-editor-footer { margin:auto -16px -16px; padding:12px 16px; }.host-editor-form,.host-editor-content { min-width:0; }.table-wrap { max-width:100%; min-width:0; overflow-x:auto; overscroll-behavior-x:contain; } }
 @container hosts-layout (max-width: 700px) { .hosts-filter-bar { align-items:stretch; padding:12px; }.hosts-search-field,.hosts-state-field { flex:1 1 100%; min-width:0; }.hosts-filter-count { margin:0; } }
+@container hosts-layout (max-width: 560px) { .actionable-error { align-items:flex-start; flex-direction:column; }.clear-filters-button { margin:0; } }
+@container hosts-layout (max-width: 700px) { .hosts-health { padding:12px; }.hosts-health-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }.hosts-health-footer { align-items:flex-start; flex-direction:column; }.hosts-health-footer .btn { width:100%; white-space:normal; } }
+@container hosts-layout (max-width: 460px) { .hosts-health-grid { grid-template-columns:minmax(0,1fr); gap:6px; }.hosts-health-tile { padding:8px 10px; }.hosts-health-tile strong { font-size:16px; } }
 @container hosts-layout (max-width: 460px) { .header-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }.header-actions .btn { min-width:0; white-space:normal; }.host-form-section { padding:14px 12px; }.host-editor-footer { gap:8px; }.host-editor-footer .btn { flex:1 1 auto; }.audit-filters { display:grid; grid-template-columns:minmax(0,1fr); }.audit-filters .search-input { min-width:0; width:100%; box-sizing:border-box; } }
 @container hosts-layout (max-width: 920px) { .host-table-wrap { overflow:visible; border:0; background:transparent; }.host-table-wrap :deep(.table) { display:block; width:100%; border-collapse:separate; background:transparent; }.host-table-wrap :deep(.table thead) { position:absolute; width:1px; height:1px; padding:0; overflow:hidden; clip:rect(0,0,0,0); clip-path:inset(50%); white-space:nowrap; }.host-table-wrap :deep(.table tbody) { display:grid; gap:10px; }.host-table-wrap :deep(.table tbody tr) { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); min-width:0; overflow:hidden; border:1px solid var(--border,#394452); border-radius:8px; background:var(--body-bg,#252b33); }.host-table-wrap :deep(.table tbody td) { display:grid; align-content:start; gap:4px; min-width:0; padding:10px 12px; border:0; white-space:normal; overflow-wrap:anywhere; }.host-table-wrap :deep(.table tbody td::before) { content:attr(data-label); color:var(--muted,#8b95a5); font-size:10px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; }.host-table-wrap :deep(.table tbody td:first-child) { grid-column:1/-1; border-bottom:1px solid var(--border,#394452); }.host-table-wrap :deep(.host-identity) { min-width:0; flex-wrap:wrap; }.host-table-wrap :deep(.host-actions) { justify-content:flex-start; flex-wrap:wrap; }.host-table-wrap :deep(.host-actions .btn) { margin:0; }.host-ui-button { margin:0; }.host-menu { text-align:left; } }
 @container hosts-layout (max-width: 460px) { .host-table-wrap :deep(.table tbody tr) { grid-template-columns:minmax(0,1fr); }.host-table-wrap :deep(.table tbody td:first-child) { grid-column:1; } }

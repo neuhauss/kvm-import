@@ -26,9 +26,11 @@ Then find **KVM Manager** in **Apps > Charts** and install it. The chart install
 
 - The API authenticates each request through Rancher Global Role Bindings. Configure viewer, VM operator, and host administrator Global Role IDs in the Helm values; `admin` remains the default host administrator role.
 - SSH passwords, private keys, and key passphrases are encrypted in SQLite using `KVM_CREDENTIAL_KEY`.
+- SSH password authentication remains supported and is the simplest option for lab hosts. Key-only SSH is optional and requires passwordless sudo for administrative actions; Cockpit automatic sign-in still requires the host password.
 - Keep the encryption key and the API data volume together in secure backups. Losing the key makes saved credentials unrecoverable.
 - Verify SSH host fingerprints before trusting them. The UI can pin a host key during import when the operator explicitly enables that option.
 - Cockpit access is proxied through an SSH tunnel. Rancher session cookies are not forwarded to the KVM host.
+- Custom S3-compatible endpoints must be explicitly allowlisted with `backup.allowedEndpointHosts`; the default AWS S3 endpoint needs no custom entry.
 - The audit log records administrative actions without passwords or private keys. Events are indexed and retained for 90 days by default; configure retention with `rancher.auditRetentionDays`.
 
 ## Build and release
@@ -55,6 +57,10 @@ For the short local preview workflow, see [LOCAL-DEPLOYMENT.md](docs/LOCAL-DEPLO
 - [API performance telemetry](docs/performance-telemetry.md)
 
 Publishing a GitHub Release tagged `kvm-manager-<version>` builds the API image on GHCR and publishes the extension chart to GitHub Pages. Make the GHCR package public for community installs. Docker Hub publishing is an optional secondary target and requires the repository secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`.
+
+## Testing
+
+Run the isolated API regression suite with `python3 -m pip install -r service/requirements.txt` and `python3 -m unittest discover -s service/tests -v`. It uses mocked Rancher and SSH responses plus a temporary database; it does not contact a local KVM host or cluster. See [docs/TESTING.md](docs/TESTING.md) for its scope and the planned integration-test layer.
 
 ## Contributing
 

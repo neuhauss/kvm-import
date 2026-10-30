@@ -23,6 +23,11 @@ rancher:
   auditRetentionDays: 90
   slowRequestThresholdMs: 1000
 
+# Custom S3-compatible endpoint hostnames require an explicit operator allowlist.
+# The standard AWS S3 endpoint does not need an entry here.
+backup:
+  allowedEndpointHosts: []
+
 backend:
   namespace: rancher-kvm-registry
   storage:
@@ -34,6 +39,9 @@ backend:
     tag: "" # Defaults to the chart appVersion.
     pullPolicy: IfNotPresent
   imagePullSecrets: []
+  maxActiveOperationJobs: 8
+  # Optional DNS overrides so pods can reach a Rancher origin that resolves to loopback on the host.
+  hostAliases: []
   resources:
     requests:
       cpu: 100m

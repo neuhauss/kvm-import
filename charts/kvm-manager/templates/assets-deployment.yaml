@@ -31,8 +31,10 @@ spec:
           args:
             - >-
               mkdir -p /tmp/www && cp -R /usr/local/apache2/htdocs/. /tmp/www/ &&
-              gzip -dc /tmp/www/kvm-manager/{{ .Chart.Version }}/plugin/kvm-manager-{{ .Chart.Version }}.umd.min.303.js.gz > /tmp/www/kvm-manager/{{ .Chart.Version }}/plugin/kvm-manager-{{ .Chart.Version }}.umd.min.303.js &&
-              rm /tmp/www/kvm-manager/{{ .Chart.Version }}/plugin/kvm-manager-{{ .Chart.Version }}.umd.min.303.js.gz &&
+              for file in /tmp/www/kvm-manager/{{ .Chart.Version }}/plugin/*.js.gz; do
+                [ -f "$file" ] || continue
+                gzip -dc "$file" > "${file%.gz}" && rm "$file"
+              done &&
               sed -e 's/^Listen 80$/Listen 8080/'
               -e 's#DocumentRoot "/usr/local/apache2/htdocs"#DocumentRoot "/tmp/www"#'
               -e 's#<Directory "/usr/local/apache2/htdocs">#<Directory "/tmp/www">#'

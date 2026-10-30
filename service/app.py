@@ -50,10 +50,19 @@ if len(credential_key) < 32:
     raise RuntimeError("Configure KVM_CREDENTIAL_KEY with at least 32 random characters")
 FERNET_KEY = base64.urlsafe_b64encode(hashlib.sha256(credential_key.encode()).digest())
 cipher = Fernet(FERNET_KEY)
-app = FastAPI(title="Rancher KVM Host API", version="0.7.109")
+app = FastAPI(title="Rancher KVM Host API", version="0.7.140")
 performance_logger = logging.getLogger("kvm.performance")
 OPERATION_JOB_EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="kvm-operation")
 OPERATION_JOB_LOCK = threading.RLock()
+try:
+    MAX_ACTIVE_OPERATION_JOBS = max(1, int(os.getenv("KVM_MAX_ACTIVE_OPERATION_JOBS", "8")))
+except ValueError:
+    MAX_ACTIVE_OPERATION_JOBS = 8
+KVM_S3_ALLOWED_ENDPOINT_HOSTS = {
+    host.strip().lower().rstrip(".")
+    for host in os.getenv("KVM_S3_ALLOWED_ENDPOINT_HOSTS", "").split(",")
+    if host.strip()
+}
 RANCHER_PUBLIC_ORIGIN = os.getenv("RANCHER_PUBLIC_ORIGIN", "https://rancher.example.com").rstrip("/")
 RANCHER_PUBLIC_HOST = urlsplit(RANCHER_PUBLIC_ORIGIN).netloc
 COCKPIT_PORT = 9090
@@ -113,9 +122,8 @@ async def disable_api_caching(request: Request, call_next):
 def initialize_database() -> None:
     # Create the schema as soon as the pod starts so a ready API always has a
     # usable persistent database, even before the first authenticated request.
-    with connect_db():
-        pass
     with connect_db() as db:
+        initialize_schema(db)
         db.execute("CREATE INDEX IF NOT EXISTS idx_audit_events_occurred_at ON audit_events(occurred_at DESC)")
         db.execute("UPDATE operation_jobs SET status='failed',updated_at=? WHERE status IN ('queued','running')",
                    (now(),))
@@ -242,7 +250,30 @@ class VMCreate(BaseModel):
     vcpus: int = Field(ge=1, le=512)
     memory_mib: int = Field(ge=128, le=1048576)
     iso_path: str | None = Field(default=None, max_length=1024)
+    iso_url: str | None = Field(default=None, max_length=2048)
     autostart: bool = False
+
+
+def validate_public_iso_url(value: str) -> str:
+    """Allow public HTTPS ISO downloads while rejecting private-network targets."""
+    parsed = urlsplit(value.strip())
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise ValueError("Use a public HTTPS URL ending in .iso, without credentials or a custom port") from exc
+    if (
+        parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password
+        or port not in (None, 443) or parsed.fragment
+        or not parsed.path.lower().endswith(".iso")
+    ):
+        raise ValueError("Use a public HTTPS URL ending in .iso, without credentials or a custom port")
+    try:
+        addresses = {ipaddress.ip_address(item[4][0].split("%", 1)[0]) for item in socket.getaddrinfo(parsed.hostname, 443, type=socket.SOCK_STREAM)}
+    except (OSError, ValueError) as exc:
+        raise ValueError("The ISO URL host could not be resolved") from exc
+    if not addresses or any(not address.is_global for address in addresses):
+        raise ValueError("The ISO URL must resolve only to public IP addresses")
+    return value.strip()
 
 
 class VMSnapshotAction(BaseModel):
@@ -352,53 +383,10 @@ def now() -> str:
 @contextmanager
 def connect_db():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    db = sqlite3.connect(DB_PATH)
+    db = sqlite3.connect(DB_PATH, timeout=10)
     db.row_factory = sqlite3.Row
     try:
-        db.execute("""CREATE TABLE IF NOT EXISTS hosts (
-            id TEXT PRIMARY KEY, name TEXT NOT NULL, address TEXT NOT NULL, port INTEGER NOT NULL,
-            username TEXT NOT NULL, password TEXT NOT NULL, hostname TEXT, status TEXT NOT NULL,
-            cpu_count INTEGER, memory_total_bytes INTEGER, last_checked_at TEXT, last_error TEXT,
-            ssh_host_key TEXT, cockpit_proxy_enabled INTEGER NOT NULL DEFAULT 0,
-            ssh_private_key_enc TEXT, ssh_key_passphrase_enc TEXT
-        )""")
-        columns = {row[1] for row in db.execute("PRAGMA table_info(hosts)")}
-        if "ssh_host_key" not in columns:
-            db.execute("ALTER TABLE hosts ADD COLUMN ssh_host_key TEXT")
-        if "cockpit_proxy_enabled" not in columns:
-            db.execute("ALTER TABLE hosts ADD COLUMN cockpit_proxy_enabled INTEGER NOT NULL DEFAULT 0")
-        if "ssh_private_key_enc" not in columns:
-            db.execute("ALTER TABLE hosts ADD COLUMN ssh_private_key_enc TEXT")
-        if "ssh_key_passphrase_enc" not in columns:
-            db.execute("ALTER TABLE hosts ADD COLUMN ssh_key_passphrase_enc TEXT")
-        db.execute("""CREATE TABLE IF NOT EXISTS audit_events (
-            id TEXT PRIMARY KEY, occurred_at TEXT NOT NULL, actor TEXT NOT NULL,
-            action TEXT NOT NULL, target TEXT NOT NULL, outcome TEXT NOT NULL, detail TEXT
-        )""")
-        db.execute("""CREATE TABLE IF NOT EXISTS operation_jobs (
-            id TEXT PRIMARY KEY, actor TEXT NOT NULL, kind TEXT NOT NULL,
-            status TEXT NOT NULL, results_json TEXT NOT NULL,
-            created_at TEXT NOT NULL, updated_at TEXT NOT NULL
-        )""")
-        db.execute("""CREATE TABLE IF NOT EXISTS managed_clusters (
-            id TEXT PRIMARY KEY, name TEXT NOT NULL, cluster_type TEXT NOT NULL,
-            state TEXT NOT NULL, host_ids_json TEXT NOT NULL, template_id TEXT,
-            created_by TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
-            last_checked_at TEXT, capabilities_json TEXT NOT NULL DEFAULT '{}'
-        )""")
-        db.execute("""CREATE TABLE IF NOT EXISTS backup_destinations (
-            id TEXT PRIMARY KEY, name TEXT NOT NULL, endpoint_url TEXT, region TEXT NOT NULL,
-            bucket TEXT NOT NULL, prefix TEXT NOT NULL, auth TEXT NOT NULL,
-            access_key_id_enc TEXT, secret_access_key_enc TEXT, path_style INTEGER NOT NULL,
-            encryption TEXT NOT NULL, kms_key_id TEXT, created_by TEXT NOT NULL,
-            created_at TEXT NOT NULL, updated_at TEXT NOT NULL
-        )""")
-        db.execute("""CREATE TABLE IF NOT EXISTS vm_backups (
-            id TEXT PRIMARY KEY, destination_id TEXT NOT NULL, host_id TEXT NOT NULL,
-            host_name TEXT NOT NULL, vm_name TEXT NOT NULL, object_key TEXT NOT NULL,
-            size_bytes INTEGER NOT NULL, sha256 TEXT NOT NULL, created_by TEXT NOT NULL,
-            created_at TEXT NOT NULL, FOREIGN KEY(destination_id) REFERENCES backup_destinations(id)
-        )""")
+        db.execute("PRAGMA busy_timeout=10000")
         yield db
         db.commit()
     except Exception:
@@ -406,6 +394,54 @@ def connect_db():
         raise
     finally:
         db.close()
+
+
+def initialize_schema(db: sqlite3.Connection) -> None:
+    """Create and migrate the extension database once during API startup."""
+    db.execute("""CREATE TABLE IF NOT EXISTS hosts (
+            id TEXT PRIMARY KEY, name TEXT NOT NULL, address TEXT NOT NULL, port INTEGER NOT NULL,
+            username TEXT NOT NULL, password TEXT NOT NULL, hostname TEXT, status TEXT NOT NULL,
+            cpu_count INTEGER, memory_total_bytes INTEGER, last_checked_at TEXT, last_error TEXT,
+            ssh_host_key TEXT, cockpit_proxy_enabled INTEGER NOT NULL DEFAULT 0,
+            ssh_private_key_enc TEXT, ssh_key_passphrase_enc TEXT
+        )""")
+    columns = {row[1] for row in db.execute("PRAGMA table_info(hosts)")}
+    if "ssh_host_key" not in columns:
+        db.execute("ALTER TABLE hosts ADD COLUMN ssh_host_key TEXT")
+    if "cockpit_proxy_enabled" not in columns:
+        db.execute("ALTER TABLE hosts ADD COLUMN cockpit_proxy_enabled INTEGER NOT NULL DEFAULT 0")
+    if "ssh_private_key_enc" not in columns:
+        db.execute("ALTER TABLE hosts ADD COLUMN ssh_private_key_enc TEXT")
+    if "ssh_key_passphrase_enc" not in columns:
+        db.execute("ALTER TABLE hosts ADD COLUMN ssh_key_passphrase_enc TEXT")
+    db.execute("""CREATE TABLE IF NOT EXISTS audit_events (
+            id TEXT PRIMARY KEY, occurred_at TEXT NOT NULL, actor TEXT NOT NULL,
+            action TEXT NOT NULL, target TEXT NOT NULL, outcome TEXT NOT NULL, detail TEXT
+        )""")
+    db.execute("""CREATE TABLE IF NOT EXISTS operation_jobs (
+            id TEXT PRIMARY KEY, actor TEXT NOT NULL, kind TEXT NOT NULL,
+            status TEXT NOT NULL, results_json TEXT NOT NULL,
+            created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+        )""")
+    db.execute("""CREATE TABLE IF NOT EXISTS managed_clusters (
+            id TEXT PRIMARY KEY, name TEXT NOT NULL, cluster_type TEXT NOT NULL,
+            state TEXT NOT NULL, host_ids_json TEXT NOT NULL, template_id TEXT,
+            created_by TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+            last_checked_at TEXT, capabilities_json TEXT NOT NULL DEFAULT '{}'
+        )""")
+    db.execute("""CREATE TABLE IF NOT EXISTS backup_destinations (
+            id TEXT PRIMARY KEY, name TEXT NOT NULL, endpoint_url TEXT, region TEXT NOT NULL,
+            bucket TEXT NOT NULL, prefix TEXT NOT NULL, auth TEXT NOT NULL,
+            access_key_id_enc TEXT, secret_access_key_enc TEXT, path_style INTEGER NOT NULL,
+            encryption TEXT NOT NULL, kms_key_id TEXT, created_by TEXT NOT NULL,
+            created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+        )""")
+    db.execute("""CREATE TABLE IF NOT EXISTS vm_backups (
+            id TEXT PRIMARY KEY, destination_id TEXT NOT NULL, host_id TEXT NOT NULL,
+            host_name TEXT NOT NULL, vm_name TEXT NOT NULL, object_key TEXT NOT NULL,
+            size_bytes INTEGER NOT NULL, sha256 TEXT NOT NULL, created_by TEXT NOT NULL,
+            created_at TEXT NOT NULL, FOREIGN KEY(destination_id) REFERENCES backup_destinations(id)
+        )""")
 
 
 def rancher_get(path: str, token: str | None = None, session_cookie: str | None = None) -> dict[str, Any]:
@@ -560,9 +596,16 @@ def create_operation_job(kind: str, actor: str, hosts: list[dict[str, Any]], ope
     job_id = str(uuid.uuid4())
     results = [{"host_id": host["id"], "host_name": host.get("hostname") or host.get("name"),
                 "status": "queued"} for host in hosts]
-    with connect_db() as db:
+    # Bound the durable queue before submitting to ThreadPoolExecutor, whose
+    # internal work queue is otherwise unbounded.
+    with OPERATION_JOB_LOCK, connect_db() as db:
         db.execute("DELETE FROM operation_jobs WHERE created_at < ?",
                    ((datetime.now(timezone.utc) - timedelta(days=30)).isoformat(),))
+        active = db.execute(
+            "SELECT COUNT(*) FROM operation_jobs WHERE status IN ('queued','running')"
+        ).fetchone()[0]
+        if active >= MAX_ACTIVE_OPERATION_JOBS:
+            raise HTTPException(429, "The KVM API has reached its limit for queued or running operations. Wait for an operation to finish, then retry.")
         db.execute("INSERT INTO operation_jobs (id,actor,kind,status,results_json,created_at,updated_at) VALUES (?,?,?,?,?,?,?)",
                    (job_id, actor, kind, "queued", json.dumps(results), now(), now()))
 
@@ -2055,7 +2098,25 @@ def backup_destination_view(row: sqlite3.Row) -> dict[str, Any]:
             "created_at": row["created_at"]}
 
 
+def validate_s3_endpoint(endpoint: str | None) -> None:
+    """Require custom S3 endpoints to be explicitly approved by the operator.
+
+    This prevents an API user with storage permissions from turning the service
+    into an arbitrary HTTP client for cluster-internal addresses. Private S3
+    compatible services remain supported through the exact-host allowlist.
+    """
+    if not endpoint:
+        return
+    parsed = urlsplit(endpoint)
+    hostname = (parsed.hostname or "").lower().rstrip(".")
+    if parsed.scheme != "https" or not hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
+        raise ValueError("The S3 endpoint must be an HTTPS URL without embedded credentials, query, or fragment")
+    if hostname not in KVM_S3_ALLOWED_ENDPOINT_HOSTS:
+        raise ValueError("This custom S3 endpoint is not approved by the KVM administrator. Add its exact hostname to the extension allowlist and retry.")
+
+
 def backup_s3_client(destination: sqlite3.Row):
+    validate_s3_endpoint(destination["endpoint_url"])
     kwargs: dict[str, Any] = {
         "service_name": "s3", "region_name": destination["region"],
         "endpoint_url": destination["endpoint_url"] or None,
@@ -2086,10 +2147,10 @@ def create_backup_destination(payload: BackupDestinationInput,
                               access: AuthorizationContext = Depends(require_permission("storage_admin"))) -> dict[str, Any]:
     name, prefix = payload.name.strip(), payload.prefix.strip().strip("/")
     endpoint = payload.endpoint_url.strip().rstrip("/") if payload.endpoint_url else None
-    if endpoint:
-        parsed = urlsplit(endpoint)
-        if parsed.scheme != "https" or not parsed.netloc or parsed.username or parsed.password or parsed.query or parsed.fragment:
-            raise HTTPException(422, "The S3 endpoint must be an HTTPS URL without embedded credentials")
+    try:
+        validate_s3_endpoint(endpoint)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
     if not re.fullmatch(r"[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]", payload.bucket) or ".." in payload.bucket:
         raise HTTPException(422, "Enter a valid S3 bucket name")
     if any(part == ".." for part in prefix.split("/")) or "\\" in prefix or "\0" in prefix:
@@ -2533,8 +2594,8 @@ def get_permissions(access: AuthorizationContext = Depends(require_permission("v
 
 @app.post("/kvm-api/hosts", status_code=201)
 def create_host(payload: HostInput, access: AuthorizationContext = Depends(require_permission("host_admin"))) -> dict[str, Any]:
-    if not payload.password:
-        raise HTTPException(422, "A password is required to import the host")
+    if not payload.password and not payload.ssh_private_key:
+        raise HTTPException(422, "Provide the host SSH password or a private key")
     if not re.fullmatch(r"[A-Za-z0-9_.:-]+", payload.address):
         raise HTTPException(422, "Enter a valid IPv4 address, IPv6 address, or DNS name")
     host_id = str(uuid.uuid4())
@@ -2549,7 +2610,7 @@ def create_host(payload: HostInput, access: AuthorizationContext = Depends(requi
         db.execute(
             "INSERT INTO hosts (id,name,address,port,username,password,hostname,status,cpu_count,memory_total_bytes,last_checked_at,last_error,ssh_host_key,ssh_private_key_enc,ssh_key_passphrase_enc) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (host_id, payload.name, payload.address, payload.port, payload.username,
-             cipher.encrypt(payload.password.encode()).decode(), facts["hostname"], facts["status"],
+             cipher.encrypt((payload.password or "").encode()).decode(), facts["hostname"], facts["status"],
              facts["cpu_count"], facts["memory_total_bytes"], facts["last_checked_at"], None,
              facts["ssh_host_key"], cipher.encrypt(payload.ssh_private_key.encode()).decode() if payload.ssh_private_key else None,
              cipher.encrypt(payload.ssh_key_passphrase.encode()).decode() if payload.ssh_key_passphrase else None),
@@ -2562,8 +2623,8 @@ def create_host(payload: HostInput, access: AuthorizationContext = Depends(requi
 @app.post("/kvm-api/hosts/probe")
 def probe_host(payload: HostInput, access: AuthorizationContext = Depends(require_permission("host_admin"))) -> dict[str, Any]:
     """Validate an import without persisting credentials or host data."""
-    if not payload.password:
-        raise HTTPException(422, "A password is required to import the host")
+    if not payload.password and not payload.ssh_private_key:
+        raise HTTPException(422, "Provide the host SSH password or a private key")
     host = payload.model_dump() | {"private_key": payload.ssh_private_key, "key_passphrase": payload.ssh_key_passphrase}
     checks: list[dict[str, str]] = []
     try:
@@ -2679,7 +2740,7 @@ print('KVM and Cockpit packages are ready; libvirt and cockpit sockets are enabl
         db.execute(
             "INSERT INTO hosts (id,name,address,port,username,password,hostname,status,cpu_count,memory_total_bytes,last_checked_at,last_error,ssh_host_key,ssh_private_key_enc,ssh_key_passphrase_enc) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (host_id, payload.name, payload.address, payload.port, payload.username,
-             cipher.encrypt(payload.password.encode()).decode(), facts["hostname"], facts["status"],
+             cipher.encrypt((payload.password or "").encode()).decode(), facts["hostname"], facts["status"],
              facts["cpu_count"], facts["memory_total_bytes"], facts["last_checked_at"], None,
              facts["ssh_host_key"], None, None),
         )
@@ -2784,6 +2845,16 @@ def refresh_stale_hosts(max_age_seconds: int = 120, limit: int = 10, access: Aut
 def delete_host(host_id: str, access: AuthorizationContext = Depends(require_permission("host_admin"))) -> Response:
     with connect_db() as db:
         current = dict(read_host(db, host_id))
+        memberships = []
+        for cluster in db.execute("SELECT id,name,host_ids_json FROM managed_clusters"):
+            try:
+                if host_id in json.loads(cluster["host_ids_json"]):
+                    memberships.append(cluster["name"])
+            except (TypeError, ValueError):
+                continue
+        if memberships:
+            names = ", ".join(memberships[:5])
+            raise HTTPException(409, f"Remove this host from its KVM group before deleting it: {names}")
     if current["cockpit_proxy_enabled"]:
         try:
             current["password"] = cipher.decrypt(current["password"].encode()).decode()
@@ -3077,10 +3148,11 @@ try:
 except Exception as error: errors.append('libvirt networks: '+str(error))
 accounts=[]
 try:
-    groups_by_user={entry.pw_name:[] for entry in pwd.getpwall()}
+    passwd_entries=pwd.getpwall()
+    groups_by_user={entry.pw_name:[] for entry in passwd_entries}
     for group in grp.getgrall():
         for username in group.gr_mem: groups_by_user.setdefault(username,[]).append(group.gr_name)
-    for entry in pwd.getpwall():
+    for entry in passwd_entries:
         if entry.pw_uid == 0 or entry.pw_uid >= 1000:
             status=subprocess.run(['passwd','-S',entry.pw_name],capture_output=True,text=True,timeout=10)
             parts=status.stdout.split()
@@ -3289,14 +3361,21 @@ def list_host_activity(host_id: str, vm_name: str | None = None, limit: int = 50
 
 
 @app.post("/kvm-api/hosts/{host_id}/vms/create")
-def create_vm(host_id: str, payload: VMCreate, access: AuthorizationContext = Depends(require_permission("vm_operator"))) -> dict[str, bool]:
+def create_vm(host_id: str, payload: VMCreate, access: AuthorizationContext = Depends(require_permission("vm_operator"))) -> dict[str, Any]:
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}", payload.name):
         raise HTTPException(422, "Use a VM name with letters, numbers, dots, underscores, or hyphens")
     if payload.iso_path and (not payload.iso_path.startswith("/") or not payload.iso_path.lower().endswith(".iso")):
         raise HTTPException(422, "The installer ISO must be an absolute path ending in .iso on the KVM host")
+    if payload.iso_path and payload.iso_url:
+        raise HTTPException(422, "Choose either a host ISO path or a remote ISO URL, not both")
+    if payload.iso_url:
+        try:
+            payload.iso_url = validate_public_iso_url(payload.iso_url)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
     host = cockpit_host_record(host_id)
-    creation_script = r'''import os,re,shutil,subprocess,sys,tempfile,xml.etree.ElementTree as ET
-name,pool,volume,network,vcpu_text,memory_text,iso_path,autostart=sys.argv[1:]
+    creation_script = r'''import hashlib,ipaddress,os,re,shutil,socket,ssl,subprocess,sys,tempfile,urllib.request,xml.etree.ElementTree as ET
+name,pool,volume,network,vcpu_text,memory_text,iso_path,iso_url,autostart=sys.argv[1:]
 if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,63}',name): raise SystemExit('Invalid VM name')
 vcpus=int(vcpu_text); memory_mib=int(memory_text)
 base=['virsh','-c','qemu:///system']
@@ -3307,6 +3386,11 @@ def run(args):
 if name in [line.strip() for line in run(base+['list','--all','--name']).splitlines()]: raise SystemExit('A VM with this name already exists')
 pool_names=[line.strip() for line in run(base+['pool-list','--all','--name']).splitlines() if line.strip()]
 if pool not in pool_names: raise SystemExit('The selected storage pool does not exist')
+pool_xml=ET.fromstring(run(base+['pool-dumpxml',pool]))
+pool_type=pool_xml.get('type','')
+pool_target=pool_xml.find('./target/path')
+pool_path=pool_target.text.strip() if pool_target is not None and pool_target.text else ''
+if iso_url and (pool_type not in ('dir','netfs','fs') or not pool_path or not os.path.isdir(pool_path)): raise SystemExit('Remote ISO downloads require an active directory-based storage pool')
 volume_xml=ET.fromstring(run(base+['vol-dumpxml',volume,'--pool',pool]))
 volume_format=volume_xml.find('./target/format')
 disk_format=volume_format.get('type','') if volume_format is not None else ''
@@ -3319,6 +3403,55 @@ net_info=run(base+['net-info',network])
 if not any(line.strip().lower()=='active: yes' for line in net_info.splitlines()): raise SystemExit('Start the selected virtual network before creating this VM')
 if iso_path:
  if not os.path.isabs(iso_path) or not iso_path.lower().endswith('.iso') or not os.path.isfile(iso_path): raise SystemExit('The installer ISO path is invalid or the file does not exist')
+if iso_url:
+ max_bytes=8*1024*1024*1024; reserve=256*1024*1024
+ def validate_url(url):
+  from urllib.parse import urlsplit
+  parsed=urlsplit(url)
+  if parsed.scheme!='https' or not parsed.hostname or parsed.username or parsed.password or parsed.port not in (None,443) or parsed.fragment or not parsed.path.lower().endswith('.iso'): raise RuntimeError('The remote ISO URL or redirect is not allowed')
+  addresses={ipaddress.ip_address(row[4][0].split('%',1)[0]) for row in socket.getaddrinfo(parsed.hostname,443,type=socket.SOCK_STREAM)}
+  if not addresses or any(not address.is_global for address in addresses): raise RuntimeError('The remote ISO host must resolve only to public addresses')
+  return parsed
+ class SafeRedirect(urllib.request.HTTPRedirectHandler):
+  def redirect_request(self,req,fp,code,msg,headers,newurl):
+   validate_url(newurl)
+   return super().redirect_request(req,fp,code,msg,headers,newurl)
+ parsed=validate_url(iso_url)
+ safe_name=os.path.basename(parsed.path)
+ safe_name=re.sub(r'[^A-Za-z0-9_.+-]','_',safe_name)[:180]
+ if not safe_name.lower().endswith('.iso'): raise SystemExit('The remote file name must end in .iso')
+ cache_dir=os.path.join(pool_path,'.rancher-kvm-iso-cache')
+ os.makedirs(cache_dir,mode=0o750,exist_ok=True)
+ iso_path=os.path.join(cache_dir,hashlib.sha256(iso_url.encode()).hexdigest()[:16]+'-'+safe_name)
+ if not os.path.isfile(iso_path) or os.path.getsize(iso_path)<40960:
+  if shutil.disk_usage(cache_dir).free < reserve+40960: raise SystemExit('The selected storage pool does not have enough free space for an ISO download')
+  opener=urllib.request.build_opener(urllib.request.ProxyHandler({}),SafeRedirect(),urllib.request.HTTPSHandler(context=ssl.create_default_context()))
+  part=iso_path+'.part'
+  try:
+   response=opener.open(iso_url,timeout=45)
+   with response:
+    final_url=response.geturl(); validate_url(final_url)
+    length=response.headers.get('Content-Length')
+    if not length or not length.isdigit(): raise RuntimeError('The ISO server did not provide a valid content length')
+    expected=int(length)
+    if expected<40960 or expected>max_bytes: raise RuntimeError('The ISO size must be between 40 KiB and 8 GiB')
+    if shutil.disk_usage(cache_dir).free < expected+reserve: raise RuntimeError('The selected storage pool does not have enough free space for this ISO')
+    written=0
+    with open(part,'wb') as output:
+     while True:
+      chunk=response.read(1024*1024)
+      if not chunk: break
+      written+=len(chunk)
+      if written>max_bytes: raise RuntimeError('The ISO exceeded the 8 GiB download limit')
+      output.write(chunk)
+     output.flush(); os.fsync(output.fileno())
+    if written!=expected: raise RuntimeError('The downloaded ISO size did not match the server response')
+    os.chmod(part,0o644); os.replace(part,iso_path)
+  except Exception as exc:
+   try: os.unlink(part)
+   except FileNotFoundError: pass
+   if isinstance(exc,RuntimeError): raise SystemExit(str(exc))
+   raise SystemExit('ISO download failed. Check host internet access, the source URL, and storage free space.')
 domain=ET.Element('domain',{'type':'kvm'})
 ET.SubElement(domain,'name').text=name
 ET.SubElement(domain,'memory',{'unit':'MiB'}).text=str(memory_mib)
@@ -3365,8 +3498,18 @@ finally:
  except FileNotFoundError: pass
 print('VM created and started')
 '''
+    if payload.iso_url:
+        def download_and_create(remote_host: dict[str, Any]) -> dict[str, Any]:
+            try:
+                output = run_sudo_python(remote_host, creation_script, [payload.name, payload.pool, payload.volume, payload.network, str(payload.vcpus), str(payload.memory_mib), payload.iso_path or "", payload.iso_url or "", str(payload.autostart).lower()], timeout=14400)
+                record_audit(access.user_id, "vm.create", f"{host_id}/{payload.name}", detail=f"pool={payload.pool}; volume={payload.volume}; vcpus={payload.vcpus}; memory_mib={payload.memory_mib}; remote_iso=true")
+                return {"status": "completed", "vm_name": payload.name, "message": output[:240]}
+            except Exception as exc:
+                record_audit(access.user_id, "vm.create", f"{host_id}/{payload.name}", "failure", "Could not create VM using the selected remote ISO")
+                raise RuntimeError("Could not create the VM with the remote ISO. Check the KVM host internet access, directory storage pool, and available disk space.") from exc
+        return create_operation_job("vm_create", access.user_id, [host], download_and_create)
     try:
-        run_sudo_python(host, creation_script, [payload.name, payload.pool, payload.volume, payload.network, str(payload.vcpus), str(payload.memory_mib), payload.iso_path or "", str(payload.autostart).lower()], timeout=75)
+        run_sudo_python(host, creation_script, [payload.name, payload.pool, payload.volume, payload.network, str(payload.vcpus), str(payload.memory_mib), payload.iso_path or "", payload.iso_url or "", str(payload.autostart).lower()], timeout=14400 if payload.iso_url else 75)
     except Exception as exc:
         record_audit(access.user_id, "vm.create", f"{host_id}/{payload.name}", "failure", "Could not create VM with the selected resources")
         raise HTTPException(502, "Could not create the VM. Confirm its disk, active virtual network, and optional ISO are available on the host.") from exc
@@ -4110,6 +4253,107 @@ print('Libvirt network definition saved')
     return {"success": True}
 
 
+STORAGE_DIRECTORY_SUGGESTIONS_SCRIPT = r'''import json,os,sys
+raw=sys.argv[1]
+if not raw.startswith('/') or '\x00' in raw: raise SystemExit('Enter an absolute directory path')
+normalized=os.path.normpath(raw)
+if raw.endswith('/'):
+    parent=normalized
+    prefix=''
+else:
+    parent,prefix=os.path.split(normalized)
+    parent=parent or '/'
+suggestions=[]
+try:
+    with os.scandir(parent) as entries:
+        for entry in entries:
+            if entry.name.startswith(prefix) and entry.is_dir(follow_symlinks=True):
+                suggestions.append(os.path.join(parent,entry.name))
+                if len(suggestions) >= 200: break
+except (FileNotFoundError,NotADirectoryError,PermissionError):
+    pass
+suggestions.sort(key=str.casefold)
+print(json.dumps({'suggestions':suggestions[:40]}))
+'''
+
+
+@app.get("/kvm-api/hosts/{host_id}/storage-pools/directories")
+def suggest_storage_pool_directories(host_id: str, path: str = "/", access: AuthorizationContext = Depends(require_permission("storage_admin"))) -> dict[str, list[str]]:
+    if len(path) > 512 or not path.startswith("/") or "\x00" in path:
+        raise HTTPException(422, "Enter an absolute path up to 512 characters")
+    host = cockpit_host_record(host_id)
+    try:
+        output = run_sudo_python(host, STORAGE_DIRECTORY_SUGGESTIONS_SCRIPT, [path], timeout=15)
+        result = json.loads(output or "{}")
+        return {"suggestions": result.get("suggestions", [])[:40]}
+    except Exception as exc:
+        raise HTTPException(502, "Could not list directories on the KVM host. Verify SSH access and storage permissions, then retry.") from exc
+
+
+ISO_IMAGE_SUGGESTIONS_SCRIPT = r'''import json,os,subprocess,sys,xml.etree.ElementTree as ET
+raw=sys.argv[1]
+if not raw.startswith('/') or '\x00' in raw: raise SystemExit('Enter an absolute path')
+base=['virsh','-c','qemu:///system']
+roots=['/var/lib/libvirt/images','/var/lib/libvirt/boot','/mnt','/media']
+try:
+    pools=subprocess.run(base+['pool-list','--all','--name'],capture_output=True,text=True,timeout=8)
+    if pools.returncode==0:
+        for name in pools.stdout.splitlines():
+            name=name.strip()
+            if not name: continue
+            dumped=subprocess.run(base+['pool-dumpxml',name],capture_output=True,text=True,timeout=8)
+            if dumped.returncode: continue
+            target=ET.fromstring(dumped.stdout).findtext('./target/path')
+            if target and target.startswith('/'): roots.append(target)
+except (OSError,subprocess.TimeoutExpired):
+    pass
+allowed=[]
+for root in roots:
+    try:
+        canonical=os.path.realpath(root)
+        if os.path.isdir(canonical) and canonical not in allowed: allowed.append(canonical)
+    except OSError: pass
+normalized=os.path.normpath(raw)
+trailing=raw.endswith('/')
+if raw=='/':
+    locations=[(root,'') for root in allowed if root in ('/var/lib/libvirt/images','/var/lib/libvirt/boot')]
+elif trailing or any(normalized==root for root in allowed):
+    locations=[(os.path.realpath(normalized),'')]
+else:
+    parent,prefix=os.path.split(normalized)
+    locations=[(os.path.realpath(parent or '/'),prefix)]
+suggestions=[]
+for directory,prefix in locations:
+    if not any(os.path.commonpath([root,directory])==root for root in allowed): continue
+    try:
+        with os.scandir(directory) as entries:
+            for entry in entries:
+                if not entry.name.lower().endswith('.iso') or not entry.name.lower().startswith(prefix.lower()): continue
+                try:
+                    if not entry.is_file(follow_symlinks=True): continue
+                    candidate=os.path.realpath(entry.path)
+                    if any(os.path.commonpath([root,candidate])==root for root in allowed): suggestions.append(candidate)
+                except (OSError,ValueError): pass
+                if len(suggestions)>=80: break
+    except (FileNotFoundError,NotADirectoryError,PermissionError,OSError,ValueError): pass
+suggestions=sorted(set(suggestions),key=str.casefold)
+print(json.dumps({'suggestions':suggestions[:40]}))
+'''
+
+
+@app.get("/kvm-api/hosts/{host_id}/vms/iso-images")
+def suggest_host_iso_images(host_id: str, path: str = "/", access: AuthorizationContext = Depends(require_permission("vm_operator"))) -> dict[str, list[str]]:
+    if len(path) > 1024 or not path.startswith("/") or "\x00" in path:
+        raise HTTPException(422, "Enter an absolute path up to 1024 characters")
+    host = cockpit_host_record(host_id)
+    try:
+        output = run_sudo_python(host, ISO_IMAGE_SUGGESTIONS_SCRIPT, [path], timeout=20)
+        result = json.loads(output or "{}")
+        return {"suggestions": result.get("suggestions", [])[:40]}
+    except Exception as exc:
+        raise HTTPException(502, "Could not list ISO images on the KVM host. Verify SSH access and libvirt storage, then retry.") from exc
+
+
 @app.post("/kvm-api/hosts/{host_id}/storage-pools/config")
 def configure_storage_pool(host_id: str, payload: StoragePoolConfig, access: AuthorizationContext = Depends(require_permission("storage_admin"))) -> dict[str, bool]:
     if not re.fullmatch(r"[A-Za-z0-9_.+-]+", payload.name):
@@ -4418,17 +4662,24 @@ def run_sudo_python(host: dict[str, Any], script: str, args: list[str] | None = 
                 f"exec(compile({script!r}, '<kvm-remote>', 'exec'))"
             )
             remote_args.append(remote_input_path)
-        command = f"sudo -S -p '' python3 -c {shlex.quote(remote_script)}"
+        command_args = f"python3 -c {shlex.quote(remote_script)}"
         if remote_args:
-            command += " " + " ".join(shlex.quote(arg) for arg in remote_args)
-        stdin, stdout, stderr = client.exec_command(command, timeout=timeout)
-        stdin.write(host["password"] + "\n")
-        stdin.flush()
-        stdin.channel.shutdown_write()
+            command_args += " " + " ".join(shlex.quote(arg) for arg in remote_args)
+        stdin, stdout, stderr = client.exec_command(f"sudo -n {command_args}", timeout=timeout)
         output = stdout.read().decode("utf-8", "replace").replace("KVM_STDIN_READY\n", "").strip()
         error = stderr.read().decode("utf-8", "replace").strip()
         if stdout.channel.recv_exit_status():
-            raise RuntimeError(error or output or "Could not run the remote command with sudo")
+            password = host.get("password") or ""
+            if not password:
+                raise RuntimeError(error or output or "This SSH key requires passwordless sudo for host administration")
+            stdin, stdout, stderr = client.exec_command(f"sudo -S -p '' {command_args}", timeout=timeout)
+            stdin.write(password + "\n")
+            stdin.flush()
+            stdin.channel.shutdown_write()
+            output = stdout.read().decode("utf-8", "replace").replace("KVM_STDIN_READY\n", "").strip()
+            error = stderr.read().decode("utf-8", "replace").strip()
+            if stdout.channel.recv_exit_status():
+                raise RuntimeError(error or output or "Could not run the remote command with sudo")
         return output
     finally:
         if sftp and remote_input_path:

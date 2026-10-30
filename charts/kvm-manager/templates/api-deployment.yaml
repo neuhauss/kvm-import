@@ -24,6 +24,10 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- with .Values.backend.hostAliases }}
+      hostAliases:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001
@@ -77,6 +81,10 @@ spec:
               value: {{ .Values.rancher.auditRetentionDays | default 90 | quote }}
             - name: KVM_SLOW_REQUEST_MS
               value: {{ .Values.rancher.slowRequestThresholdMs | default 1000 | quote }}
+            - name: KVM_MAX_ACTIVE_OPERATION_JOBS
+              value: {{ .Values.backend.maxActiveOperationJobs | default 8 | quote }}
+            - name: KVM_S3_ALLOWED_ENDPOINT_HOSTS
+              value: {{ join "," .Values.backup.allowedEndpointHosts | quote }}
           ports:
             - name: http
               containerPort: 8080

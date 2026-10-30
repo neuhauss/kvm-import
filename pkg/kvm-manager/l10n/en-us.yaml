@@ -19,6 +19,10 @@ kvmManager:
     filterByState: Connection state
     allStates: All states
     hostFilterCount: "Showing {shown} of {total} hosts"
+    clearFilters: Clear filters
+    retry: Retry
+    unableToLoadTitle: Host inventory could not be loaded
+    unableToLoadHelp: Check your Rancher session and the KVM API, then retry. No hosts were removed.
     noHostMatches: No KVM hosts match these filters.
     dataStale: Stale · checking host connectivity...
     backgroundRefreshFailed: "Host refresh failed. The displayed state is the last saved check; verify SSH connectivity and refresh again."
@@ -45,6 +49,18 @@ kvmManager:
     ready: Ready
     unreachable: Unreachable
     unknown: Unknown
+    stale: Stale
+    inventoryHealth: Host health
+    inventoryHealthSummary: "{ready} of {total} hosts ready · {stale} need a refresh"
+    refreshStaleHosts: Refresh stale hosts
+    metricsFromCheck: Host metrics from this check
+    detectedHostname: "Detected hostname: {hostname}"
+    refreshComplete: "Host checks finished: {ready} ready, {unreachable} unreachable (of {total})."
+    hostAdded: "{name} was added to the inventory."
+    hostUpdated: "{name} was updated."
+    hostRefreshComplete: "{name} is reachable and its inventory was refreshed."
+    hostRefreshUnreachable: "Could not refresh {name}: {detail}"
+    hostRemoved: "{name} was removed from the inventory."
     addTitle: Add KVM host
     editTitle: Edit host
     hostDescription: Enter an existing host. The extension does not install or change packages on the host.
@@ -53,16 +69,16 @@ kvmManager:
     hostDetails: Host details
     hostDetailsDescription: Enter the host name and SSH endpoint used to manage this KVM server.
     sshCredentials: SSH credentials
-    sshCredentialsDescription: Credentials are encrypted when stored. A password is still required for automatic Cockpit sign-in.
+    sshCredentialsDescription: Password remains the simplest SSH option for labs and enables automatic Cockpit sign-in. A private key can be used as an additional or key-only SSH method.
     displayName: Display name
     ipDns: IP address or DNS name
     sshPort: SSH port
     sshUser: SSH username
     password: Host / Cockpit password
     keepPassword: Leave blank to keep the current password
-    passwordHelp: Used for Cockpit and as an SSH fallback. It is stored encrypted.
+    passwordHelp: Used for SSH and automatic Cockpit sign-in. It is stored encrypted; key-only access requires passwordless sudo and does not enable automatic Cockpit sign-in.
     sshKey: Private SSH key (optional)
-    sshKeyHelp: The key is used for SSH; the password above is still used for Cockpit. The key is encrypted and is never shown after saving.
+    sshKeyHelp: The key is encrypted and never shown after saving. Keep using the password above for the simplest lab setup, SSH fallback, and automatic Cockpit sign-in.
     keyPassphrase: SSH key passphrase
     removeSavedKey: Remove the saved SSH key and use password-only SSH
     acceptHostKey: Automatically trust the SSH host key
@@ -111,7 +127,16 @@ kvmManager:
     systemMountsHelp: Virtual and temporary system filesystems. These are collapsed to keep persistent volumes and capacity information easy to scan.
     noPersistentMounts: No persistent filesystem mounts match this filter.
     poolNameHelp: Use letters, numbers, dots, underscores, plus signs, or hyphens.
-    poolPathHelp: Enter an absolute path on the KVM host. Ensure the host has enough free space and suitable permissions.
+    poolPathHelp: Start typing an absolute path to see existing directories on this KVM host. You can still enter a new path; it will be created when the pool is saved.
+    poolPathSuggestions: Existing directories on the KVM host
+    searchingDirectories: Looking up directories on the host...
+    directorySuggestionsUnavailable: Could not list host directories. You can still enter the path manually.
+    noDirectorySuggestions: No matching directories. You can still enter a path manually.
+    networkSuggestionWarning: Suggestions come from this host’s current network setup. Verify that an address is available before applying it.
+    isoSuggestions: Existing ISO images
+    searchingIsoImages: Looking up ISO files on the host...
+    isoSuggestionsUnavailable: Could not list ISO files from this host. You can still enter a path manually.
+    noIsoSuggestions: No matching ISO files found. You can still enter a path manually.
     accountSettings: Account settings
     accountFormHelp: Create a local host account or update its login settings. Changes affect access to the operating system.
     accountNameHelp: Use a lowercase Linux username. The name cannot be changed after account creation.
@@ -143,6 +168,7 @@ kvmManager:
     operationPhase_applying: Applying the change on the KVM host...
     operationPhase_verifying: Checking the updated host state...
     operationPhase_running: Waiting for the KVM host response...
+    operationPhase_downloading: Downloading the installer ISO to the KVM host...
     recentActivity: Recent activity
     recentActivityHelp: Recent KVM administration actions recorded by the extension. Sensitive command details are not shown.
     vmActivityHelp: Recent extension actions that targeted this virtual machine.
@@ -285,14 +311,35 @@ kvmManager:
     confirmVmConfiguration: "Save settings for {name}: {vcpus} vCPUs and {memory} memory? Changes take effect after restart."
     createVm: Create virtual machine
     creatingVm: Creating VM...
-    createVmHelp: Create and start a VM from an existing libvirt disk volume. Optionally attach an installer ISO stored on the KVM host.
+    createVmHelp: 'Choose how the VM will boot: install an operating system from an ISO already on the KVM host, or use an existing bootable disk.'
     vmName: Virtual machine name
     storagePool: Storage pool
     bootDisk: Boot disk volume
     virtualNetwork: Virtual network
     installerIsoPath: Installer ISO path on host
-    installerIsoOptional: Optional absolute path, for example /var/lib/libvirt/images/installer.iso
-    installerIsoHelp: Only an ISO already stored on the host can be attached. Use a serial-console-compatible installer to complete setup from this interface.
+    installerIsoPathPlaceholder: /var/lib/libvirt/images/installer.iso
+    installerIsoHelp: Enter the absolute path to an ISO already on the KVM host. The interface does not upload files; use an installer that supports a serial console.
+    isoSource: ISO location
+    isoSourceHost: Already on the KVM host
+    isoSourceInternet: Download from the internet
+    isoPreset: Operating system image
+    isoPreset_opensuse: openSUSE Leap 16 installer
+    isoPreset_rocky: Rocky Linux 10 boot ISO
+    isoPreset_ubuntu: Ubuntu Server 26.04.1
+    isoPreset_alpine: Alpine Linux 3.24.3 Virt (lightweight VM test)
+    isoPreset_custom: Custom HTTPS URL
+    isoUrl: ISO download URL
+    remoteIsoHelp: The KVM host downloads the image into the selected directory-based storage pool. HTTPS only, public internet access required, maximum 8 GiB; redirects to private addresses are blocked. The first download may take several minutes.
+    lightweightTest: Lightweight network-install test
+    lightweightTestHelp: "Alpine Virt is about 67 MB and tailored for virtual machines. Suggested test resources: 1 vCPU and 512 MiB RAM. Run setup-alpine and install packages from the network; use the VM serial console."
+    useLightweightDefaults: Use test defaults
+    remoteIsoFailed: The remote ISO download or VM creation failed.
+    remoteIsoTimeout: The operation is still running. Check the operation status and refresh the VM list later.
+    vmBootSource: How should the virtual machine boot?
+    bootFromIso: Install an operating system from an ISO image
+    bootFromExistingDisk: Boot from an existing bootable disk
+    existingDiskBootHelp: The selected disk must already contain a bootable operating system. No ISO will be attached.
+    isoRequiredForInstall: Choose a valid local ISO path, an HTTPS ISO URL, or boot from an existing bootable disk.
     selectVolume: Select a disk volume
     selectNetwork: Select a virtual network
     invalidVmCreate: Enter a VM name, CPU and memory values, an available disk volume, and an active virtual network.
@@ -438,8 +485,26 @@ kvmManager:
     changeSubscriptionHelp: The current registration is removed before the new code is applied. Make sure the new code is valid and has an available system slot.
     registered: Registered
     notRegistered: Not registered
-    group_system: System
-    group_tools: Tools
+    group_overview: Dashboard
+    group_compute: Compute
+    group_infrastructure: Infrastructure
+    group_host: Host
+    vmProvisioning: Virtual machine provisioning steps
+    provisioningStep: 'Step {current} of {total}'
+    vmWizardCompute: Identity and capacity
+    vmWizardComputeHelp: Set the virtual machine name and its processor and memory resources.
+    vmWizardResources: Storage and network
+    vmWizardResourcesHelp: Select the storage pool, disk, and network, then choose ISO installation or an existing bootable disk.
+    vmWizardReview: Review configuration
+    vmWizardReviewHelp: Review the selected resources and devices before creating the virtual machine.
+    vmWizardBack: Back
+    vmWizardContinue: Continue
+    vmProvisioningGuide: Follow the steps to choose capacity, select a disk and network, then review the configuration before creating the VM.
+    resizeVolume: Change capacity
+    volumeResizeHelp: Capacity can only be increased. Stop any VM using this volume first; the host checks free space in the pool.
+    createNatNetwork: Create NAT network
+    createBridgeNetwork: Create bridge network
+    hostBridgeHelp: Choose a Linux bridge that already exists on the host. Keep the host IP configured on that bridge.
     accountsDescription: Local users and their login shells, groups, and home directories.
     account: Account
     homeDirectory: Home directory
@@ -592,8 +657,13 @@ kvmManager:
     linkUp: Up
     linkDown: Down
     adminAreas: Administration areas
+    retryUpdate: Retry update
+    activeFilters: "Filters active: {count}"
+    clearFilters: Clear filters
     storageDescription: Create and remove libvirt directory pools, and review host block devices and mounted filesystems.
     noVm: No virtual machines found.
+    noVmHelp: Create a virtual machine from an existing disk or installer ISO on this host.
+    firstVmAction: Create your first VM
     storagePools: Libvirt storage pools
     noPool: No libvirt storage pools found.
     storageVolumes: Storage volumes
@@ -754,6 +824,7 @@ kvmManager:
     clusterHostsHelp: Distinct Corosync membership fingerprints
     confirmedMembers: "Confirmed members: {members}"
     navigation: Cluster administration sections
+    liveClusterAreasHint: Node, resource, constraint, activity, and fencing controls appear after a live HA cluster is detected and opened.
     section_overview: Host readiness
     section_plan: Plan cluster
     section_templates: Workload templates
@@ -1273,7 +1344,7 @@ kvmManager:
     sshPassword: SSH password
     trustHostKey: Accept and pin this SSH host key
     trustHostKeyHelp: Enable for first contact when the API has no trusted key for this machine. The received key is pinned to the imported host record.
-    stepTwo: STEP 2 · PREPARATION
+    stepTwo: PREPARATION PLAN
     preparationTitle: What the extension will prepare
     preparationHelp: The extension checks the operating system, installs only missing KVM and Cockpit packages, enables the required sockets, then verifies libvirt before importing.
     preparationSles: Confirm the machine is SUSE Linux Enterprise.
@@ -1281,7 +1352,7 @@ kvmManager:
     preparationCockpit: Install Cockpit packages and enable cockpit.socket.
     preparationImport: Verify SSH/libvirt and add the host to the Hosts list.
     preparationSafety: Package installation requires working SUSE repositories and sudo access. Review the summary before starting; the operation can take several minutes.
-    stepThree: STEP 3 · REVIEW
+    stepThree: STEP 2 · REVIEW
     reviewTitle: Review and prepare
     reviewHelp: Confirm the target and the host changes. The extension will import the machine only after preparation and libvirt validation succeed.
     changes: Planned changes
@@ -1294,6 +1365,7 @@ kvmManager:
     preparedImported: "{host} is prepared and imported."
     openHost: Open host
   backups:
+    backupAreas: Backup areas
     eyebrow: DATA PROTECTION
     title: VM backups
     subtitle: Create and manage powered-off VM archives in S3-compatible object storage.
@@ -1306,6 +1378,8 @@ kvmManager:
     destinationTab: Destinations
     archivesTab: Archives
     destinationTitle: S3 destination
+    destinationBasics: Storage location
+    destinationSecurity: Access and encryption
     destinationHelp: Credentials are encrypted by the API before they are stored. Workload identity uses the API runtime's AWS credential chain.
     destinationName: Name
     bucket: Bucket
@@ -1327,6 +1401,11 @@ kvmManager:
     destinationSaved: Destination saved. Test its connection before starting a backup.
     savedDestinations: Saved destinations
     noDestinations: No destinations configured.
+    noDestinationGuidance: Backups need a destination before they can run.
+    configureDestination: Configure destination
+    noReadyHostGuidance: No connected KVM host is ready for a backup. Check host connectivity first.
+    openHosts: Open hosts
+    noEligibleVmGuidance: Backups are available only for powered-off VMs with supported local disks.
     credentialsSaved: Credentials saved
     testConnection: Test connection
     testing: Testing…

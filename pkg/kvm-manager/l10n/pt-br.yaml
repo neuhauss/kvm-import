@@ -19,6 +19,10 @@ kvmManager:
     filterByState: "Estado da conexão"
     allStates: "Todos os estados"
     hostFilterCount: "Exibindo {shown} de {total} hosts"
+    clearFilters: Limpar filtros
+    retry: Tentar novamente
+    unableToLoadTitle: Não foi possível carregar o inventário de hosts
+    unableToLoadHelp: Confira sua sessão do Rancher e a API KVM e tente novamente. Nenhum host foi removido.
     noHostMatches: "Nenhum host KVM corresponde a esses filtros."
     dataStale: Desatualizado · verificando a conexão do host...
     backgroundRefreshFailed: "Falha ao atualizar o host. O estado exibido é da última consulta salva; verifique o SSH e atualize novamente."
@@ -45,6 +49,18 @@ kvmManager:
     ready: "Pronto"
     unreachable: "Inacessível"
     unknown: "Desconhecido"
+    stale: "Desatualizado"
+    inventoryHealth: "Saúde dos hosts"
+    inventoryHealthSummary: "{ready} de {total} hosts prontos · {stale} precisam de atualização"
+    refreshStaleHosts: "Atualizar hosts desatualizados"
+    metricsFromCheck: "Métricas do host nesta verificação"
+    detectedHostname: "Hostname detectado: {hostname}"
+    refreshComplete: "Verificações concluídas: {ready} prontos, {unreachable} inacessíveis (de {total})."
+    hostAdded: "{name} foi adicionado ao inventário."
+    hostUpdated: "{name} foi atualizado."
+    hostRefreshComplete: "{name} está acessível e o inventário foi atualizado."
+    hostRefreshUnreachable: "Não foi possível atualizar {name}: {detail}"
+    hostRemoved: "{name} foi removido do inventário."
     addTitle: "Adicionar host KVM"
     editTitle: "Editar host"
     hostDescription: "Informe um host existente. A extensão não instala nem altera pacotes no host."
@@ -53,16 +69,16 @@ kvmManager:
     hostDetails: Detalhes do host
     hostDetailsDescription: Informe o nome do host e o endereço SSH usado para administrar este servidor KVM.
     sshCredentials: Credenciais SSH
-    sshCredentialsDescription: As credenciais são criptografadas quando armazenadas. A senha continua necessária para o login automático no Cockpit.
+    sshCredentialsDescription: A senha continua sendo a opção SSH mais simples para labs e habilita o login automático no Cockpit. A chave privada pode ser usada como método SSH adicional ou exclusivo.
     displayName: "Nome de exibição"
     ipDns: "Endereço IP ou nome DNS"
     sshPort: "Porta SSH"
     sshUser: "Usuário SSH"
     password: "Senha do host / Cockpit"
     keepPassword: "Deixe vazio para manter a senha atual"
-    passwordHelp: "Usada no Cockpit e como alternativa para SSH. A senha é armazenada criptografada."
+    passwordHelp: "Usada no SSH e no login automático do Cockpit. É armazenada criptografada; o acesso somente por chave exige sudo sem senha e não habilita o login automático no Cockpit."
     sshKey: "Chave privada SSH (opcional)"
-    sshKeyHelp: "A chave é usada para SSH; a senha acima continua sendo usada para o Cockpit. A chave é criptografada e não será exibida após salvar."
+    sshKeyHelp: "A chave é criptografada e não será exibida após salvar. Para o lab mais simples, mantenha também a senha acima para fallback SSH e login automático no Cockpit."
     keyPassphrase: "Frase secreta da chave SSH"
     removeSavedKey: "Remover a chave SSH salva e usar somente senha no SSH"
     acceptHostKey: "Confiar automaticamente na chave SSH do host"
@@ -111,7 +127,16 @@ kvmManager:
     systemMountsHelp: Sistemas de arquivos virtuais e temporários do sistema. Eles ficam recolhidos para destacar os volumes persistentes e as informações de capacidade.
     noPersistentMounts: Nenhuma montagem de sistema de arquivos persistente corresponde a este filtro.
     poolNameHelp: Use letras, números, pontos, sublinhados, sinais de mais ou hífens.
-    poolPathHelp: Informe um caminho absoluto no host KVM. Verifique o espaço livre e as permissões adequadas.
+    poolPathHelp: Digite um caminho absoluto para ver diretórios existentes no host KVM. Você também pode informar um caminho novo; ele será criado ao salvar o pool.
+    poolPathSuggestions: Diretórios existentes no host KVM
+    searchingDirectories: Consultando diretórios no host...
+    directorySuggestionsUnavailable: Não foi possível listar os diretórios do host. Você ainda pode informar o caminho manualmente.
+    noDirectorySuggestions: Nenhum diretório correspondente. Você ainda pode informar o caminho manualmente.
+    networkSuggestionWarning: As sugestões vêm da configuração de rede atual deste host. Confirme se o endereço está disponível antes de aplicá-lo.
+    isoSuggestions: Imagens ISO existentes
+    searchingIsoImages: Consultando arquivos ISO no host...
+    isoSuggestionsUnavailable: Não foi possível listar arquivos ISO neste host. Você ainda pode informar um caminho manualmente.
+    noIsoSuggestions: Nenhum arquivo ISO correspondente. Você ainda pode informar um caminho manualmente.
     accountSettings: Configurações da conta
     accountFormHelp: Crie uma conta local no host ou atualize suas configurações de login. As alterações afetam o acesso ao sistema operacional.
     accountNameHelp: Use um nome Linux em letras minúsculas. O nome não pode ser alterado após a criação.
@@ -143,6 +168,7 @@ kvmManager:
     operationPhase_applying: Aplicando a alteração no host KVM...
     operationPhase_verifying: Verificando o estado atualizado do host...
     operationPhase_running: Aguardando resposta do host KVM...
+    operationPhase_downloading: Baixando a ISO de instalação para o host KVM...
     recentActivity: Atividade recente
     recentActivityHelp: Ações administrativas recentes registradas pela extensão. Detalhes sensíveis de comandos não são exibidos.
     vmActivityHelp: Ações recentes da extensão direcionadas a esta máquina virtual.
@@ -285,14 +311,35 @@ kvmManager:
     confirmVmConfiguration: "Salvar configurações de {name}: {vcpus} vCPUs e {memory} de memória? As alterações entram em vigor após reiniciar."
     createVm: Criar máquina virtual
     creatingVm: Criando VM...
-    createVmHelp: Crie e inicie uma VM usando um volume de disco existente do libvirt. Opcionalmente, anexe uma ISO armazenada no host KVM.
+    createVmHelp: 'Escolha como iniciar a VM: instale um sistema por uma ISO que já esteja no host KVM ou use um disco inicializável existente.'
     vmName: Nome da máquina virtual
     storagePool: Pool de armazenamento
     bootDisk: Volume do disco de inicialização
     virtualNetwork: Rede virtual
     installerIsoPath: Caminho da ISO de instalação no host
-    installerIsoOptional: Caminho absoluto opcional, por exemplo /var/lib/libvirt/images/instalador.iso
-    installerIsoHelp: Só é possível anexar uma ISO já armazenada no host. Use um instalador compatível com console serial para concluir a instalação nesta interface.
+    installerIsoPathPlaceholder: /var/lib/libvirt/images/instalador.iso
+    installerIsoHelp: Informe o caminho absoluto de uma ISO que já esteja no host KVM. A interface não envia arquivos para o host; use um instalador compatível com console serial.
+    isoSource: Local da ISO
+    isoSourceHost: Já está no host KVM
+    isoSourceInternet: Baixar da internet
+    isoPreset: Imagem do sistema operacional
+    isoPreset_opensuse: Instalador do openSUSE Leap 16
+    isoPreset_rocky: ISO boot do Rocky Linux 10
+    isoPreset_ubuntu: Ubuntu Server 26.04.1
+    isoPreset_alpine: Alpine Linux 3.24.3 Virt (teste leve de VM)
+    isoPreset_custom: URL HTTPS personalizada
+    isoUrl: URL para baixar a ISO
+    remoteIsoHelp: O host KVM baixa a imagem para o pool de armazenamento baseado em diretório selecionado. Somente HTTPS, exige acesso público à internet e aceita até 8 GiB; redirecionamentos para endereços privados são bloqueados. O primeiro download pode levar alguns minutos.
+    lightweightTest: Teste leve com instalação pela rede
+    lightweightTestHelp: "O Alpine Virt tem cerca de 67 MB e foi feito para máquinas virtuais. Recursos sugeridos: 1 vCPU e 512 MiB de RAM. Execute setup-alpine e instale pacotes pela rede; use o console serial da VM."
+    useLightweightDefaults: Usar padrão de teste
+    remoteIsoFailed: O download da ISO remota ou a criação da VM falhou.
+    remoteIsoTimeout: A operação ainda está em andamento. Confira o estado da operação e atualize a lista de VMs depois.
+    vmBootSource: Como iniciar a máquina virtual
+    bootFromIso: Instalar o sistema usando uma imagem ISO
+    bootFromExistingDisk: Iniciar usando um disco já inicializável
+    existingDiskBootHelp: O disco selecionado precisa conter um sistema operacional inicializável. Nenhuma ISO será anexada.
+    isoRequiredForInstall: Escolha um caminho local de ISO válido, uma URL HTTPS de ISO ou inicie de um disco já inicializável.
     selectVolume: Selecione um volume de disco
     selectNetwork: Selecione uma rede virtual
     invalidVmCreate: Informe o nome da VM, CPU, memória, um volume disponível e uma rede virtual ativa.
@@ -438,8 +485,26 @@ kvmManager:
     changeSubscriptionHelp: O registro atual será removido antes de aplicar o novo código. Confirme que o código é válido e tem uma vaga de sistema disponível.
     registered: Registrado
     notRegistered: Não registrado
-    group_system: Sistema
-    group_tools: Ferramentas
+    group_overview: Painel
+    group_compute: Computação
+    group_infrastructure: Infraestrutura
+    group_host: Host
+    vmProvisioning: Etapas de provisionamento da máquina virtual
+    provisioningStep: 'Etapa {current} de {total}'
+    vmWizardCompute: Identidade e capacidade
+    vmWizardComputeHelp: Defina o nome da máquina virtual e os recursos de processamento e memória.
+    vmWizardResources: Armazenamento e rede
+    vmWizardResourcesHelp: Selecione o pool, o disco e a rede. Depois escolha instalar por ISO ou iniciar de um disco já preparado.
+    vmWizardReview: Revisar configuração
+    vmWizardReviewHelp: Confira os recursos e dispositivos antes de criar a máquina virtual.
+    vmWizardBack: Voltar
+    vmWizardContinue: Continuar
+    vmProvisioningGuide: Siga as etapas para escolher a capacidade, selecionar o disco e a rede e revisar a configuração antes da criação.
+    resizeVolume: Alterar capacidade
+    volumeResizeHelp: A capacidade só pode aumentar. Se alguma VM estiver usando este volume, desligue-a antes; o host verifica o espaço disponível no pool.
+    createNatNetwork: Criar rede NAT
+    createBridgeNetwork: Criar rede Bridge
+    hostBridgeHelp: Use uma bridge Linux já criada no host. O endereço IP do host continua configurado na bridge.
     accountsDescription: Usuários locais, grupos, diretórios pessoais e shells de login.
     account: Conta
     homeDirectory: Diretório pessoal
@@ -592,8 +657,13 @@ kvmManager:
     linkUp: Ativa
     linkDown: Inativa
     adminAreas: Áreas administrativas
+    retryUpdate: Tentar atualizar novamente
+    activeFilters: "Filtros ativos: {count}"
+    clearFilters: Limpar filtros
     storageDescription: Crie e remova pools de diretório libvirt e consulte dispositivos de bloco e sistemas de arquivos montados.
     noVm: "Nenhuma máquina virtual encontrada."
+    noVmHelp: Crie uma máquina virtual usando um disco existente ou uma ISO de instalação neste host.
+    firstVmAction: Criar a primeira VM
     storagePools: "Pools de armazenamento do libvirt"
     noPool: "Nenhum pool de armazenamento do libvirt encontrado."
     storageVolumes: Volumes de armazenamento
@@ -754,6 +824,7 @@ kvmManager:
     clusterHostsHelp: Identificadores distintos dos membros Corosync
     confirmedMembers: "Membros confirmados: {members}"
     navigation: Seções de administração do cluster
+    liveClusterAreasHint: As áreas de nós, recursos, restrições, atividade e fencing aparecem quando um cluster HA ativo for detectado e aberto.
     section_overview: Prontidão dos hosts
     section_plan: Planejar cluster
     section_templates: Modelos de workload
@@ -1273,7 +1344,7 @@ kvmManager:
     sshPassword: Senha SSH
     trustHostKey: Aceitar e fixar esta chave SSH do host
     trustHostKeyHelp: Ative no primeiro acesso quando a API ainda não conhecer a chave desta máquina. A chave recebida ficará vinculada ao host importado.
-    stepTwo: ETAPA 2 · PREPARAÇÃO
+    stepTwo: PLANO DE PREPARAÇÃO
     preparationTitle: O que a extensão vai preparar
     preparationHelp: A extensão verifica o sistema operacional, instala apenas os pacotes KVM e Cockpit ausentes, habilita os sockets necessários e valida o libvirt antes de importar.
     preparationSles: Confirmar que a máquina usa SUSE Linux Enterprise.
@@ -1281,7 +1352,7 @@ kvmManager:
     preparationCockpit: Instalar os pacotes Cockpit e habilitar cockpit.socket.
     preparationImport: Validar SSH/libvirt e incluir o host na lista Hosts.
     preparationSafety: A instalação exige repositórios SUSE funcionais e acesso sudo. Revise o resumo antes de iniciar; a operação pode levar alguns minutos.
-    stepThree: ETAPA 3 · REVISÃO
+    stepThree: ETAPA 2 · REVISÃO
     reviewTitle: Revisar e preparar
     reviewHelp: Confirme o destino e as alterações. A extensão só importará a máquina após a preparação e a validação do libvirt.
     changes: Alterações previstas
@@ -1294,6 +1365,7 @@ kvmManager:
     preparedImported: "{host} foi preparado e importado."
     openHost: Abrir host
   backups:
+    backupAreas: Áreas de backup
     eyebrow: PROTEÇÃO DE DADOS
     title: Backups de VMs
     subtitle: Crie e gerencie arquivos de VMs desligadas em armazenamento de objetos compatível com S3.
@@ -1306,6 +1378,8 @@ kvmManager:
     destinationTab: Destinos
     archivesTab: Arquivos
     destinationTitle: Destino S3
+    destinationBasics: Localização do armazenamento
+    destinationSecurity: Acesso e criptografia
     destinationHelp: As credenciais são criptografadas pela API antes de serem armazenadas. A identidade de workload usa a cadeia de credenciais AWS do ambiente da API.
     destinationName: Nome
     bucket: Bucket
@@ -1327,6 +1401,11 @@ kvmManager:
     destinationSaved: Destino salvo. Teste a conexão antes de iniciar um backup.
     savedDestinations: Destinos salvos
     noDestinations: Nenhum destino configurado.
+    noDestinationGuidance: Os backups precisam de um destino configurado antes de iniciar.
+    configureDestination: Configurar destino
+    noReadyHostGuidance: Nenhum host KVM conectado está pronto para backup. Verifique a conexão do host.
+    openHosts: Abrir hosts
+    noEligibleVmGuidance: O backup está disponível apenas para VMs desligadas com discos locais compatíveis.
     credentialsSaved: Credenciais salvas
     testConnection: Testar conexão
     testing: Testando…

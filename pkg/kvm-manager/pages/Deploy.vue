@@ -9,7 +9,9 @@
       <div v-if="error" class="banner error" role="alert">{{ error }}</div>
       <div v-if="success" class="banner success" role="status"><strong>{{ success }}</strong><button class="btn role-link btn-sm" @click="$router.push({ name: 'kvm-c-cluster-cloud-native', query: { hostId: importedHost.id } })">{{ t('openHost') }}</button></div>
 
-      <section class="deploy-panel">
+      <ol class="deploy-stepper" :aria-label="t('title')"><li :class="{ active: !reviewing, complete: reviewing }" :aria-current="!reviewing ? 'step' : undefined"><span>1</span>{{ t('connectionTitle') }}</li><li :class="{ active: reviewing }" :aria-current="reviewing ? 'step' : undefined"><span>2</span>{{ t('reviewTitle') }}</li></ol>
+
+      <section v-if="!reviewing" class="deploy-panel">
         <header class="panel-heading"><div><span class="eyebrow">{{ t('stepOne') }}</span><h2>{{ t('connectionTitle') }}</h2><p>{{ t('connectionHelp') }}</p></div></header>
         <div class="deploy-grid">
           <label class="rancher-field"><span>{{ t('hostName') }} *</span><input v-model.trim="form.name" maxlength="80" autocomplete="off" :placeholder="t('hostNamePlaceholder')"></label>
@@ -21,7 +23,7 @@
         </div>
       </section>
 
-      <section class="deploy-panel preparation-panel">
+      <section v-if="reviewing" class="deploy-panel preparation-panel">
         <header class="panel-heading"><div><span class="eyebrow">{{ t('stepTwo') }}</span><h2>{{ t('preparationTitle') }}</h2><p>{{ t('preparationHelp') }}</p></div></header>
         <ul class="preparation-list"><li>{{ t('preparationSles') }}</li><li>{{ t('preparationKvm') }}</li><li>{{ t('preparationCockpit') }}</li><li>{{ t('preparationImport') }}</li></ul>
         <p class="deploy-footnote">{{ t('preparationSafety') }}</p>
@@ -103,6 +105,7 @@ export default defineComponent({
 .deploy-footnote { margin:14px 0 0; color:var(--muted,#8b95a5); font-size:12px; line-height:1.5; }
 .review-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px 22px; margin:0; }.review-grid dt { color:var(--muted,#8b95a5); font-size:11px; }.review-grid dd { margin:4px 0 0; font-size:13px; overflow-wrap:anywhere; }
 .deploy-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:18px; }.deploy-progress { position:sticky; bottom:0; display:flex; align-items:center; gap:10px; padding:12px 16px; border:1px solid var(--border,#394452); border-radius:6px; background:var(--body-bg,#252b33); }.spinner { width:16px; height:16px; border:2px solid var(--border,#394452); border-top-color:var(--primary,#4b91e2); border-radius:50%; animation:spin .8s linear infinite; }@keyframes spin { to { transform:rotate(360deg); } }
+.deploy-stepper { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin:18px 0; padding:0; list-style:none; }.deploy-stepper li { display:flex; align-items:center; gap:10px; min-height:42px; padding:8px 12px; border:1px solid var(--border,#394452); border-radius:6px; color:var(--muted,#8b95a5); font-size:13px; }.deploy-stepper li>span { display:grid; width:24px; height:24px; place-items:center; border-radius:50%; color:var(--body-text,#243043); background:color-mix(in srgb,var(--muted,#8892a0) 18%,var(--body-bg,#fff)); font-size:12px; font-weight:700; }.deploy-stepper li.active { border-color:var(--primary,#4b91e2); color:var(--body-text,#243043); background:color-mix(in srgb,var(--primary,#4b91e2) 8%,var(--body-bg,#fff)); }.deploy-stepper li.active>span,.deploy-stepper li.complete>span { color:#fff; background:var(--primary,#4b91e2); }.review-panel .deploy-actions { position:sticky; bottom:0; padding:12px 0 2px; border-top:1px solid var(--border,#394452); background:var(--body-bg,#252b33); }
 .banner.error,.banner.success { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:12px 0; padding:12px; border:1px solid var(--border,#394452); border-radius:5px; background:color-mix(in srgb,var(--body-text,#eee) 6%,var(--body-bg,#252b33)); }.banner.error { border-color:color-mix(in srgb,#d45b52 55%,var(--border,#394452)); }.banner.success { border-color:color-mix(in srgb,#53ba84 55%,var(--border,#394452)); }
-@container deploy (max-width:700px) { .deploy-page { padding:18px 12px; }.deploy-grid,.review-grid,.preparation-list { grid-template-columns:minmax(0,1fr); }.deploy-panel,.deploy-callout { padding:14px; }.deploy-header,.panel-heading { flex-direction:column; align-items:stretch; }.deploy-actions { flex-wrap:wrap; }.deploy-actions .btn { flex:1 1 auto; } }
+@container deploy (max-width:700px) { .deploy-page { padding:18px 12px; }.deploy-grid,.review-grid,.preparation-list,.deploy-stepper { grid-template-columns:minmax(0,1fr); }.deploy-panel,.deploy-callout { padding:14px; }.deploy-header,.panel-heading { flex-direction:column; align-items:stretch; }.deploy-actions { flex-wrap:wrap; }.deploy-actions .btn { flex:1 1 auto; } }
 </style>

@@ -4,7 +4,7 @@
       <thead><tr><th>{{ t('vm') }}</th><th>{{ t('state') }}</th><th>{{ t('ipAddresses') }}</th><th>vCPU</th><th>{{ t('memory') }}</th><th>{{ t('autostart') }}</th><th>{{ t('actions') }}</th></tr></thead>
       <tbody>
         <tr v-for="vm in vms" :key="vm.uuid || vm.name">
-          <td :data-label="t('vm')"><button class="vm-name" @click="$emit('details', vm)">{{ vm.name }}</button><small>{{ vm.uuid }}</small></td>
+          <td :data-label="t('vm')"><button class="vm-name" @click="$emit('details', vm)">{{ vm.name }}</button></td>
           <td :data-label="t('state')"><span class="state" :class="stateClass(vm.state)"><i></i>{{ vm.state }}</span></td>
           <td class="vm-addresses" :data-label="t('ipAddresses')">{{ vm.ip_addresses?.join(', ') || '—' }}</td>
           <td data-label="vCPU">{{ vm.current_vcpus || vm.vcpus }}</td>

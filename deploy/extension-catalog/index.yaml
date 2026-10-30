@@ -6,6 +6,1638 @@ entries:
     description: Rancher UI extension for importing and inventorying existing KVM
       hosts
     type: application
+    version: 0.7.140
+    appVersion: 0.7.140
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-30T16:22:21.813988Z'
+    digest: 9f57a0703fd8eab481738a455e774e0a9c86fa09447d472773f907f4d392e4ac
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.140.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.139
+    appVersion: 0.7.139
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-30T15:59:48.746197Z'
+    digest: 5669e902c9472d9baa2b4d5c2b8bc7fa174d87701131cffa43eb19e0b3b472d0
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.139.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.138
+    appVersion: 0.7.138
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-30T15:31:00.985220Z'
+    digest: 580f97ac3989012dfa5c538f1cfd42a18e9f2c1e474c6d6582ed4612539f6b0b
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.138.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.137
+    appVersion: 0.7.137
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-30T15:24:16.985418Z'
+    digest: e566dc41cd45fc55f01fb22b8e5729bd574a89fb977cb4d5c310380197464935
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.137.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.136
+    appVersion: 0.7.136
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-30T15:04:13.422392Z'
+    digest: 945b380b4c239f54eb3b2c6f86de794fc9c74067551d5a6d740c0df2db525096
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.136.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.135
+    appVersion: 0.7.135
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-30T14:57:35.588022Z'
+    digest: 5b5c11bee0f39607379abae9def5890447cd8f612b7dbca5748273e73e8aac07
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.135.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.134
+    appVersion: 0.7.134
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-30T14:51:01.768879Z'
+    digest: 634f33b8e2f035e89fae9b21b85b48c3e312f05455b2982394c2f4d8cd216099
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.134.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.133
+    appVersion: 0.7.133
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-30T14:47:51.979331Z'
+    digest: 929b8b35d70e846174e36bde62808700339cafb083d4dd3c7ff9bf306a800de4
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.133.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.132
+    appVersion: 0.7.132
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-30T14:43:11.232632Z'
+    digest: 2774bb4e7f8a27b73b3561798d3645d589e39177f08505b95191063ea139d2d7
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.132.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.131
+    appVersion: 0.7.131
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-30T14:40:39.794664Z'
+    digest: 4f9613f7eefe67737fd69b6e6a09e257938f706e37cfd0f3b8bded04d0a8e282
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.131.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.130
+    appVersion: 0.7.130
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-30T14:38:58.525152Z'
+    digest: c5ecfcca4bf15fab75f690641a73606a4b87cc528b5b94fc0ec6bd479c88c315
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.130.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.129
+    appVersion: 0.7.129
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-30T14:27:03.045219Z'
+    digest: 114918a58c23dadd4498df266f285b3f675065650a1f8c4ab563d9016fbba943
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.129.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.128
+    appVersion: 0.7.128
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-30T14:21:54.038775Z'
+    digest: 34cf96249fc40f676948ef942860f18abc66d33aa1bd6a12b8fb8c114c29bb6f
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.128.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.127
+    appVersion: 0.7.127
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-30T13:58:41.318382Z'
+    digest: e64915b2b9c11903b39db98481c715562510ee12ff943738cb2cb90c40ca778f
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.127.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.126
+    appVersion: 0.7.126
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-30T13:19:35.132286Z'
+    digest: e88d5bd4c7cfdf416daea9b6b726c1f4bd649eb1d5cca6ab83583d559bdc4e27
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.126.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.125
+    appVersion: 0.7.125
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-23T17:01:55.828884Z'
+    digest: c4d23ec31fad89c62809c33a21dfa9695a194dbfc29416663288ac3782fda0dd
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.125.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.121
+    appVersion: 0.7.121
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-20T16:46:16.976251Z'
+    digest: 1da02fb23998dd9758cbcfb30bb7c45d0dd74294a8e249bc551c99cca3eae973
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.121.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.120
+    appVersion: 0.7.120
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-20T12:21:20.645251Z'
+    digest: a8fb3063c6adc12f2ae5c9ae57677c1d30caa2f290d7b9af0a96b8c713245232
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.120.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.119
+    appVersion: 0.7.119
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-20T12:16:46.214589Z'
+    digest: eef1e0365fd9623f447d99356f0d97c08b31457f9876881e1f905b52222170f9
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.119.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.118
+    appVersion: 0.7.118
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-20T12:13:22.645721Z'
+    digest: 035b607b764a66738b9859c882be968c00f8f7786da9d5c7e1b68b72c7d8a6f8
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.118.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.117
+    appVersion: 0.7.117
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-20T12:12:04.532930Z'
+    digest: a208dbb9ad3862ff2f83f11155247542530b28d61f0638034933cb9a5292b096
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.117.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.116
+    appVersion: 0.7.116
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-20T12:02:00.588033Z'
+    digest: 6144e8d5c350413501ab848a3a127e5ca7bb390323ff0a2fc681c28c604dccb9
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.116.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.115
+    appVersion: 0.7.115
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-20T11:55:52.369150Z'
+    digest: 9dd886142d9c9c08c18fd053e9cd760f2923f963d2f6350b5c075bf6f21383a0
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.115.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.114
+    appVersion: 0.7.114
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-20T11:52:43.518018Z'
+    digest: cb889a52690688ca28d7780a4697527bd122a87e5fcc22eb2c79cd9e81670d6e
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.114.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.113
+    appVersion: 0.7.113
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-20T11:47:37.248221Z'
+    digest: d74548a99536fc21042e3438da32499a1c605473078099976111caf652170f44
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.113.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.112
+    appVersion: 0.7.112
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-19T22:02:07.567249Z'
+    digest: a64289607fc579f0a6fa08e8989052772cad8900967064015021fe4d7c9e530e
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.112.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.111
+    appVersion: 0.7.111
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-19T21:58:02.891991Z'
+    digest: 1e405dc3fe4b4093741d29ec694d0717bbd09ff28c387844b502da7d14c76c5e
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.111.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.110
+    appVersion: 0.7.110
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-19T21:31:00.926415Z'
+    digest: 73bf0b329412f034bb229ee37f46d2386f226ab8f0505f775fc112b30450259a
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.110.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.109
+    appVersion: 0.7.109
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-19T20:56:07.944066Z'
+    digest: 5343076ec48848ad4a7f9e059616630ed4a3c83537987353cf86866df1f54504
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.109.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.108
+    appVersion: 0.7.108
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-19T20:46:38.256075Z'
+    digest: 4669dd6581c5c21ccb2027b00041dd24325a5bec15be70e2d37e7fd4cbb4a937
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.108.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.107
+    appVersion: 0.7.107
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-19T20:40:16.121232Z'
+    digest: a3b80c41edcc43ef1258487868ef2dc4a49d0f266c1fec12df5ca7ca29f51fd4
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.107.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.106
+    appVersion: 0.7.106
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-19T20:28:28.396176Z'
+    digest: 34102f7a6fa8abdbd256ab17f914bdc6d488bd37a8f164b768c91b8790562962
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.106.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.105
+    appVersion: 0.7.105
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-19T20:24:34.262889Z'
+    digest: 7f66018dc2fddc1b6fad27a87e2bf503d44963098737b14be58c731789cdfde1
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.105.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.104
+    appVersion: 0.7.104
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-19T20:16:43.714572Z'
+    digest: 0463f57c9e758f34eaf6b2d1615049c41704bdbe6c59567101dada6a0258e223
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.104.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.103
+    appVersion: 0.7.103
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-19T19:48:30.981556Z'
+    digest: 1435985bfa82748cf682014926d7c38a9e57fb2cd9aa1ebcc5919b414ebb0b73
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.103.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.102
+    appVersion: 0.7.102
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-19T19:17:22.150966Z'
+    digest: 030130acd0379c52778bd2a3ffedbcd216b24c42644e6919849d2bf665b2df90
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.102.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.101
+    appVersion: 0.7.101
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-19T19:16:04.372917Z'
+    digest: 9b58f9d5c06ad2a453e9a98857cd7abb5a0b3e5a3c4a3d291730905efad55c70
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.101.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.100
+    appVersion: 0.7.100
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-19T19:03:31.990517Z'
+    digest: d8ac3ef4415e3dc8874d530e210ad3dd1537e102a126976b36a15aa41b197be7
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.100.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.99
+    appVersion: 0.7.99
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-19T18:54:16.651030Z'
+    digest: 76f370c13069011c7f2a007339eef2788a9fcd164e6cfb7321657a098fc2ef82
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.99.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.98
+    appVersion: 0.7.98
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-19T18:53:31.773369Z'
+    digest: 71af6dcebbd5f3d9fe2adc8e9b3cb9b6c2db90f70e0c19dc45f81af1aea82191
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.98.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.97
+    appVersion: 0.7.97
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-19T18:46:07.384692Z'
+    digest: bfd5fead12edff524ba6bc108fde10cc59809ef11a93651e3a783ffbe3d1a0a0
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.97.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.96
+    appVersion: 0.7.96
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-19T18:34:20.148006Z'
+    digest: e6545bec974389fab251aae761df4217f815a7b0be94a9fca622c9518f3dc13e
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.96.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.95
+    appVersion: 0.7.95
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-19T18:31:50.744026Z'
+    digest: 57f609b128ccd43e71778013e6f058f20785150ea1193da733bfd8f850cae585
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.95.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.94
+    appVersion: 0.7.94
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-19T18:13:22.626274Z'
+    digest: b6615bd00ffa2adb776bb6241786a0b427c66833b1a793d477c0cb05eb6e5dc1
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.94.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.93
+    appVersion: 0.7.93
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-19T18:10:34.193595Z'
+    digest: 88d5a1836d02254927992244c244e573193c27d3411ec2b196e916974d698fa7
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.93.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.92
+    appVersion: 0.7.92
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-19T18:09:56.088755Z'
+    digest: 73eef23c0bb03eafed7b29de5c18fc4d8fc02c1503203d99d9375a287fb43a10
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.92.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.91
+    appVersion: 0.7.91
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-19T18:09:02.804086Z'
+    digest: d052260c62ab1d70e4830f9777f4ed57f83c481a9876ffc9e4895df30a73c2e8
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.91.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.90
+    appVersion: 0.7.90
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-19T17:36:31.323700Z'
+    digest: 0cb0e44e74041db350243df48894e5d2551af04a317d1a9d66ef0ed93814f85b
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.90.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.89
+    appVersion: 0.7.89
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-19T17:24:55.245849Z'
+    digest: a242ba899c3e7bb8349d5a992e16e63fd6d3dc7b9efa106819df832fedbd31b3
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.89.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.88
+    appVersion: 0.7.88
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-19T17:10:01.430998Z'
+    digest: 6ef052c6275419585255f7312a06cc9ab4b2f0e1d572619a68c27c90a19e476f
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.88.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.87
+    appVersion: 0.7.87
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-19T16:58:43.716716Z'
+    digest: 6baa6268c017b7b74995fb05a38c5979da825b32334c9b64279102ed660bc968
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.87.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.86
+    appVersion: 0.7.86
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-19T16:55:55.927699Z'
+    digest: dbba215e55b4dacc3a5537210b1c120392e97cd76a3ad78bf3c731bdb517b4c5
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.86.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.85
+    appVersion: 0.7.85
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-19T16:34:32.441728Z'
+    digest: c4598694f5287a80ff6e548fca3379ad77a07788bd65dd1c05ab323bd59440e1
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.85.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.84
+    appVersion: 0.7.84
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-19T16:32:18.179389Z'
+    digest: 23ac71889258daf3acd8a05a79d050387cdb35eaefc15b35390123c454186e25
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.84.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.83
+    appVersion: 0.7.83
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-19T16:21:59.099392Z'
+    digest: 2fcfabf969bb3cab3ed146a0de2c520050a9e2db761d5945d104d71e2f495978
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.83.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.82
+    appVersion: 0.7.82
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-19T16:20:04.825320Z'
+    digest: 0c1c8ced659cd27b2e42a53599017dc985ed088c72bec7133218e6018f0d70ef
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.82.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.81
+    appVersion: 0.7.81
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-19T16:05:59.593261Z'
+    digest: ec069d74905c76ebc9a044a0137ea1a6b5f4c464c990b31e0ab5419cceb9cd6a
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.81.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.80
+    appVersion: 0.7.80
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-19T15:40:18.740707Z'
+    digest: c7971fc1ef81ff743cb41910f21a19adae6a058676fa4afad504db7992578b4c
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.80.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.79
+    appVersion: 0.7.79
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-19T15:27:56.441052Z'
+    digest: cce93ef731ee5de262a7fdc0e9859edd96054fc2d5307c96b3745838104dadc2
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.79.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.78
+    appVersion: 0.7.78
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-19T14:41:30.040505Z'
+    digest: 4a966a5a182506fb01d9dced43c68dea7907a5ac7abe657f31ca4f4a661b6d02
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.78.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.77
+    appVersion: 0.7.77
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-19T14:37:15.325959Z'
+    digest: 319aa62c8a6ed419b4ab5ea8b5cfb3472ac24cf3e4acdf7d95de2cd883aef357
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.77.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.76
+    appVersion: 0.7.76
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-19T14:36:04.595824Z'
+    digest: 4b76080a8cec2f9b47c2080f914104883ab178229dc25e4dc00cafed67dbf6ed
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.76.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.75
+    appVersion: 0.7.75
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-19T14:17:06.923009Z'
+    digest: bffa9719b34dc5b5dff4adfd7b42051f3175b9883c624c38766f07baf3cd44ba
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.75.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.74
+    appVersion: 0.7.74
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-19T13:57:53.522487Z'
+    digest: 9776377133c6150308a5d9cee76cf4f25bc0648bf46da403427583e72c773060
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.74.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.73
+    appVersion: 0.7.73
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-19T13:14:01.781626Z'
+    digest: d4a9a1c0c03140cbb82b3ce8393a1a8ccb61f4b40ea7e53dddfb17a433c882df
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.73.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.72
+    appVersion: 0.7.72
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-19T12:33:24.733394Z'
+    digest: 3185c07d936bf8bfe4beb74a474d128baf377f2374fa835b16ab229f8f2b84cd
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.72.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.71
+    appVersion: 0.7.71
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-19T12:18:18.263114Z'
+    digest: a934cf4138ac9e3e3e169b806fea03674e755501da57af0cddbb2097eb24a8d7
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.71.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.69
+    appVersion: 0.7.69
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-18T23:59:29.688569Z'
+    digest: c85a8f0c70bef3b67a44b820aa533ebbfef44a1f5f8a810eb35217bf33b50be0
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.69.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.68
+    appVersion: 0.7.68
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-18T23:54:20.648828Z'
+    digest: 57774637cb00f665bb4ae1f8fa8dd470933209b95e10ac2158420e4ffe98bc49
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.68.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.67
+    appVersion: 0.7.67
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-18T23:53:01.730324Z'
+    digest: 032c73035ac2e9bacb413cedab4db4766048f27ee975edf992d37835dff2d07a
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.67.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.66
+    appVersion: 0.7.66
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-18T23:47:43.331755Z'
+    digest: 67a53b369ea3445dd532943b0c729c44822ffc84650da85f53db53eeb7170767
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.66.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.65
+    appVersion: 0.7.65
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-18T23:44:25.528676Z'
+    digest: 44d46009d9439457b032c72792a29d3edd77aaef0cb8b573599af6657687b4ed
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.65.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.64
+    appVersion: 0.7.64
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-18T23:40:07.724614Z'
+    digest: c4699e4b8855e0ef165edd09862e9d2748a2be12904779f94592e71337ba0fc4
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.64.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.63
+    appVersion: 0.7.63
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-18T23:37:58.541951Z'
+    digest: ec053804712a691e66ad1dbd9bea197fce47b01c90c87ec19a42bf73d666beb3
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.63.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.62
+    appVersion: 0.7.62
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-18T23:27:32.539007Z'
+    digest: 287abc325182f598e4fa83fb727c5978132070d362e01a833bd22dd2a28a35f0
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.62.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.61
+    appVersion: 0.7.61
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-18T20:16:01.818747Z'
+    digest: a8e89545e49d874476df28eff71183125cfccfc45f8387d2cfee9c5c5e1749d6
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.61.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.60
+    appVersion: 0.7.60
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-18T20:01:42.573131Z'
+    digest: b10eca77dd667ec8956127ecba554ce2429699e4fc433d5fe2f422e9febbaf51
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.60.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.59
+    appVersion: 0.7.59
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-18T19:32:29.010001Z'
+    digest: 3867aaca1e7c79e2a7a29d1cfdd0bb5d45e121491067ff39077c960a09c52aee
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.59.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.58
+    appVersion: 0.7.58
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-18T15:52:03.650107Z'
+    digest: 16bb927e937011695447fd673a7a8bfae3a0c4f231e51965f382ab8e0dc90cf4
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.58.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.57
+    appVersion: 0.7.57
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-18T14:56:03.444727Z'
+    digest: a36cc670dfae82745bce894983c32b450099405d8911c29a28e382639b21ed87
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.57.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.56
+    appVersion: 0.7.56
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-18T14:54:07.246396Z'
+    digest: 8f5755477247913765a39bd12c432c8c6c4e52d31702d81af81b3a9ba8cc0b42
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.56.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.54
+    appVersion: 0.7.54
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-18T14:47:41.890062Z'
+    digest: 733ef0a43dbfb2b698efc4cc292b860bd980ef3b88515e1a1853debf88151907
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.54.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.53
+    appVersion: 0.7.53
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-18T14:46:47.277391Z'
+    digest: dd9d20aa014babe8fc2da338058a49641cf6db9f4082fec76cd585e019ec3cc2
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.53.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.52
+    appVersion: 0.7.52
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-18T14:44:14.353990Z'
+    digest: dc64f254c13245966c6741568e0bfdf0933cc3080ef980b3601df9d632656b8a
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.52.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.51
+    appVersion: 0.7.51
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-18T14:43:33.060417Z'
+    digest: 534b76749157084cb6b8e0f1d498d2a028908d5835a6e65505e6c19523f0eb7b
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.51.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.50
+    appVersion: 0.7.50
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-18T14:42:00.977462Z'
+    digest: acf9e6b3ba701c49c18f7860e53c77e15e0087c1f524682b8035ecb49082dfb8
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.50.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.49
+    appVersion: 0.7.49
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-18T14:30:40.615527Z'
+    digest: 02a4d7250638b58306d131abe60fa8a705ef0c02939f6ff4254279bd6e80d91b
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.49.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.48
+    appVersion: 0.7.48
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-18T14:29:54.305877Z'
+    digest: 7e94ea81d1d2e3959ba0c869c5cfc691c4d04c0966e46ea48233c9c9fcb96707
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.48.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.47
+    appVersion: 0.7.47
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-18T14:21:34.761375Z'
+    digest: a4b912be6d98950a7bc14b0fe2e45f7ad3894526227a64a17593a1e65c63e90e
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.47.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.46
+    appVersion: 0.7.46
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-18T14:16:29.854266Z'
+    digest: d15a77f402a12e8ca3239f4248a5ec951a905a250db15dfec2c97f20d423e1cd
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.46.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.45
+    appVersion: 0.7.45
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-18T14:14:15.616104Z'
+    digest: 5810368a2b3817ad22cbb6da77c88b867ac464eb57ab28ec22772aa3bf58a81e
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.45.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.44
+    appVersion: 0.7.44
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-18T14:00:35.413230Z'
+    digest: 015f463ba934240857bf1159d1ba90282f3396771d5f24ebfa2f122462556d66
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.44.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.43
+    appVersion: 0.7.43
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-18T13:18:46.549716Z'
+    digest: 9698d7c309101361f624d2aac5aedc1babf8c004cd22d4c917ae534bf9f26fb8
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.43.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.42
+    appVersion: 0.7.42
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-18T11:32:22.501729Z'
+    digest: fbd4a458e30e245a045e000fa87aa55b8001dfc39e085630737d2902eeb830d0
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.42.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.40
+    appVersion: 0.7.40
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-18T11:14:42.964700Z'
+    digest: ad86584be6e76a1128180d9fa6cee11f268ad0b3d261874bb3eb0003a249f98c
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.40.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
+    version: 0.7.38
+    appVersion: 0.7.38
+    annotations:
+      catalog.cattle.io/display-name: KVM
+      catalog.cattle.io/ui-component: plugins
+      catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/rancher-version: '>=2.15.0'
+      catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
+    created: '2026-10-18T10:47:22.325837Z'
+    digest: bf5cd4122902d693e4baeb3b831fc203dc290e55fbce0b35c099e4a5e8e61b79
+    urls:
+    - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.38.tgz
+  - apiVersion: v2
+    name: kvm-manager
+    description: Rancher UI extension for importing and inventorying existing KVM
+      hosts
+    type: application
     version: 0.7.16
     appVersion: 0.7.16
     annotations:
@@ -18,4 +1650,4 @@ entries:
     digest: a4ec56b83dbb954f8a40572c1cbe78d4ee6aa0977aaadcc615b4e62c96ed3bca
     urls:
     - https://neuhauss.github.io/kvm-import/kvm-manager-0.7.16.tgz
-generated: '2026-10-17T15:11:41.585206Z'
+generated: '2026-10-30T16:22:21.814424Z'

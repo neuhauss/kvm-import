@@ -4,7 +4,7 @@ import Hosts from './pages/Hosts.vue';
 import Clusters from './pages/Clusters.vue';
 import Deploy from './pages/Deploy.vue';
 const Backups = defineAsyncComponent(() => import('./pages/Backups.vue'));
-import CloudNative from './pages/CloudNative.vue';
+const CloudNative = defineAsyncComponent(() => import(/* webpackChunkName: "kvm-cloud-native" */ './pages/CloudNative.vue'));
 const ManagedKvmClusters = defineAsyncComponent(() => import('./pages/ManagedKvmClusters.vue'));
 import './assets/kvm.css';
 

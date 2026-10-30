@@ -3,10 +3,10 @@ import { IPlugin } from '@shell/core/types';
 import { defineAsyncComponent } from 'vue';
 import Hosts from './pages/Hosts.vue';
 import Clusters from './pages/Clusters.vue';
-import CloudNative from './pages/CloudNative.vue';
 import Deploy from './pages/Deploy.vue';
-const ManagedKvmClusters = defineAsyncComponent(() => import('./pages/ManagedKvmClusters.vue'));
 const Backups = defineAsyncComponent(() => import('./pages/Backups.vue'));
+const ManagedKvmClusters = defineAsyncComponent(() => import('./pages/ManagedKvmClusters.vue'));
+const CloudNative = defineAsyncComponent(() => import(/* webpackChunkName: "kvm-cloud-native" */ './pages/CloudNative.vue'));
 import './assets/kvm.css';
 
 // Init the package

@@ -1,10 +1,10 @@
 <template>
   <div class="cloud-native-layout-frame">
   <div class="cloud-native-page">
-    <div class="breadcrumbs"><button @click="backToHosts">KVM</button><span>›</span><button @click="backToHosts">{{ t('hosts.title') }}</button><span>›</span><strong>{{ host?.hostname || host?.name || t('cloudNative.title') }}</strong></div>
+    <div class="breadcrumbs"><button @click="backToHosts">KVM</button><span>›</span><button @click="backToHosts">{{ t('hosts.title') }}</button><span>›</span><strong>{{ host?.hostname || host?.name || t('cloudNative.title') }}</strong><template v-if="showVmCreateForm"><span>›</span><strong>{{ t('cloudNative.createVm') }}</strong></template></div>
     <header class="page-header">
-      <div class="title-block"><span class="eyebrow">{{ t('cloudNative.title') }}</span><h1>{{ host ? host.hostname || host.name : t('cloudNative.title') }}</h1><p class="muted">{{ t('cloudNative.subtitle') }}</p><div v-if="inventoryUpdatedAt" class="freshness-list"><small class="updated-at" :class="{ stale: !!inventoryError || inventoryIsStale }">{{ t(inventoryError ? 'cloudNative.inventoryUpdateFailed' : inventoryIsStale ? 'cloudNative.inventoryStale' : 'cloudNative.inventoryUpdatedAt', { time: dateLabel(inventoryUpdatedAt) }) }}</small><small v-if="metricsUpdatedAt" class="updated-at" :class="{ stale: !!metricsError || metricsIsStale }">{{ t(metricsError ? 'cloudNative.metricsUpdateFailed' : metricsIsStale ? 'cloudNative.metricsStale' : 'cloudNative.metricsUpdatedAt', { time: dateLabel(metricsUpdatedAt) }) }}</small></div></div>
-      <div v-if="host" class="toolbar">
+      <div class="title-block"><span class="eyebrow">{{ t('cloudNative.title') }}</span><h1>{{ showVmCreateForm ? t('cloudNative.createVm') : (host ? host.hostname || host.name : t('cloudNative.title')) }}</h1><p class="muted">{{ showVmCreateForm ? t('cloudNative.createVmHelp') : t('cloudNative.subtitle') }}</p><div v-if="inventoryUpdatedAt && !showVmCreateForm" class="freshness-list"><small class="updated-at" :class="{ stale: !!inventoryError || inventoryIsStale }">{{ t(inventoryError ? 'cloudNative.inventoryUpdateFailed' : inventoryIsStale ? 'cloudNative.inventoryStale' : 'cloudNative.inventoryUpdatedAt', { time: dateLabel(inventoryUpdatedAt) }) }}</small><small v-if="metricsUpdatedAt" class="updated-at" :class="{ stale: !!metricsError || metricsIsStale }">{{ t(metricsError ? 'cloudNative.metricsUpdateFailed' : metricsIsStale ? 'cloudNative.metricsStale' : 'cloudNative.metricsUpdatedAt', { time: dateLabel(metricsUpdatedAt) }) }}</small></div></div>
+      <div v-if="host && !showVmCreateForm" class="toolbar">
         <span class="state" :class="host.status"><i></i>{{ statusLabel(host.status) }}</span>
         <span v-if="permissions.accessLevel" class="permission-badge">{{ t('cloudNative.accessLevelLabel', { level: t(`cloudNative.role_${permissions.accessLevel}`) }) }}</span>
         <form v-if="permissions.canAdministerHost" :action="cockpitUrl(host)" method="post" target="_blank"><button class="btn role-secondary" type="submit">{{ t('cloudNative.openCockpit') }}</button></form>
@@ -12,22 +12,22 @@
       </div>
     </header>
 
-    <div v-if="error" class="banner error" role="alert">{{ error }}</div>
+    <div v-if="error" class="banner error actionable-error" role="alert"><span>{{ error }}</span><button type="button" class="btn role-secondary btn-sm" :disabled="loading" @click="load">{{ loading ? t('cloudNative.updating') : t('cloudNative.retryUpdate') }}</button></div>
     <div v-if="busy" class="banner progress operation-status" role="status" aria-live="polite"><div class="operation-status-copy"><strong>{{ operationInProgressLabel }}</strong><span>{{ t('cloudNative.operationInProgress', { operation: operationLabelForBusy, host: host?.hostname || host?.name || t('cloudNative.title') }) }}</span><small>{{ t(`cloudNative.operationPhase_${operationPhase || 'running'}`) }} · {{ t('cloudNative.operationElapsed', { time: elapsedLabel }) }}</small></div><span class="operation-progress-track" aria-hidden="true"><i></i></span></div>
     <div v-if="loading && !inventory" class="loading">{{ t('cloudNative.queryHost') }}</div>
     <template v-else-if="inventory">
-      <div class="cluster-summary">
+      <div v-if="!showVmCreateForm" class="cluster-summary">
         <article class="summary-card host-card"><div><span>{{ t('cloudNative.host') }}</span><strong>{{ inventory.system.hostname }}</strong><small>{{ inventory.system.os }} · {{ inventory.system.kernel }}</small></div><span class="state ready"><i></i>{{ t('cloudNative.connected') }}</span></article>
         <article class="summary-card"><div class="card-top"><span>{{ t('cloudNative.vms') }}</span></div><strong class="metric">{{ inventory.vms.length }}</strong><small>{{ t('cloudNative.runningStopped', { running: runningVmCount, stopped: inventory.vms.length - runningVmCount }) }}</small><div class="metric-track"><i :style="{ width: vmRunningPercent + '%' }"></i></div></article>
         <article class="summary-card"><div class="card-top"><span>{{ t('cloudNative.hostCpu') }}</span></div><strong class="metric">{{ inventory.system.cpu_count }} <small>{{ t('cloudNative.cores') }}</small></strong><small>{{ t('cloudNative.loadAverage') }} {{ inventory.system.load_average.map((n) => n.toFixed(2)).join(' · ') }}</small><div class="metric-track"><i :style="{ width: cpuLoadPercent + '%' }"></i></div></article>
         <article class="summary-card"><div class="card-top"><span>{{ t('cloudNative.memory') }}</span></div><strong class="metric">{{ memoryLabel(inventory.system.memory_total_kib) }}</strong><small>{{ memoryLabel(inventory.system.memory_total_kib - inventory.system.memory_available_kib) }} {{ t('cloudNative.inUse') }}</small><div class="metric-track"><i :style="{ width: memoryUsedPercent + '%' }"></i></div></article>
       </div>
-      <div class="health-summary" :class="{ 'health-warning': failedServiceCount || criticalFilesystemCount }">
+      <div v-if="!showVmCreateForm" class="health-summary" :class="{ 'health-warning': failedServiceCount || criticalFilesystemCount }">
         <span class="health-indicator" :class="failedServiceCount || criticalFilesystemCount ? 'warning' : 'healthy'"><i></i>{{ failedServiceCount || criticalFilesystemCount ? t('cloudNative.attentionRequired') : t('cloudNative.hostHealthy') }}</span>
         <span>{{ t('cloudNative.failedServicesShort', { count: failedServiceCount }) }}</span><span>{{ t('cloudNative.fullFilesystems', { count: criticalFilesystemCount }) }}</span>
       </div>
 
-      <div class="admin-layout">
+      <div v-if="!showVmCreateForm" class="admin-layout">
       <label class="mobile-section-picker">{{ t('cloudNative.adminAreas') }}<select class="search-input" :value="activeTab" @change="selectTab(($event.target as HTMLSelectElement).value)"><optgroup v-for="group in navGroups" :key="group.id" :label="t(`cloudNative.group_${group.id}`)"><option v-for="tab in availableTabs.filter((item) => item.group === group.id)" :key="tab.id" :value="tab.id">{{ t(`cloudNative.${tab.id}`) }}</option></optgroup></select></label>
       <svg class="icon-sprite" aria-hidden="true" focusable="false"><symbol id="kvm-icon-overview" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol><symbol id="kvm-icon-logs" viewBox="0 0 24 24"><path d="M5 6h14M5 12h14M5 18h14M2 6h.01M2 12h.01M2 18h.01"/></symbol><symbol id="kvm-icon-storage" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></symbol><symbol id="kvm-icon-network" viewBox="0 0 24 24"><circle cx="5" cy="12" r="3"/><circle cx="19" cy="5" r="3"/><circle cx="19" cy="19" r="3"/><path d="m8 11 8-5M8 13l8 5"/></symbol><symbol id="kvm-icon-vms" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8m-4-4v4M9 8l6 3-6 3z"/></symbol><symbol id="kvm-icon-accounts" viewBox="0 0 24 24"><circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0m2-12h5m-2.5-2.5v5"/></symbol><symbol id="kvm-icon-services" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="m19 14 2 1-2 4-2-1-2 1v2H9v-2l-2-1-2 1-2-4 2-1v-3l-2-1 2-4 2 1 2-1V4h6v2l2 1 2-1 2 4-2 1z"/></symbol><symbol id="kvm-icon-repositories" viewBox="0 0 24 24"><path d="M5 4h14v16H5zM8 8h8m-8 4h8m-8 4h5"/></symbol><symbol id="kvm-icon-selinux" viewBox="0 0 24 24"><path d="m12 3 8 4v5c0 5-3.4 8-8 9-4.6-1-8-4-8-9V7z"/><path d="m9 12 2 2 4-4"/></symbol><symbol id="kvm-icon-subscriptions" viewBox="0 0 24 24"><path d="M4 5h16v14H4zM8 9h8m-8 4h8m-8 3h5"/></symbol><symbol id="kvm-icon-terminal" viewBox="0 0 24 24"><path d="m4 6 6 6-6 6m8 0h8"/></symbol></svg>
       <nav class="admin-tabs" :aria-label="t('cloudNative.adminAreas')">
@@ -37,9 +37,11 @@
         </section>
       </nav>
       <main class="admin-content">
+      <div v-if="activeFilterCount" class="active-filter-tools" role="status"><span>{{ t('cloudNative.activeFilters', { count: activeFilterCount }) }}</span><button type="button" class="btn role-link btn-sm" @click="clearCurrentFilters">{{ t('cloudNative.clearFilters') }}</button></div>
       <div v-if="inventory.errors.length" class="banner warning">{{ t('cloudNative.loadError') }}: {{ inventory.errors.join('; ') }}</div>
       <div v-if="actionError" class="banner error" role="alert">{{ actionError }}</div>
-      <div v-else-if="actionSuccess" class="banner success" role="status">{{ t('cloudNative.actionSucceeded') }}</div>
+      <div v-else-if="actionSuccess" class="banner success" role="status" aria-live="polite">{{ t('cloudNative.actionSucceeded') }}</div>
+
       <section v-if="activeTab === 'overview'" class="section-panel">
         <div class="section-heading"><div><span class="eyebrow">{{ t('cloudNative.systemSummary') }}</span><h2>{{ t('cloudNative.overview') }}</h2></div><span class="updated-at">{{ t('cloudNative.uptime') }} {{ uptimeLabel(inventory.system.uptime_seconds) }}</span></div>
         <div class="overview-grid">
@@ -53,12 +55,13 @@
           <div v-else-if="!activityEvents.length" class="empty-state compact-empty">{{ t('cloudNative.noRecentActivity') }}</div>
           <ol v-else class="activity-list activity-scroll" tabindex="0" :aria-label="t('cloudNative.recentActivity')"><li v-for="event in activityEvents" :key="`${event.occurred_at}-${event.action}-${event.target}`"><span class="activity-result" :class="event.outcome === 'success' ? 'ready' : 'unreachable'">{{ t(event.outcome === 'success' ? 'cloudNative.activitySucceeded' : 'cloudNative.activityFailed') }}</span><div><strong>{{ activityActionLabel(event.action) }}</strong><small>{{ activityTargetLabel(event.target) }} · {{ dateLabel(event.occurred_at) }}</small></div></li></ol>
         </section>
-        <div class="section-heading vm-heading"><div><span class="eyebrow">LIBVIRT</span><h2>{{ t('cloudNative.vms') }}</h2></div><button class="text-button" @click="selectTab('vms')">{{ t('cloudNative.fullInventory') }}</button></div>
-        <VmTable :vms="inventory.vms.slice(0, 5)" :busy="busy" :can-operate="permissions.canOperateVms" @action="actOnVm" @details="showVmDetails" @snapshots="openVmSnapshots" @configure="configureVm" @autostart="setAutostart" />
+        <section class="vm-provisioning-guide"><div><span class="eyebrow">{{ t('cloudNative.vmProvisioning') }}</span><h3>{{ t('cloudNative.createVm') }}</h3><p>{{ t('cloudNative.vmProvisioningGuide') }}</p><ol><li>{{ t('cloudNative.vmWizardCompute') }}</li><li>{{ t('cloudNative.vmWizardResources') }}</li><li>{{ t('cloudNative.vmWizardReview') }}</li></ol></div><button v-if="permissions.canOperateVms" class="btn role-primary" :disabled="busy !== ''" @click="openVmCreateForm">{{ t('cloudNative.createVm') }}</button></section>
+        <div class="section-heading vm-heading"><div><span class="eyebrow">LIBVIRT</span><h2>{{ t('cloudNative.vms') }} <span class="count-badge">{{ inventory.vms.length }}</span></h2></div><button class="text-button" @click="selectTab('vms')">{{ t('cloudNative.fullInventory') }}</button></div>
+        <VmTable :vms="inventory.vms" :busy="busy" :can-operate="permissions.canOperateVms" @action="actOnVm" @details="showVmDetails" @snapshots="openVmSnapshots" @configure="configureVm" @autostart="setAutostart" />
       </section>
 
       <section v-else-if="activeTab === 'snapshots'" class="section-panel">
-        <div class="section-heading"><div><span class="eyebrow">LIBVIRT</span><h2>{{ t('cloudNative.snapshots') }}</h2><p class="muted">{{ t('cloudNative.snapshotsLibraryHelp') }}</p></div><div class="snapshot-library-toolbar"><select v-if="permissions.canOperateVms" v-model="snapshotVmTarget" class="search-input" :aria-label="t('cloudNative.vmName')"><option value="">{{ t('cloudNative.selectVm') }}</option><option v-for="vm in inventory.vms" :key="vm.name" :value="vm.name">{{ vm.name }}</option></select><div class="row-actions"><button class="btn role-secondary" :disabled="snapshotsLoading" @click="loadSnapshotLibrary">{{ snapshotsLoading ? t('cloudNative.updating') : t('cloudNative.refreshSnapshots') }}</button><button v-if="permissions.canOperateVms" class="btn role-primary" :disabled="!snapshotVmTarget" @click="openSnapshotVm(snapshotVmTarget)">{{ t('cloudNative.createSnapshot') }}</button></div></div></div>
+        <div class="section-heading snapshot-section-heading"><div><span class="eyebrow">LIBVIRT</span><h2>{{ t('cloudNative.snapshots') }}</h2><p class="muted">{{ t('cloudNative.snapshotsLibraryHelp') }}</p></div><div class="snapshot-library-toolbar"><select v-if="permissions.canOperateVms" v-model="snapshotVmTarget" class="search-input" :aria-label="t('cloudNative.vmName')"><option value="">{{ t('cloudNative.selectVm') }}</option><option v-for="vm in inventory.vms" :key="vm.name" :value="vm.name">{{ vm.name }}</option></select><div class="row-actions"><button class="btn role-secondary" :disabled="snapshotsLoading" @click="loadSnapshotLibrary">{{ snapshotsLoading ? t('cloudNative.updating') : t('cloudNative.refreshSnapshots') }}</button><button v-if="permissions.canOperateVms" class="btn role-primary snapshot-create-action" :disabled="!snapshotVmTarget" @click="openSnapshotVm(snapshotVmTarget)">{{ t('cloudNative.createSnapshot') }}</button></div></div></div>
         <div v-if="permissions.canOperateVms && snapshotLibrary.length" class="retention-panel">
           <div><strong>{{ t('cloudNative.snapshotRetention') }}</strong><p class="muted">{{ t('cloudNative.snapshotRetentionHelp') }}</p></div>
           <label>{{ t('cloudNative.keepLatest') }}<select v-model.number="snapshotKeepLast" class="search-input"><option :value="2">2</option><option :value="3">3</option><option :value="5">5</option><option :value="10">10</option></select></label>
@@ -71,36 +74,33 @@
         </div>
         <div v-if="snapshotsError" class="banner error" role="alert">{{ snapshotsError }}</div>
         <div v-if="snapshotsLoading && !snapshotLibrary.length" class="loading">{{ t('cloudNative.loadingSnapshots') }}</div><div v-else-if="!snapshotLibrary.length" class="empty-state">{{ t('cloudNative.noSnapshots') }}</div>
-        <div v-else class="table-wrap snapshot-library"><table class="table"><thead><tr><th>{{ t('cloudNative.vmName') }}</th><th>{{ t('cloudNative.snapshotVersion') }}</th><th>{{ t('cloudNative.snapshotName') }}</th><th>{{ t('cloudNative.snapshotCreated') }}</th><th>{{ t('cloudNative.stateLabel') }}</th><th>{{ t('hosts.action') }}</th></tr></thead><tbody><tr v-for="snapshot in snapshotLibrary" :key="`${snapshot.vm_name}/${snapshot.name}`"><td><button class="resource-name" @click="openSnapshotVm(snapshot.vm_name || '')">{{ snapshot.vm_name }}</button></td><td><span class="snapshot-version">{{ formatSnapshotVersion(snapshot.version, snapshot.created_at) }}</span></td><td><strong>{{ snapshot.name }}</strong><small v-if="snapshot.description">{{ snapshot.description }}</small></td><td>{{ snapshot.created_at ? formatSnapshotTime(snapshot.created_at) : '—' }}</td><td>{{ snapshot.state }}</td><td><div class="row-actions snapshot-library-actions"><button v-if="permissions.canOperateVms" class="btn role-secondary btn-sm" @click="downloadSnapshot(snapshot)">{{ t('cloudNative.downloadSnapshot') }}</button><button v-if="permissions.canOperateVms" class="btn role-secondary btn-sm" :disabled="busy === 'vm-snapshot'" @click="controlListedSnapshot('revert', snapshot)">{{ t('cloudNative.revertSnapshot') }}</button><button v-if="permissions.canOperateVms" class="btn role-link btn-sm danger-text" :disabled="busy === 'vm-snapshot'" @click="controlListedSnapshot('delete', snapshot)">{{ t('cloudNative.deleteSnapshot') }}</button></div></td></tr></tbody></table></div>
+        <div v-else class="table-wrap snapshot-library"><table class="table"><thead><tr><th>{{ t('cloudNative.vmName') }}</th><th>{{ t('cloudNative.snapshotVersion') }}</th><th>{{ t('cloudNative.snapshotName') }}</th><th>{{ t('cloudNative.snapshotCreated') }}</th><th>{{ t('cloudNative.stateLabel') }}</th><th>{{ t('hosts.action') }}</th></tr></thead><tbody><tr v-for="snapshot in snapshotLibrary" :key="`${snapshot.vm_name}/${snapshot.name}`"><td><button class="resource-name" @click="openSnapshotVm(snapshot.vm_name || '')">{{ snapshot.vm_name }}</button></td><td><span class="snapshot-version">{{ formatSnapshotVersion(snapshot.version, snapshot.created_at) }}</span></td><td><strong>{{ snapshot.name }}</strong><small v-if="snapshot.description">{{ snapshot.description }}</small></td><td>{{ snapshot.created_at ? formatSnapshotTime(snapshot.created_at) : '—' }}</td><td><span class="state snapshot-state" :class="snapshotStateClass(snapshot.state)">{{ snapshot.state || t('cloudNative.unknown') }}</span></td><td><div class="row-actions snapshot-library-actions"><button v-if="permissions.canOperateVms" class="btn role-secondary btn-sm" @click="downloadSnapshot(snapshot)">{{ t('cloudNative.downloadSnapshot') }}</button><button v-if="permissions.canOperateVms" class="btn role-secondary btn-sm snapshot-action" :disabled="busy === 'vm-snapshot'" @click="controlListedSnapshot('revert', snapshot)">{{ t('cloudNative.revertSnapshot') }}</button><button v-if="permissions.canOperateVms" class="btn role-danger btn-sm snapshot-action snapshot-action-delete" :disabled="busy === 'vm-snapshot'" @click="controlListedSnapshot('delete', snapshot)">{{ t('cloudNative.deleteSnapshot') }}</button></div></td></tr></tbody></table></div>
         <p class="safety-note">{{ t('cloudNative.snapshotExportHelp') }}</p>
       </section>
 
       <section v-else-if="activeTab === 'vms'" class="section-panel">
         <div class="section-heading"><div><span class="eyebrow">LIBVIRT</span><h2>{{ t('cloudNative.vms') }}</h2><p class="muted">{{ t('cloudNative.vmLifecycle') }}</p></div><div class="vm-list-toolbar"><div class="filter-bar"><input v-model="vmFilter" class="search-input" :placeholder="t('cloudNative.filterVms')" :aria-label="t('cloudNative.filterVms')" /><select v-model="vmStateFilter" class="search-input" :aria-label="t('cloudNative.filterVmState')"><option value="all">{{ t('cloudNative.allVmStates') }}</option><option value="running">{{ t('cloudNative.running') }}</option><option value="paused">{{ t('cloudNative.paused') }}</option><option value="stopped">{{ t('cloudNative.stopped') }}</option></select></div><button v-if="permissions.canOperateVms" class="btn role-primary" :disabled="busy !== ''" @click="openVmCreateForm">{{ t('cloudNative.createVm') }}</button></div></div>
-        <form v-if="showVmCreateForm" class="admin-form guided-admin-form vm-create-form" @submit.prevent="createVm">
-          <h3>{{ t('cloudNative.createVm') }}</h3><p class="muted">{{ t('cloudNative.createVmHelp') }}</p>
-          <div class="admin-field-grid"><label>{{ t('cloudNative.vmName') }}<input v-model.trim="vmCreateForm.name" class="search-input" required maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9_.-]*" autocomplete="off" /></label>
-            <label>{{ t('cloudNative.vcpuCount') }}<input v-model.number="vmCreateForm.vcpus" class="search-input" type="number" min="1" max="512" step="1" required /></label><label>{{ t('cloudNative.memoryMiB') }}<input v-model.number="vmCreateForm.memory_mib" class="search-input" type="number" min="128" max="1048576" step="128" required /></label>
-            <label>{{ t('cloudNative.storagePool') }}<select v-model="vmCreateForm.pool" class="search-input" required @change="vmCreateForm.volume = ''"><option disabled value="">{{ t('cloudNative.selectPool') }}</option><option v-for="pool in availableVmPools" :key="pool.name" :value="pool.name">{{ pool.name }}</option></select></label>
-            <label>{{ t('cloudNative.bootDisk') }}<select v-model="vmCreateForm.volume" class="search-input" required><option disabled value="">{{ t('cloudNative.selectVolume') }}</option><option v-for="volume in availableVmCreateVolumes" :key="`${volume.pool}/${volume.name}`" :value="volume.name">{{ volume.name }} · {{ volume.format }} · {{ bytesLabel(volume.capacity_bytes) }}</option></select></label>
-            <label>{{ t('cloudNative.virtualNetwork') }}<select v-model="vmCreateForm.network" class="search-input" required><option disabled value="">{{ t('cloudNative.selectNetwork') }}</option><option v-for="network in activeVmNetworks" :key="network.name" :value="network.name">{{ network.name }}</option></select></label>
-            <label class="field-wide">{{ t('cloudNative.installerIsoPath') }}<input v-model.trim="vmCreateForm.iso_path" class="search-input" type="text" maxlength="1024" :placeholder="t('cloudNative.installerIsoOptional')" /><small>{{ t('cloudNative.installerIsoHelp') }}</small></label>
-            <label class="vm-autostart-option"><input v-model="vmCreateForm.autostart" type="checkbox" />{{ t('cloudNative.enableAutostart') }}</label>
-          </div>
-          <div v-if="vmCreateError" class="banner error" role="alert">{{ vmCreateError }}</div>
-          <div class="row-actions"><button type="button" class="btn role-secondary" @click="showVmCreateForm = false">{{ t('cloudNative.cancel') }}</button><button class="btn role-primary" :disabled="busy === 'vm-create' || !vmCreateForm.volume || !vmCreateForm.network">{{ busy === 'vm-create' ? t('cloudNative.creatingVm') : t('cloudNative.createVm') }}</button></div>
-        </form>
-        <div v-if="!filteredVms.length && !showVmCreateForm" class="empty-state">{{ t(vmFilter || vmStateFilter !== 'all' ? 'cloudNative.noVmMatch' : 'cloudNative.noVm') }}</div><VmTable v-else-if="filteredVms.length" :vms="filteredVms" :busy="busy" :can-operate="permissions.canOperateVms" @action="actOnVm" @details="showVmDetails" @snapshots="openVmSnapshots" @configure="configureVm" @autostart="setAutostart" />
+        <div v-if="!filteredVms.length && !showVmCreateForm" class="empty-state vm-empty-state"><template v-if="vmFilter || vmStateFilter !== 'all'">{{ t('cloudNative.noVmMatch') }}</template><template v-else><strong>{{ t('cloudNative.noVm') }}</strong><p>{{ t('cloudNative.noVmHelp') }}</p><button v-if="permissions.canOperateVms" type="button" class="btn role-primary" :disabled="busy !== ''" @click="openVmCreateForm">{{ t('cloudNative.firstVmAction') }}</button></template></div><VmTable v-else-if="filteredVms.length" :vms="filteredVms" :busy="busy" :can-operate="permissions.canOperateVms" @action="actOnVm" @details="showVmDetails" @snapshots="openVmSnapshots" @configure="configureVm" @autostart="setAutostart" />
       </section>
 
       <section v-else-if="activeTab === 'storage'" class="section-panel">
-        <div class="section-heading"><div><span class="eyebrow">HOST + LIBVIRT</span><h2>{{ t('cloudNative.storage') }}</h2><p class="muted">{{ t('cloudNative.storageDescription') }}</p></div><div class="section-tools"><input v-model="storageFilter" class="search-input" :placeholder="t('cloudNative.searchStorage')" :aria-label="t('cloudNative.searchStorage')" /><button v-if="permissions.canManageStorage" class="btn role-primary" @click="showPoolForm = !showPoolForm">{{ t(showPoolForm ? 'cloudNative.cancel' : 'cloudNative.addPool') }}</button></div></div>
+        <div class="section-heading"><div><span class="eyebrow">HOST + LIBVIRT</span><h2>{{ t('cloudNative.storage') }}</h2><p class="muted">{{ t('cloudNative.storageDescription') }}</p><small v-if="volumesLoading && storageVolumes.length" class="quiet-refresh" role="status"><i aria-hidden="true"></i>{{ t('cloudNative.updating') }}</small></div><div class="section-tools"><input v-model="storageFilter" class="search-input" :placeholder="t('cloudNative.searchStorage')" :aria-label="t('cloudNative.searchStorage')" /><button v-if="permissions.canManageStorage" class="btn role-primary" @click="showPoolForm = !showPoolForm">{{ t(showPoolForm ? 'cloudNative.cancel' : 'cloudNative.addPool') }}</button></div></div>
         <div class="storage-summary"><article><span>{{ t('cloudNative.storagePools') }}</span><strong>{{ inventory.storage_pools.length }}</strong></article><article><span>{{ t('cloudNative.devicesTitle') }}</span><strong>{{ inventory.storage.devices.length }}</strong></article><article><span>{{ t('cloudNative.mountedFilesystems') }}</span><strong>{{ inventory.storage.filesystems.length }}</strong><small v-if="criticalFilesystemCount">{{ t('cloudNative.fullFilesystems', { count: criticalFilesystemCount }) }}</small><small v-else>{{ t('cloudNative.noCapacityWarnings') }}</small></article></div>
         <form v-if="showPoolForm" class="admin-form guided-admin-form" @submit.prevent="savePool">
           <header class="form-intro"><span class="eyebrow">{{ t('cloudNative.storagePoolType') }}</span><h3>{{ t(poolForm.action === 'edit' ? 'cloudNative.editPool' : 'cloudNative.addPool') }}</h3><p>{{ t('cloudNative.storagePoolFormHelp') }}</p></header>
           <div class="admin-field-grid">
             <label class="field-wide">{{ t('cloudNative.poolName') }}<input v-model.trim="poolForm.name" class="search-input" required maxlength="128" pattern="[A-Za-z0-9_.+-]+" :readonly="poolForm.action === 'edit'" autocomplete="off" /><small>{{ t('cloudNative.poolNameHelp') }}</small></label>
-            <label class="field-wide">{{ t('cloudNative.poolPath') }}<input v-model.trim="poolForm.target" class="search-input" required placeholder="/var/lib/libvirt/images" autocomplete="off" /><small>{{ t('cloudNative.poolPathHelp') }}</small></label>
+            <div class="field-wide pool-path-field" @focusout="closePoolPathSuggestionsWhenFocusLeaves">
+              <label for="kvm-storage-pool-target">{{ t('cloudNative.poolPath') }}</label>
+              <input id="kvm-storage-pool-target" v-model="poolForm.target" class="search-input" required placeholder="/var/lib/libvirt/images" autocomplete="off" aria-autocomplete="list" :aria-expanded="poolPathSuggestionsOpen" aria-controls="kvm-storage-pool-suggestions" @focus="schedulePoolPathSuggestions" @input="schedulePoolPathSuggestions" @keydown.esc="poolPathSuggestionsOpen = false" />
+              <ul v-if="poolPathSuggestionsOpen" id="kvm-storage-pool-suggestions" class="pool-path-suggestions" :aria-label="t('cloudNative.poolPathSuggestions')">
+                <li v-if="poolPathSuggestionsLoading" class="pool-path-hint" role="status">{{ t('cloudNative.searchingDirectories') }}</li>
+                <li v-for="directory in poolPathSuggestions" :key="directory" class="pool-path-option"><button type="button" @mousedown.prevent @click="selectPoolPathSuggestion(directory)">{{ directory }}</button></li>
+                <li v-if="!poolPathSuggestionsLoading && poolPathSuggestionError" class="pool-path-hint" role="status">{{ t('cloudNative.directorySuggestionsUnavailable') }}</li>
+                <li v-else-if="!poolPathSuggestionsLoading && !poolPathSuggestionError && !poolPathSuggestions.length" class="pool-path-hint" role="status">{{ t('cloudNative.noDirectorySuggestions') }}</li>
+              </ul>
+              <small>{{ t('cloudNative.poolPathHelp') }}</small>
+            </div>
           </div>
           <div class="row-actions"><button type="button" class="btn role-secondary" @click="showPoolForm = false">{{ t('cloudNative.cancel') }}</button><button class="btn role-primary" :disabled="busy === 'storage-pool'">{{ t('cloudNative.saveChanges') }}</button></div>
         </form>
@@ -108,7 +108,7 @@
         <div class="subsection">
           <div class="subsection-heading"><div><h3>{{ t('cloudNative.storageVolumes') }}</h3><p>{{ t('cloudNative.storageVolumesHelp') }}</p></div><button v-if="permissions.canManageStorage" class="btn role-secondary btn-sm" @click="showVolumeForm = !showVolumeForm">{{ t(showVolumeForm ? 'cloudNative.cancel' : 'cloudNative.createVolume') }}</button></div>
           <form v-if="showVolumeForm" class="admin-form" @submit.prevent="saveVolume"><label>{{ t('cloudNative.poolName') }}<select v-model="volumeForm.pool" class="search-input" required><option disabled value="">{{ t('cloudNative.selectPool') }}</option><option v-for="pool in inventory.storage_pools.filter((item) => item.type === 'dir' && item.state.toLowerCase() === 'running')" :key="pool.name" :value="pool.name">{{ pool.name }}</option></select></label><label>{{ t('cloudNative.volumeName') }}<input v-model.trim="volumeForm.name" class="search-input" required maxlength="128" pattern="[A-Za-z0-9_.+-]+" /></label><label>{{ t('cloudNative.capacityGiB') }}<input v-model.number="volumeForm.capacity_gib" class="search-input" type="number" min="0.001" max="10240" step="0.001" required /></label><label>{{ t('cloudNative.volumeFormat') }}<select v-model="volumeForm.format" class="search-input"><option value="qcow2">qcow2</option><option value="raw">raw</option></select></label><div class="row-actions"><button type="button" class="btn role-secondary" @click="showVolumeForm = false">{{ t('cloudNative.cancel') }}</button><button class="btn role-primary" :disabled="busy === 'storage-volume' || !volumeForm.pool">{{ t('cloudNative.createVolume') }}</button></div></form>
-          <div v-if="volumesLoading" class="loading">{{ t('cloudNative.loadingVolumes') }}</div><div v-else-if="!storageVolumes.length" class="empty-state">{{ t('cloudNative.noVolumes') }}</div><div v-else class="table-wrap"><table class="table"><thead><tr><th>{{ t('cloudNative.volumeName') }}</th><th>{{ t('cloudNative.poolName') }}</th><th>{{ t('cloudNative.volumeFormat') }}</th><th>{{ t('cloudNative.capacity') }}</th><th>{{ t('cloudNative.allocated') }}</th><th>{{ t('cloudNative.actions') }}</th></tr></thead><tbody><tr v-for="volume in storageVolumes" :key="`${volume.pool}/${volume.name}`"><td><strong>{{ volume.name }}</strong><small>{{ volume.path }}</small></td><td>{{ volume.pool }}</td><td>{{ volume.format }}</td><td>{{ bytesLabel(volume.capacity_bytes) }}</td><td>{{ bytesLabel(volume.allocation_bytes) }}</td><td><button v-if="permissions.canManageStorage" class="btn role-link btn-sm danger-text" :disabled="busy === 'storage-volume'" @click="deleteVolume(volume)">{{ t('cloudNative.delete') }}</button></td></tr></tbody></table></div>
+          <div v-if="volumesLoading && !storageVolumes.length" class="loading">{{ t('cloudNative.loadingVolumes') }}</div><div v-else-if="!storageVolumes.length" class="empty-state">{{ t('cloudNative.noVolumes') }}</div><div v-else class="table-wrap"><table class="table"><thead><tr><th>{{ t('cloudNative.volumeName') }}</th><th>{{ t('cloudNative.poolName') }}</th><th>{{ t('cloudNative.volumeFormat') }}</th><th>{{ t('cloudNative.capacity') }}</th><th>{{ t('cloudNative.allocated') }}</th><th>{{ t('cloudNative.actions') }}</th></tr></thead><tbody><template v-for="volume in storageVolumes" :key="`${volume.pool}/${volume.name}`"><tr><td><strong>{{ volume.name }}</strong><small>{{ volume.path }}</small></td><td>{{ volume.pool }}</td><td>{{ volume.format }}</td><td>{{ bytesLabel(volume.capacity_bytes) }}</td><td>{{ bytesLabel(volume.allocation_bytes) }}</td><td class="row-actions"><button v-if="permissions.canManageStorage && ['qcow2', 'raw'].includes(volume.format.toLowerCase())" class="btn role-secondary btn-sm" :disabled="busy === 'storage-volume'" @click="openStorageVolumeResize(volume)">{{ t('cloudNative.resizeVolume') }}</button><button v-if="permissions.canManageStorage" class="btn role-link btn-sm danger-text" :disabled="busy === 'storage-volume'" @click="deleteVolume(volume)">{{ t('cloudNative.delete') }}</button></td></tr><tr v-if="volumeResizeForm?.pool === volume.pool && volumeResizeForm?.name === volume.name"><td colspan="6"><form class="admin-form volume-resize-form" @submit.prevent="saveStorageVolumeResize"><div><strong>{{ t('cloudNative.resizeVolume') }} · {{ volume.name }}</strong><p class="muted">{{ t('cloudNative.volumeResizeHelp') }}</p></div><label>{{ t('cloudNative.currentDiskSize') }}<input class="search-input" :value="bytesLabel(volumeResizeForm.current_capacity_bytes)" disabled /></label><label>{{ t('cloudNative.newDiskSizeGiB') }}<input v-model.number="volumeResizeForm.capacity_gib" class="search-input" type="number" :min="volumeResizeForm.current_capacity_bytes / 1073741824 + 0.001" max="10240" step="0.001" required /></label><div class="row-actions"><button type="button" class="btn role-secondary" @click="volumeResizeForm = null">{{ t('cloudNative.cancel') }}</button><button class="btn role-primary" :disabled="busy === 'storage-volume'">{{ t('cloudNative.saveChanges') }}</button></div></form></td></tr></template></tbody></table></div>
         </div>
         <div class="subsection"><div class="subsection-heading"><div><h3>{{ t('cloudNative.devicesTitle') }}</h3><p>{{ t('cloudNative.storageDevicesHelp') }}</p></div><span class="count-badge">{{ filteredStorageDevices.length }}</span></div><div class="table-wrap"><table class="table"><thead><tr><th>{{ t('cloudNative.devices') }}</th><th>{{ t('cloudNative.type') }}</th><th>{{ t('cloudNative.size') }}</th><th>{{ t('cloudNative.filesystem') }}</th><th>{{ t('cloudNative.mount') }}</th><th>{{ t('cloudNative.model') }}</th></tr></thead><tbody><tr v-for="disk in filteredStorageDevices" :key="disk.path || disk.name"><td><button class="resource-name" @click="inspectResource('disk', disk)">{{ disk.name }}</button><small>{{ disk.path }}</small></td><td>{{ disk.type }}</td><td>{{ bytesLabel(disk.size) }}</td><td>{{ disk.filesystem || '—' }}</td><td>{{ disk.mountpoints.join(', ') || '—' }}</td><td>{{ disk.model || '—' }}</td></tr><tr v-if="!filteredStorageDevices.length"><td colspan="6" class="empty-row">{{ t(storageFilter ? 'cloudNative.noStorageMatch' : 'cloudNative.noDevice') }}</td></tr></tbody></table></div></div>
         <div class="subsection"><div class="subsection-heading"><div><h3>{{ t('cloudNative.mountedFilesystems') }}</h3><p>{{ t('cloudNative.filesystemUsageHelp') }}</p></div><span class="count-badge">{{ filteredFilesystems.length + filteredSystemFilesystems.length }}</span></div><div class="table-wrap"><table class="table"><thead><tr><th>{{ t('cloudNative.device') }}</th><th>{{ t('cloudNative.type') }}</th><th>{{ t('cloudNative.size') }}</th><th>{{ t('cloudNative.used') }}</th><th>{{ t('cloudNative.available') }}</th><th>{{ t('cloudNative.usage') }}</th><th>{{ t('cloudNative.mount') }}</th></tr></thead><tbody><tr v-for="fs in filteredFilesystems" :key="`${fs.device}-${fs.mountpoint}`"><td><button class="resource-name" @click="inspectResource('filesystem', fs)">{{ fs.device }}</button></td><td>{{ fs.type }}</td><td>{{ bytesLabel(fs.size) }}</td><td>{{ bytesLabel(fs.used) }}</td><td>{{ bytesLabel(fs.available) }}</td><td><div class="usage-cell"><span class="usage-pill" :class="usageClass(fs.use_percent)">{{ fs.use_percent }}</span><span class="usage-track"><i :class="usageClass(fs.use_percent)" :style="{ width: usagePercent(fs.use_percent) + '%' }"></i></span></div></td><td>{{ fs.mountpoint }}</td></tr><tr v-if="!filteredFilesystems.length"><td colspan="7" class="empty-row">{{ t('cloudNative.noPersistentMounts') }}</td></tr></tbody></table></div><details v-if="filteredSystemFilesystems.length" class="system-mounts"><summary>{{ t('cloudNative.systemMounts', { count: filteredSystemFilesystems.length }) }}</summary><p>{{ t('cloudNative.systemMountsHelp') }}</p><div class="table-wrap"><table class="table"><thead><tr><th>{{ t('cloudNative.device') }}</th><th>{{ t('cloudNative.type') }}</th><th>{{ t('cloudNative.size') }}</th><th>{{ t('cloudNative.used') }}</th><th>{{ t('cloudNative.available') }}</th><th>{{ t('cloudNative.usage') }}</th><th>{{ t('cloudNative.mount') }}</th></tr></thead><tbody><tr v-for="fs in filteredSystemFilesystems" :key="`${fs.device}-${fs.mountpoint}`"><td><button class="resource-name" @click="inspectResource('filesystem', fs)">{{ fs.device }}</button></td><td>{{ fs.type }}</td><td>{{ bytesLabel(fs.size) }}</td><td>{{ bytesLabel(fs.used) }}</td><td>{{ bytesLabel(fs.available) }}</td><td><div class="usage-cell"><span class="usage-pill" :class="usageClass(fs.use_percent)">{{ fs.use_percent }}</span><span class="usage-track"><i :class="usageClass(fs.use_percent)" :style="{ width: usagePercent(fs.use_percent) + '%' }"></i></span></div></td><td>{{ fs.mountpoint }}</td></tr></tbody></table></div></details></div>
@@ -117,10 +117,10 @@
       <section v-else-if="activeTab === 'network'" class="section-panel network-page">
         <div class="section-heading">
           <div><span class="eyebrow">HOST + LIBVIRT</span><h2>{{ t('cloudNative.network') }}</h2><p class="muted">{{ t('cloudNative.networkEditable') }}</p></div>
-          <div class="filter-bar">
+          <div class="network-page-actions"><div class="filter-bar">
             <input v-model="networkFilter" class="search-input" :placeholder="t('cloudNative.searchNetworkItems')" :aria-label="t('cloudNative.searchNetworkItems')" />
             <select v-model="networkStateFilter" class="search-input" :aria-label="t('cloudNative.filterState')"><option value="all">{{ t('cloudNative.allNetworkItems') }}</option><option value="active">{{ t('cloudNative.active') }}</option><option value="inactive">{{ t('cloudNative.inactive') }}</option></select>
-          </div>
+          </div><div v-if="permissions.canManageNetwork" class="network-quick-create"><button class="btn role-primary" @click="openLibvirtNetworkForm(undefined, 'nat')">{{ t('cloudNative.createNatNetwork') }}</button><button class="btn role-secondary" @click="openLibvirtNetworkForm(undefined, 'bridge')">{{ t('cloudNative.createBridgeNetwork') }}</button></div></div>
         </div>
         <div class="network-summary">
           <article class="network-stat"><span>{{ t('cloudNative.interfaces') }}</span><strong>{{ inventory.network.interfaces.length }}</strong><small>{{ t('cloudNative.activeInterfaces', { count: activeInterfaceCount }) }}</small></article>
@@ -176,11 +176,12 @@
             <form class="admin-form network-editor" @submit.prevent="saveNetwork">
               <div class="editor-heading"><div><span class="eyebrow">{{ t('cloudNative.ipv4Configuration') }}</span><h4>{{ networkForm.name }}</h4></div><button type="button" class="text-button" @click="networkForm = null">{{ t('cloudNative.cancel') }}</button></div>
               <label>{{ t('cloudNative.ipMethod') }}<select v-model="networkForm.method" class="search-input"><option value="auto">{{ t('cloudNative.dhcp') }}</option><option value="manual">{{ t('cloudNative.manual') }}</option><option value="shared">{{ t('cloudNative.shared') }}</option><option value="link-local">{{ t('cloudNative.linkLocal') }}</option><option value="disabled">{{ t('cloudNative.disabled') }}</option></select></label>
-              <label>{{ t('cloudNative.addresses') }}<input v-model="networkForm.addresses" class="search-input" :disabled="networkForm.method === 'auto'" :required="networkForm.method === 'manual'" placeholder="192.0.2.10/24" /></label>
-              <label>{{ t('cloudNative.gateway') }}<input v-model="networkForm.gateway" class="search-input" :disabled="networkForm.method === 'auto'" placeholder="192.0.2.1" /></label>
-              <label>{{ t('cloudNative.dnsServers') }}<input v-model="networkForm.dns" class="search-input" :disabled="networkForm.method === 'auto'" placeholder="1.1.1.1, 8.8.8.8" /></label>
+              <label>{{ t('cloudNative.addresses') }}<input v-model="networkForm.addresses" class="search-input" list="kvm-ipv4-address-options" :disabled="networkForm.method === 'auto'" :required="networkForm.method === 'manual'" placeholder="192.0.2.10/24" /><datalist id="kvm-ipv4-address-options"><option v-for="address in ipv4AddressSuggestions" :key="address" :value="address" /></datalist></label>
+              <label>{{ t('cloudNative.gateway') }}<input v-model="networkForm.gateway" class="search-input" list="kvm-ipv4-gateway-options" :disabled="networkForm.method === 'auto'" placeholder="192.0.2.1" /><datalist id="kvm-ipv4-gateway-options"><option v-for="address in ipv4GatewaySuggestions" :key="address" :value="address" /></datalist></label>
+              <label>{{ t('cloudNative.dnsServers') }}<input v-model="networkForm.dns" class="search-input" list="kvm-ipv4-dns-options" :disabled="networkForm.method === 'auto'" placeholder="1.1.1.1, 8.8.8.8" /><datalist id="kvm-ipv4-dns-options"><option v-for="address in ipv4DnsSuggestions" :key="address" :value="address" /></datalist></label>
               <div class="field-wide network-family-heading"><span class="eyebrow">{{ t('cloudNative.ipv6Configuration') }}</span></div><label>{{ t('cloudNative.ipv6Method') }}<select v-model="networkForm.ipv6_method" class="search-input"><option value="auto">{{ t('cloudNative.automatic') }}</option><option value="manual">{{ t('cloudNative.manual') }}</option><option value="disabled">{{ t('cloudNative.disabled') }}</option></select></label>
-              <label>{{ t('cloudNative.addresses') }} ({{ t('cloudNative.ipv6') }})<input v-model="networkForm.ipv6_addresses" class="search-input" :disabled="networkForm.ipv6_method !== 'manual'" :required="networkForm.ipv6_method === 'manual'" placeholder="2001:db8::10/64" /></label><label>{{ t('cloudNative.gateway') }} ({{ t('cloudNative.ipv6') }})<input v-model="networkForm.ipv6_gateway" class="search-input" :disabled="networkForm.ipv6_method !== 'manual'" placeholder="2001:db8::1" /></label><label>{{ t('cloudNative.dnsServers') }} ({{ t('cloudNative.ipv6') }})<input v-model="networkForm.ipv6_dns" class="search-input" :disabled="networkForm.ipv6_method === 'disabled'" placeholder="2001:4860:4860::8888" /></label>
+              <label>{{ t('cloudNative.addresses') }} ({{ t('cloudNative.ipv6') }})<input v-model="networkForm.ipv6_addresses" class="search-input" list="kvm-ipv6-address-options" :disabled="networkForm.ipv6_method !== 'manual'" :required="networkForm.ipv6_method === 'manual'" placeholder="2001:db8::10/64" /><datalist id="kvm-ipv6-address-options"><option v-for="address in ipv6AddressSuggestions" :key="address" :value="address" /></datalist></label><label>{{ t('cloudNative.gateway') }} ({{ t('cloudNative.ipv6') }})<input v-model="networkForm.ipv6_gateway" class="search-input" list="kvm-ipv6-gateway-options" :disabled="networkForm.ipv6_method !== 'manual'" placeholder="2001:db8::1" /><datalist id="kvm-ipv6-gateway-options"><option v-for="address in ipv6GatewaySuggestions" :key="address" :value="address" /></datalist></label><label>{{ t('cloudNative.dnsServers') }} ({{ t('cloudNative.ipv6') }})<input v-model="networkForm.ipv6_dns" class="search-input" list="kvm-ipv6-dns-options" :disabled="networkForm.ipv6_method === 'disabled'" placeholder="2001:4860:4860::8888" /><datalist id="kvm-ipv6-dns-options"><option v-for="address in ipv6DnsSuggestions" :key="address" :value="address" /></datalist></label>
+              <p class="field-wide safety-note">{{ t('cloudNative.networkSuggestionWarning') }}</p>
               <label class="vm-autostart-option field-wide"><input v-model="networkForm.autoconnect" type="checkbox" />{{ t('cloudNative.autoconnect') }}</label>
               <div class="network-editor-footer"><p class="safety-note">{{ t('cloudNative.networkWarning') }}</p><button class="btn role-primary" :disabled="busy === `connection:${networkForm.uuid}`">{{ t('cloudNative.saveChanges') }}</button></div>
             </form>
@@ -197,11 +198,11 @@
 
         <section class="subsection">
           <div class="subsection-heading"><div><span class="eyebrow">LIBVIRT</span><h3>{{ t('cloudNative.virtualNetworks') }}</h3><p>{{ t('cloudNative.libvirtNetworkDetails') }}</p></div><div class="row-actions"><span class="count-badge">{{ filteredLibvirtNetworks.length }}</span><button v-if="permissions.canManageNetwork" class="btn role-primary btn-sm" @click="openLibvirtNetworkForm()">{{ t('cloudNative.createVirtualNetwork') }}</button></div></div>
-          <form v-if="libvirtNetworkForm" class="admin-form libvirt-network-form" @submit.prevent="saveLibvirtNetwork">
+          <form v-if="libvirtNetworkForm" ref="libvirtNetworkEditor" class="admin-form libvirt-network-form" @submit.prevent="saveLibvirtNetwork">
             <div class="editor-heading"><div><span class="eyebrow">LIBVIRT</span><h4>{{ t(libvirtNetworkForm.action === 'create' ? 'cloudNative.createVirtualNetwork' : 'cloudNative.editVirtualNetwork') }}<template v-if="libvirtNetworkForm.action === 'edit'"> · {{ libvirtNetworkForm.name }}</template></h4><p class="muted">{{ t('cloudNative.virtualNetworkFormHelp') }}</p></div><button type="button" class="text-button" @click="libvirtNetworkForm = null">{{ t('cloudNative.cancel') }}</button></div>
             <div class="admin-field-grid"><label>{{ t('cloudNative.networkName') }}<input v-model.trim="libvirtNetworkForm.name" class="search-input" required maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9_.-]*" :disabled="libvirtNetworkForm.action === 'edit'" /></label>
               <label>{{ t('cloudNative.forwardMode') }}<select v-model="libvirtNetworkForm.forward_mode" class="search-input"><option value="nat">NAT</option><option value="route">{{ t('cloudNative.routeMode') }}</option><option value="bridge">{{ t('cloudNative.bridgeMode') }}</option><option value="none">{{ t('cloudNative.isolatedMode') }}</option></select></label>
-              <label v-if="libvirtNetworkForm.forward_mode === 'bridge'">{{ t('cloudNative.hostBridge') }}<input v-model.trim="libvirtNetworkForm.bridge" class="search-input" maxlength="15" pattern="[A-Za-z0-9_.-]+" required placeholder="br0" /></label>
+              <label v-if="libvirtNetworkForm.forward_mode === 'bridge'">{{ t('cloudNative.hostBridge') }}<input v-model.trim="libvirtNetworkForm.bridge" class="search-input" list="kvm-host-bridge-options" maxlength="15" pattern="[A-Za-z0-9_.-]+" required placeholder="br0" /><datalist id="kvm-host-bridge-options"><option v-for="bridge in hostBridgeNames" :key="bridge" :value="bridge" /></datalist><small>{{ t('cloudNative.hostBridgeHelp') }}</small></label>
               <label v-if="libvirtNetworkForm.forward_mode !== 'bridge'" class="field-wide">{{ t('cloudNative.virtualNetworkGateway') }}<input v-model.trim="libvirtNetworkForm.ipv4_address" class="search-input" placeholder="192.168.100.1/24" /></label>
               <label v-if="libvirtNetworkForm.forward_mode !== 'bridge'">{{ t('cloudNative.dhcpStart') }}<input v-model.trim="libvirtNetworkForm.dhcp_start" class="search-input" placeholder="192.168.100.100" /></label><label v-if="libvirtNetworkForm.forward_mode !== 'bridge'">{{ t('cloudNative.dhcpEnd') }}<input v-model.trim="libvirtNetworkForm.dhcp_end" class="search-input" placeholder="192.168.100.200" /></label>
               <label v-if="libvirtNetworkForm.action === 'create'" class="vm-autostart-option"><input v-model="libvirtNetworkForm.start_after_create" type="checkbox" />{{ t('cloudNative.startAfterCreate') }}</label><label class="vm-autostart-option"><input v-model="libvirtNetworkForm.autostart" type="checkbox" />{{ t('cloudNative.enableAutostart') }}</label>
@@ -237,7 +238,7 @@
           <div class="admin-field-grid">
             <label class="field-wide">{{ t('cloudNative.account') }}<input v-model.trim="accountForm.username" class="search-input" :readonly="accountForm.action === 'edit'" required maxlength="32" pattern="[a-z_][a-z0-9_-]{0,31}" autocomplete="off" /><small>{{ t('cloudNative.accountNameHelp') }}</small></label>
             <label>{{ t('cloudNative.shell') }}<input v-model.trim="accountForm.shell" class="search-input" placeholder="/bin/bash" autocomplete="off" /><small>{{ t('cloudNative.shellHelp') }}</small></label>
-            <label>{{ t('cloudNative.homeDirectory') }}<input v-model.trim="accountForm.home" class="search-input" placeholder="/home/username" autocomplete="off" /><small>{{ t('cloudNative.homeHelp') }}</small></label>
+            <label>{{ t('cloudNative.homeDirectory') }}<input v-model.trim="accountForm.home" class="search-input" list="kvm-account-home-options" placeholder="/home/username" autocomplete="off" /><datalist id="kvm-account-home-options"><option v-for="path in homeDirectorySuggestions" :key="path" :value="path" /></datalist><small>{{ t('cloudNative.homeHelp') }}</small></label>
             <label class="field-wide">{{ t('cloudNative.groups') }}<input v-model.trim="accountForm.groups" class="search-input" placeholder="users, libvirt" autocomplete="off" /><small>{{ t('cloudNative.groupsEditHelp') }}</small></label>
             <label v-if="accountForm.action === 'create'" class="field-wide">{{ t('cloudNative.newPassword') }}<input v-model="accountForm.password" class="search-input" type="password" minlength="8" maxlength="1024" autocomplete="new-password" required /><small>{{ t('cloudNative.passwordPolicyHelp') }}</small></label>
           </div>
@@ -311,7 +312,10 @@
         <p v-if="vmDetailLoading" class="loading">{{ t('cloudNative.loadingVmDetails') }}</p>
         <div v-else-if="vmDetail" class="details-content">
           <div v-if="vmDetail.serial_console === false" class="banner warning" role="status">{{ t('cloudNative.serialConsoleMissing') }}</div>
-          <div class="vm-detail-tabs" role="tablist" :aria-label="t('cloudNative.vmDetailsSections')"><button v-for="section in vmDetailSections" :key="section.id" role="tab" :aria-selected="vmDetailSection === section.id" :class="{ active: vmDetailSection === section.id }" @click="selectVmDetailSection(section.id)">{{ t(`cloudNative.${section.label}`) }}</button></div>
+          <div class="vm-detail-tabs" role="tablist" :aria-label="t('cloudNative.vmDetailsSections')"><button v-for="section in vmDetailSections" :key="section.id" :data-vm-detail-tab="section.id" role="tab" :aria-selected="vmDetailSection === section.id" :tabindex="vmDetailSection === section.id ? 0 : -1" :class="{ active: vmDetailSection === section.id }" @keydown="onVmDetailTabKeydown($event, section.id)" @click="selectVmDetailSection(section.id)">{{ t(`cloudNative.${section.label}`) }}</button></div>
+          <div v-if="vmDetailOperationBusy" class="vm-detail-feedback vm-detail-progress" role="status" aria-live="polite"><span class="spinner" aria-hidden="true"></span><div><strong>{{ operationInProgressLabel }}</strong><small>{{ t(`cloudNative.operationPhase_${operationPhase || 'running'}`) }} · {{ t('cloudNative.operationElapsed', { time: elapsedLabel }) }}</small></div></div>
+          <div v-if="vmDetailError" class="banner error vm-detail-feedback" role="alert">{{ vmDetailError }}</div>
+          <div v-else-if="vmDetailMessage" class="banner success vm-detail-feedback" role="status" aria-live="polite">{{ vmDetailMessage }}</div>
           <section v-if="vmDetailSection === 'overview'" class="vm-config-editor vm-detail-section"><h3>{{ t('cloudNative.vmOverview') }}</h3><p class="vm-description">{{ vmDetail.description || t('cloudNative.noVmDescription') }}</p><div class="detail-stats vm-live-config-stats"><div><span>{{ t('cloudNative.runtimeVcpus') }}</span><strong>{{ vmIsRunning(vmDetail) ? (vmDetail.live_vcpus || vmDetail.current_vcpus) : '—' }}</strong><small>{{ t('cloudNative.savedConfiguration') }}: {{ vmDetail.configured_vcpus }}</small></div><div><span>{{ t('cloudNative.runtimeMemory') }}</span><strong>{{ vmIsRunning(vmDetail) && vmDetail.live_memory_kib ? memoryLabel(vmDetail.live_memory_kib) : '—' }}</strong><small>{{ t('cloudNative.savedConfiguration') }}: {{ memoryLabel(vmDetail.configured_memory_kib) }}</small></div><div><span>{{ t('cloudNative.stateLabel') }}</span><strong>{{ vmDetail.state }}</strong><small>{{ t('cloudNative.autostart') }}: {{ vmDetail.autostart === 'yes' ? t('cloudNative.enabled') : t('cloudNative.disabled') }}</small></div></div><div class="network-meta vm-hardware-meta"><span><small>{{ t('cloudNative.architecture') }}</small><b>{{ vmDetail.architecture || '—' }}</b></span><span><small>{{ t('cloudNative.machineType') }}</small><b>{{ vmDetail.machine || '—' }}</b></span><span><small>{{ t('cloudNative.firmware') }}</small><b>{{ vmDetail.firmware || '—' }}</b></span><span><small>{{ t('cloudNative.cpuMode') }}</small><b>{{ vmDetail.cpu_mode }}<template v-if="vmDetail.cpu_model"> · {{ vmDetail.cpu_model }}</template></b></span><span><small>{{ t('cloudNative.bootOrder') }}</small><b>{{ vmDetail.boot_order.join(' → ') || '—' }}</b></span><span><small>{{ t('cloudNative.vmIdentifier') }}</small><b>{{ vmDetail.uuid || '—' }}</b></span></div></section>
           <section v-if="vmDetailSection === 'configuration'" class="vm-config-editor vm-detail-section"><h3>{{ t('cloudNative.vmConfiguration') }}</h3><p class="muted">{{ t('cloudNative.vmConfigurationHelp') }}</p><form v-if="permissions.canOperateVms" class="admin-form" @submit.prevent="saveVmConfiguration"><label>{{ t('cloudNative.vcpuCount') }}<input v-model.number="vmConfigForm.vcpus" class="search-input" type="number" min="1" max="512" step="1" required /></label><label>{{ t('cloudNative.memoryMiB') }}<input v-model.number="vmConfigForm.memory_mib" class="search-input" type="number" min="128" max="1048576" step="128" required /></label><p class="safety-note">{{ t('cloudNative.vmConfigurationRestartNote') }}</p><div class="row-actions"><button class="btn role-primary" :disabled="busy === 'vm-config' || vmDetailLoading">{{ busy === 'vm-config' ? t('cloudNative.saving') : t('cloudNative.saveChanges') }}</button></div></form><form v-if="permissions.canOperateVms" class="admin-form vm-details-editor" @submit.prevent="saveVmDetailsConfiguration"><label>{{ t('cloudNative.vmDescription') }}<input v-model.trim="vmDetailsForm.description" class="search-input" maxlength="256" /></label><label>{{ t('cloudNative.cpuMode') }}<select v-model="vmDetailsForm.cpu_mode" class="search-input"><option value="host-model">host-model</option><option value="host-passthrough">host-passthrough</option><option value="custom">{{ t('cloudNative.customCpuModel') }}</option></select></label><label v-if="vmDetailsForm.cpu_mode === 'custom'">{{ t('cloudNative.cpuModel') }}<input v-model.trim="vmDetailsForm.cpu_model" class="search-input" maxlength="100" pattern="[A-Za-z0-9_.+-]+" required placeholder="Skylake-Client" /></label><label>{{ t('cloudNative.bootOrder') }}<input v-model.trim="vmDetailsForm.boot_order" class="search-input" required pattern="(hd|cdrom|network)(,(hd|cdrom|network))*" placeholder="hd,cdrom,network" /><small>{{ t('cloudNative.bootOrderHelp') }}</small></label><label class="vm-autostart-option"><input v-model="vmDetailsForm.autostart" type="checkbox" />{{ t('cloudNative.enableAutostart') }}</label><p class="safety-note field-wide">{{ t('cloudNative.vmDetailsRestartNote') }}</p><div class="row-actions field-wide"><button class="btn role-primary" :disabled="busy === 'vm-details-config' || vmDetailLoading">{{ busy === 'vm-details-config' ? t('cloudNative.saving') : t('cloudNative.saveChanges') }}</button></div></form></section>
           <section v-if="vmDetailSection === 'devices'" class="vm-detail-section"><section class="vm-device-panel"><div class="subsection-heading"><div><h3>{{ t('cloudNative.vmDisks') }}</h3><p>{{ t('cloudNative.vmDeviceRestartNote') }}</p></div><button v-if="permissions.canOperateVms" class="btn role-secondary btn-sm" @click="openVmDiskForm">{{ t('cloudNative.attachDisk') }}</button></div>
@@ -324,15 +328,23 @@
           </section></section>
           <section v-if="vmDetailSection === 'snapshots'" class="vm-snapshot-panel vm-detail-section"><div class="subsection-heading"><div><h3>{{ t('cloudNative.snapshots') }}</h3><p>{{ t('cloudNative.snapshotHelp') }}</p></div></div>
             <div v-if="!vmDetail.snapshot_supported" class="banner warning" role="status">{{ t('cloudNative.snapshotUnsupported') }}</div>
-            <form v-else-if="permissions.canOperateVms" class="admin-form snapshot-form" @submit.prevent="controlVmSnapshot('create')"><label>{{ t('cloudNative.snapshotName') }}<input v-model.trim="snapshotForm.name" class="search-input" required maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9_.-]*" /></label><label>{{ t('cloudNative.description') }}<input v-model.trim="snapshotForm.description" class="search-input" maxlength="256" /></label><button class="btn role-primary" :disabled="busy === 'vm-snapshot' || !snapshotForm.name || !isVmStopped(vmDetail)">{{ t('cloudNative.createSnapshot') }}</button><p v-if="!isVmStopped(vmDetail)" class="safety-note field-wide">{{ t('cloudNative.snapshotRequiresStopped') }}</p></form>
+            <form v-else-if="permissions.canOperateVms" class="admin-form snapshot-form" @submit.prevent="controlVmSnapshot('create')"><label>{{ t('cloudNative.snapshotName') }}<input v-model.trim="snapshotForm.name" class="search-input" required maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9_.-]*" /></label><label>{{ t('cloudNative.description') }}<input v-model.trim="snapshotForm.description" class="search-input" maxlength="256" /></label><p v-if="!isVmStopped(vmDetail)" class="safety-note field-wide">{{ t('cloudNative.snapshotRequiresStopped') }}</p><div class="row-actions field-wide snapshot-create-actions"><button class="btn role-primary snapshot-create-form-action" :disabled="busy === 'vm-snapshot' || !snapshotForm.name || !isVmStopped(vmDetail)">{{ t('cloudNative.createSnapshot') }}</button></div></form>
             <p v-else class="safety-note">{{ t('cloudNative.readOnly') }}</p>
-            <div v-if="!vmDetail.snapshots.length" class="empty-state">{{ t('cloudNative.noSnapshots') }}</div><div v-for="snapshot in vmDetail.snapshots" :key="snapshot.name" class="snapshot-row"><div><strong>{{ snapshot.name }}</strong><small>{{ snapshot.created_at ? formatSnapshotTime(snapshot.created_at) : '—' }}<span v-if="snapshot.description"> · {{ snapshot.description }}</span></small></div><div v-if="permissions.canOperateVms && isVmStopped(vmDetail)" class="row-actions"><button class="btn role-secondary btn-sm" :disabled="busy === 'vm-snapshot'" @click="controlVmSnapshot('revert', snapshot)">{{ t('cloudNative.revertSnapshot') }}</button><button class="btn role-link btn-sm danger-text" :disabled="busy === 'vm-snapshot'" @click="controlVmSnapshot('delete', snapshot)">{{ t('cloudNative.deleteSnapshot') }}</button></div></div>
+            <div v-if="!vmDetail.snapshots.length" class="empty-state">{{ t('cloudNative.noSnapshots') }}</div><div v-for="snapshot in vmDetail.snapshots" :key="snapshot.name" class="snapshot-row"><div class="snapshot-copy"><strong>{{ snapshot.name }}</strong><small>{{ snapshot.created_at ? formatSnapshotTime(snapshot.created_at) : '—' }}<span v-if="snapshot.description"> · {{ snapshot.description }}</span></small><span class="state snapshot-state" :class="snapshotStateClass(snapshot.state)">{{ snapshot.state || t('cloudNative.unknown') }}</span></div><div v-if="permissions.canOperateVms && isVmStopped(vmDetail)" class="row-actions"><button class="btn role-secondary btn-sm snapshot-action" :disabled="busy === 'vm-snapshot'" @click="controlVmSnapshot('revert', snapshot)">{{ t('cloudNative.revertSnapshot') }}</button><button class="btn role-danger btn-sm snapshot-action snapshot-action-delete" :disabled="busy === 'vm-snapshot'" @click="controlVmSnapshot('delete', snapshot)">{{ t('cloudNative.deleteSnapshot') }}</button></div></div>
           </section>
           <section v-if="vmDetailSection === 'activity'" class="vm-detail-section"><div class="subsection-heading"><div><h3>{{ t('cloudNative.recentActivity') }}</h3><p>{{ t('cloudNative.vmActivityHelp') }}</p></div><button class="btn role-secondary btn-sm" :disabled="vmActivityLoading" @click="loadVmActivity(selectedVmName)">{{ vmActivityLoading ? t('cloudNative.loadingActivity') : t('cloudNative.refreshActivity') }}</button></div><div v-if="vmActivityError" class="banner error" role="alert">{{ vmActivityError }}</div><div v-else-if="vmActivityLoading && !vmActivityEvents.length" class="loading">{{ t('cloudNative.loadingActivity') }}</div><div v-else-if="!vmActivityEvents.length" class="empty-state compact-empty">{{ t('cloudNative.noVmActivity') }}</div><ol v-else class="activity-list"><li v-for="event in vmActivityEvents" :key="`${event.occurred_at}-${event.action}-${event.target}`"><span class="activity-result" :class="event.outcome === 'success' ? 'ready' : 'unreachable'">{{ t(event.outcome === 'success' ? 'cloudNative.activitySucceeded' : 'cloudNative.activityFailed') }}</span><div><strong>{{ activityActionLabel(event.action) }}</strong><small>{{ dateLabel(event.occurred_at) }}</small></div></li></ol></section>
         </div>
-        <div v-if="vmDetailError" class="banner error">{{ vmDetailError }}</div>
       </section>
     </div>
+      <form v-if="showVmCreateForm" class="admin-form guided-admin-form vm-create-form" @submit.prevent="createVm">
+        <header class="form-intro"><span class="eyebrow">{{ t('cloudNative.provisioningStep', { current: vmCreateStep + 1, total: 3 }) }}</span><h3>{{ t('cloudNative.createVm') }}</h3><p>{{ t('cloudNative.createVmHelp') }}</p></header>
+        <ol class="wizard-steps" :aria-label="t('cloudNative.vmProvisioning')"><li v-for="(label, index) in ['vmWizardCompute', 'vmWizardResources', 'vmWizardReview']" :key="label" :class="{ active: vmCreateStep === index, complete: vmCreateStep > index }"><span>{{ index + 1 }}</span>{{ t(`cloudNative.${label}`) }}</li></ol>
+        <section v-if="vmCreateStep === 0" class="wizard-panel"><h4>{{ t('cloudNative.vmWizardCompute') }}</h4><p class="muted">{{ t('cloudNative.vmWizardComputeHelp') }}</p><div class="admin-field-grid"><label>{{ t('cloudNative.vmName') }}<input v-model.trim="vmCreateForm.name" class="search-input" required maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9_.-]*" autocomplete="off" /></label><label>{{ t('cloudNative.vcpuCount') }}<input v-model.number="vmCreateForm.vcpus" class="search-input" type="number" min="1" max="512" step="1" required /></label><label>{{ t('cloudNative.memoryMiB') }}<input v-model.number="vmCreateForm.memory_mib" class="search-input" type="number" min="128" max="1048576" step="128" required /></label></div></section>
+        <section v-else-if="vmCreateStep === 1" class="wizard-panel"><h4>{{ t('cloudNative.vmWizardResources') }}</h4><p class="muted">{{ t('cloudNative.vmWizardResourcesHelp') }}</p><div class="admin-field-grid"><label>{{ t('cloudNative.storagePool') }}<select v-model="vmCreateForm.pool" class="search-input" required @change="vmCreateForm.volume = ''"><option disabled value="">{{ t('cloudNative.selectPool') }}</option><option v-for="pool in availableVmPools" :key="pool.name" :value="pool.name">{{ pool.name }}</option></select></label><label>{{ t('cloudNative.bootDisk') }}<select v-model="vmCreateForm.volume" class="search-input" required><option disabled value="">{{ t('cloudNative.selectVolume') }}</option><option v-for="volume in availableVmCreateVolumes" :key="`${volume.pool}/${volume.name}`" :value="volume.name">{{ volume.name }} · {{ volume.format }} · {{ bytesLabel(volume.capacity_bytes) }}</option></select></label><label>{{ t('cloudNative.virtualNetwork') }}<select v-model="vmCreateForm.network" class="search-input" required><option disabled value="">{{ t('cloudNative.selectNetwork') }}</option><option v-for="network in activeVmNetworks" :key="network.name" :value="network.name">{{ network.name }}</option></select></label><fieldset class="field-wide vm-boot-source"><legend>{{ t('cloudNative.vmBootSource') }}</legend><label><input v-model="vmCreateForm.boot_source" type="radio" value="iso" />{{ t('cloudNative.bootFromIso') }}</label><label><input v-model="vmCreateForm.boot_source" type="radio" value="disk" />{{ t('cloudNative.bootFromExistingDisk') }}</label></fieldset><template v-if="vmCreateForm.boot_source === 'iso'"><fieldset class="field-wide vm-boot-source"><legend>{{ t('cloudNative.isoSource') }}</legend><label><input v-model="vmCreateForm.iso_source" type="radio" value="host" />{{ t('cloudNative.isoSourceHost') }}</label><label><input v-model="vmCreateForm.iso_source" type="radio" value="internet" />{{ t('cloudNative.isoSourceInternet') }}</label></fieldset><div v-if="vmCreateForm.iso_source === 'host'" class="field-wide iso-path-field" @focusout="closeIsoSuggestionsWhenFocusLeaves"><label for="kvm-installer-iso-path">{{ t('cloudNative.installerIsoPath') }}</label><input id="kvm-installer-iso-path" v-model.trim="vmCreateForm.iso_path" class="search-input" type="text" maxlength="1024" required :placeholder="t('cloudNative.installerIsoPathPlaceholder')" autocomplete="off" aria-autocomplete="list" :aria-expanded="isoSuggestionsOpen" aria-controls="kvm-iso-image-suggestions" @focus="scheduleIsoSuggestions" @input="scheduleIsoSuggestions" @keydown.esc="isoSuggestionsOpen = false" /><ul v-if="isoSuggestionsOpen" id="kvm-iso-image-suggestions" class="path-suggestions" :aria-label="t('cloudNative.isoSuggestions')"><li v-if="isoSuggestionsLoading" class="path-suggestion-hint" role="status">{{ t('cloudNative.searchingIsoImages') }}</li><li v-for="path in isoSuggestions" :key="path"><button type="button" @mousedown.prevent @click="selectIsoSuggestion(path)">{{ path }}</button></li><li v-if="!isoSuggestionsLoading && isoSuggestionError" class="path-suggestion-hint" role="status">{{ t('cloudNative.isoSuggestionsUnavailable') }}</li><li v-else-if="!isoSuggestionsLoading && !isoSuggestionError && !isoSuggestions.length" class="path-suggestion-hint" role="status">{{ t('cloudNative.noIsoSuggestions') }}</li></ul><small>{{ t('cloudNative.installerIsoHelp') }}</small></div><div v-else class="field-wide iso-download-fields"><label>{{ t('cloudNative.isoPreset') }}<select v-model="vmCreateForm.iso_preset" class="search-input" @change="updateVmIsoPreset"><option v-for="preset in remoteIsoPresets" :key="preset.id" :value="preset.id">{{ t(`cloudNative.isoPreset_${preset.id}`) }}</option><option value="custom">{{ t('cloudNative.isoPreset_custom') }}</option></select></label><label>{{ t('cloudNative.isoUrl') }}<input v-model.trim="vmCreateForm.iso_url" class="search-input" type="url" maxlength="2048" required :readonly="vmCreateForm.iso_preset !== 'custom'" placeholder="https://example.org/installer.iso" /></label><small>{{ t('cloudNative.remoteIsoHelp') }}</small><div class="lightweight-test-callout"><div><strong>{{ t('cloudNative.lightweightTest') }}</strong><p>{{ t('cloudNative.lightweightTestHelp') }}</p></div><button type="button" class="btn role-secondary btn-sm" @click="applyLightweightTestDefaults">{{ t('cloudNative.useLightweightDefaults') }}</button></div></div></template><p v-else class="field-wide muted">{{ t('cloudNative.existingDiskBootHelp') }}</p></div></section>
+        <section v-else class="wizard-panel"><h4>{{ t('cloudNative.vmWizardReview') }}</h4><p class="muted">{{ t('cloudNative.vmWizardReviewHelp') }}</p><dl class="wizard-review"><dt>{{ t('cloudNative.vmName') }}</dt><dd>{{ vmCreateForm.name }}</dd><dt>{{ t('cloudNative.vcpuCount') }}</dt><dd>{{ vmCreateForm.vcpus }}</dd><dt>{{ t('cloudNative.memoryMiB') }}</dt><dd>{{ vmCreateForm.memory_mib }} MiB</dd><dt>{{ t('cloudNative.storagePool') }}</dt><dd>{{ vmCreateForm.pool }}</dd><dt>{{ t('cloudNative.bootDisk') }}</dt><dd>{{ vmCreateForm.volume }}</dd><dt>{{ t('cloudNative.virtualNetwork') }}</dt><dd>{{ vmCreateForm.network }}</dd><dt>{{ t('cloudNative.vmBootSource') }}</dt><dd>{{ vmCreateForm.boot_source === 'iso' ? `${t('cloudNative.bootFromIso')} · ${vmCreateForm.iso_source === 'internet' ? (vmCreateForm.iso_preset === 'custom' ? vmCreateForm.iso_url : t(`cloudNative.isoPreset_${vmCreateForm.iso_preset}`)) : vmCreateForm.iso_path}` : t('cloudNative.bootFromExistingDisk') }}</dd></dl><label class="vm-autostart-option"><input v-model="vmCreateForm.autostart" type="checkbox" />{{ t('cloudNative.enableAutostart') }}</label></section>
+        <div v-if="vmCreateError" class="banner error" role="alert">{{ vmCreateError }}</div>
+        <footer class="wizard-footer"><button type="button" class="btn role-secondary" @click="showVmCreateForm = false">{{ t('cloudNative.cancel') }}</button><div class="row-actions"><button v-if="vmCreateStep > 0" type="button" class="btn role-secondary" @click="vmCreateStep--">{{ t('cloudNative.vmWizardBack') }}</button><button v-if="vmCreateStep < 2" type="button" class="btn role-primary" @click="advanceVmWizard">{{ t('cloudNative.vmWizardContinue') }}</button><button v-else class="btn role-primary" :disabled="busy === 'vm-create' || !vmCreateForm.volume || !vmCreateForm.network">{{ busy === 'vm-create' ? t('cloudNative.creatingVm') : t('cloudNative.createVm') }}</button></div></footer>
+      </form>
     <div v-if="selectedResource" class="modal-backdrop" @click.self="closeResourceDetails" @keydown="trapDialogFocus" @keydown.esc.stop="closeResourceDetails"><aside class="resource-details-panel" role="dialog" aria-modal="true" :aria-label="selectedResource.title"><header><div><span class="eyebrow">{{ selectedResource.subtitle }}</span><h2>{{ selectedResource.title }}</h2></div><button class="btn role-secondary btn-sm" @click="closeResourceDetails">{{ t('cloudNative.close') }}</button></header><dl><template v-for="field in selectedResource.fields" :key="field.label"><dt>{{ field.label }}</dt><dd>{{ field.value }}</dd></template></dl></aside></div>
     <div v-if="pendingAction" class="modal-backdrop review-backdrop" @click.self="cancelPendingAction" @keydown="trapDialogFocus" @keydown.esc.stop="cancelPendingAction"><section class="impact-review-modal" role="dialog" aria-modal="true" :aria-label="t('cloudNative.reviewChangeTitle')"><span class="eyebrow">{{ t('cloudNative.reviewChangeEyebrow') }}</span><h2>{{ pendingAction.title }}</h2><p>{{ pendingAction.summary }}</p><div class="safety-note impact-warning">{{ pendingAction.warning }}</div><div class="modal-actions"><button type="button" class="btn role-secondary" @click="cancelPendingAction">{{ t('cloudNative.cancel') }}</button><button type="button" class="btn role-danger" :disabled="!!busy" @click="confirmPendingAction">{{ pendingAction.confirmLabel || t('cloudNative.confirmChange') }}</button></div></section></div>
     <VmConsole v-if="consoleVm" :host-id="hostId" :vm-name="consoleVm.name" @close="consoleVm = null" />
@@ -375,6 +387,36 @@ type Inventory = {
 };
 
 const apiBase = (process.env.VUE_APP_KVM_API || '/kvm-api').replace(/\/$/, '');
+const remoteIsoPresets = [
+  { id: 'opensuse', url: 'https://download.opensuse.org/distribution/leap/16.0/installer/iso/agama-installer.x86_64-Leap_16.0.iso' },
+  { id: 'rocky', url: 'https://download.rockylinux.org/pub/rocky/10/isos/x86_64/Rocky-10-latest-x86_64-boot.iso' },
+  { id: 'ubuntu', url: 'https://releases.ubuntu.com/26.04/ubuntu-26.04.1-live-server-amd64.iso' },
+  { id: 'alpine', url: 'https://dl-cdn.alpinelinux.org/alpine/v3.24/releases/x86_64/alpine-virt-3.24.3-x86_64.iso' },
+];
+const CLOUD_VIEW_STATE_PREFIX = 'rancher-kvm:cloud-native-view:';
+const CLOUD_FILTER_KEYS = ['vmFilter', 'vmStateFilter', 'storageFilter', 'accountFilter', 'repositoryFilter', 'networkFilter', 'networkStateFilter', 'serviceFilter', 'serviceStateFilter', 'logFilter', 'logPreset'] as const;
+const CLOUD_FILTER_DEFAULTS: Record<string, string> = { vmFilter: '', vmStateFilter: 'all', storageFilter: '', accountFilter: '', repositoryFilter: '', networkFilter: '', networkStateFilter: 'all', serviceFilter: '', serviceStateFilter: 'all', logFilter: '', logPreset: 'all' };
+const LOG_PRESET_PATTERNS: Record<string, RegExp> = {
+  errors: /\b(error|err|failed|failure|critical|crit|alert|emerg|panic|fatal)\b/i,
+  warnings: /\b(warn|warning)\b/i,
+  kernel: /\b(kernel|kworker|systemd-udevd)\b/i,
+  virtualization: /\b(libvirt|libvirtd|virtqemud|virtlogd|virsh|qemu|kvm)\b/i,
+  auth: /\b(sshd|ssh|sudo|pam|polkit|authentication|auth(?:entication)? failed|login failed)\b/i,
+  ha: /\b(pacemaker|corosync|crmsh|crm_mon|stonith|sbd|qdevice|qnetd|hawk)\b/i,
+};
+
+function readCloudViewState(hostId: string): Record<string, string> {
+  try {
+    const value = JSON.parse(window.sessionStorage.getItem(`${CLOUD_VIEW_STATE_PREFIX}${hostId}`) || '{}');
+    const state = { ...CLOUD_FILTER_DEFAULTS };
+    for (const key of CLOUD_FILTER_KEYS) if (typeof value[key] === 'string') state[key] = value[key];
+    if (!['all', 'running', 'paused', 'stopped'].includes(state.vmStateFilter)) state.vmStateFilter = 'all';
+    if (!['all', 'active', 'inactive'].includes(state.networkStateFilter)) state.networkStateFilter = 'all';
+    if (!['all', 'active', 'failed', 'inactive'].includes(state.serviceStateFilter)) state.serviceStateFilter = 'all';
+    if (!['all', 'errors', 'warnings', 'kernel', 'virtualization', 'auth', 'ha'].includes(state.logPreset)) state.logPreset = 'all';
+    return { ...state, activeTab: ['overview', 'vms', 'snapshots', 'storage', 'network', 'logs', 'accounts', 'services', 'repositories', 'selinux', 'subscriptions', 'terminal'].includes(value.activeTab) ? value.activeTab : 'overview' };
+  } catch { return { ...CLOUD_FILTER_DEFAULTS, activeTab: 'overview' }; }
+}
 
 // Keep older API responses and hosts with partial network/account data from
 // breaking the entire admin view. Each section can then render its own empty
@@ -445,25 +487,31 @@ export default defineComponent({
       busy: '' as string, operationPhase: '', operationStartedAt: 0, operationClock: Date.now(), operationTimer: 0 as number, pendingAction: null as PendingAction | null,
       activityEvents: [] as HostActivity[], activityLoading: false, activityError: '', vmActivityEvents: [] as HostActivity[], vmActivityLoading: false, vmActivityError: '',
       activeTab: 'overview', vmFilter: '', vmStateFilter: 'all', storageFilter: '', accountFilter: '', repositoryFilter: '', networkFilter: '', networkStateFilter: 'all', serviceFilter: '', serviceStateFilter: 'all', serviceLimit: 25, logFilter: '', logPreset: 'all', logPresets: [{ id: 'all', label: 'logsAll' }, { id: 'errors', label: 'logsErrors' }, { id: 'warnings', label: 'logsWarnings' }, { id: 'kernel', label: 'logsKernel' }, { id: 'virtualization', label: 'logsVirtualization' }, { id: 'auth', label: 'logsAuth' }, { id: 'ha', label: 'logsHa' }], terminalCommand: '', terminalResult: null as TerminalResult | null, accountPasswordTarget: '', accountPassword: '', selectedResource: null as null | { title: string; subtitle: string; fields: { label: string; value: string }[] },
-      showPoolForm: false, poolForm: { action: 'create' as 'create' | 'edit', name: '', target: '' }, networkForm: null as null | { name: string; uuid: string; method: string; addresses: string; gateway: string; dns: string; ipv6_method: string; ipv6_addresses: string; ipv6_gateway: string; ipv6_dns: string; autoconnect: boolean }, libvirtNetworkForm: null as null | { action: 'create' | 'edit'; name: string; forward_mode: 'nat' | 'route' | 'bridge' | 'none'; bridge: string; ipv4_address: string; dhcp_start: string; dhcp_end: string; autostart: boolean; start_after_create: boolean }, accountForm: null as null | { action: 'create' | 'edit'; username: string; shell: string; home: string; groups: string; password: string }, showRepositoryForm: false, repositoryForm: { action: 'add' as 'add' | 'edit', alias: '', name: '', uri: '' }, showSubscriptionForm: false, subscriptionMenuOpen: false, subscriptionCodeVisible: false, subscriptionForm: { email: '', regcode: '' },
-      storageVolumes: [] as StorageVolume[], volumesLoading: false, volumesLoaded: false, showVolumeForm: false, volumeForm: { pool: '', name: '', capacity_gib: 10, format: 'qcow2' },
+      showPoolForm: false, poolForm: { action: 'create' as 'create' | 'edit', name: '', target: '' }, poolPathSuggestions: [] as string[], poolPathSuggestionsLoading: false, poolPathSuggestionsOpen: false, poolPathSuggestionError: false, poolPathLookupTimer: 0 as number, poolPathRequestSequence: 0, networkForm: null as null | { name: string; uuid: string; method: string; addresses: string; gateway: string; dns: string; ipv6_method: string; ipv6_addresses: string; ipv6_gateway: string; ipv6_dns: string; autoconnect: boolean }, libvirtNetworkForm: null as null | { action: 'create' | 'edit'; name: string; forward_mode: 'nat' | 'route' | 'bridge' | 'none'; bridge: string; ipv4_address: string; dhcp_start: string; dhcp_end: string; autostart: boolean; start_after_create: boolean }, accountForm: null as null | { action: 'create' | 'edit'; username: string; shell: string; home: string; groups: string; password: string }, showRepositoryForm: false, repositoryForm: { action: 'add' as 'add' | 'edit', alias: '', name: '', uri: '' }, showSubscriptionForm: false, subscriptionMenuOpen: false, subscriptionCodeVisible: false, subscriptionForm: { email: '', regcode: '' },
+      storageVolumes: [] as StorageVolume[], volumesLoading: false, volumesLoaded: false, showVolumeForm: false, volumeForm: { pool: '', name: '', capacity_gib: 10, format: 'qcow2' }, volumeResizeForm: null as null | { pool: string; name: string; current_capacity_bytes: number; capacity_gib: number },
       extensions: [] as SubscriptionExtension[], extensionsLoading: false, extensionsLoaded: false, extensionsHostId: '', extensionsError: '', extensionRegcodes: {} as Record<string, string>,
-      selectedVmName: '', vmDetail: null as VmDetail | null, vmDetailLoading: false, vmDetailError: '', vmDetailSection: 'overview', vmDetailSections: [{ id: 'overview', label: 'vmOverview' }, { id: 'configuration', label: 'vmConfiguration' }, { id: 'devices', label: 'vmDevices' }, { id: 'snapshots', label: 'snapshots' }, { id: 'activity', label: 'recentActivity' }], snapshotLibrary: [] as VmSnapshot[], snapshotsLoading: false, snapshotsError: '', snapshotVmTarget: '', snapshotKeepLast: 5, snapshotCleanupReview: false, snapshotCleanupConfirm: false, selectedSnapshotCleanup: [] as string[], vmConfigForm: { vcpus: 1, memory_mib: 1024 }, vmDetailsForm: { description: '', cpu_mode: 'host-model' as 'host-model' | 'host-passthrough' | 'custom', cpu_model: '', boot_order: 'hd,cdrom,network', autostart: false }, consoleVm: null as Vm | null,
-      showVmCreateForm: false, vmCreateForm: { name: '', pool: '', volume: '', network: '', vcpus: 2, memory_mib: 2048, iso_path: '', autostart: false }, vmCreateError: '', snapshotForm: { name: '', description: '' },
+      selectedVmName: '', vmDetail: null as VmDetail | null, vmDetailLoading: false, vmDetailError: '', vmDetailMessage: '', vmDetailSection: 'overview', vmDetailSections: [{ id: 'overview', label: 'vmOverview' }, { id: 'configuration', label: 'vmConfiguration' }, { id: 'devices', label: 'vmDevices' }, { id: 'snapshots', label: 'snapshots' }, { id: 'activity', label: 'recentActivity' }], snapshotLibrary: [] as VmSnapshot[], snapshotsLoading: false, snapshotsError: '', snapshotVmTarget: '', snapshotKeepLast: 5, snapshotCleanupReview: false, snapshotCleanupConfirm: false, selectedSnapshotCleanup: [] as string[], vmConfigForm: { vcpus: 1, memory_mib: 1024 }, vmDetailsForm: { description: '', cpu_mode: 'host-model' as 'host-model' | 'host-passthrough' | 'custom', cpu_model: '', boot_order: 'hd,cdrom,network', autostart: false }, consoleVm: null as Vm | null,
+      showVmCreateForm: false, vmCreateStep: 0, vmCreateForm: { name: '', pool: '', volume: '', network: '', vcpus: 2, memory_mib: 2048, boot_source: 'iso' as 'iso' | 'disk', iso_source: 'host' as 'host' | 'internet', iso_preset: 'opensuse', iso_url: '', iso_path: '', autostart: false }, vmCreateError: '', snapshotForm: { name: '', description: '' },
+      isoSuggestions: [] as string[], isoSuggestionsLoading: false, isoSuggestionsOpen: false, isoSuggestionError: false, isoSuggestionTimer: 0 as number, isoSuggestionSequence: 0,
       showVmDiskForm: false, vmDeviceForm: { pool: '', volume: '', network: '' }, vmDiskResizeForm: null as null | { pool: string; name: string; current_capacity_bytes: number; capacity_gib: number; vm_name: string },
-      navGroups: [{ id: 'system' }, { id: 'tools' }],
+      navGroups: [{ id: 'overview' }, { id: 'compute' }, { id: 'infrastructure' }, { id: 'host' }],
       tabs: [
-        { id: 'overview', group: 'system', icon: 'overview' }, { id: 'logs', group: 'system', icon: 'logs' },
-        { id: 'storage', group: 'system', icon: 'storage', countKey: 'storage' }, { id: 'network', group: 'system', icon: 'network', countKey: 'network' },
-        { id: 'vms', group: 'system', icon: 'vms', countKey: 'vms' }, { id: 'snapshots', group: 'system', icon: 'storage', countKey: 'snapshots' }, { id: 'accounts', group: 'system', icon: 'accounts', countKey: 'accounts' },
-        { id: 'services', group: 'system', icon: 'services' },
-        { id: 'repositories', group: 'tools', icon: 'repositories', countKey: 'repositories' }, { id: 'selinux', group: 'tools', icon: 'selinux' },
-        { id: 'subscriptions', group: 'tools', icon: 'subscriptions' }, { id: 'terminal', group: 'tools', icon: 'terminal' },
+        { id: 'overview', group: 'overview', icon: 'overview' },
+        { id: 'vms', group: 'compute', icon: 'vms', countKey: 'vms' }, { id: 'snapshots', group: 'compute', icon: 'storage', countKey: 'snapshots' },
+        { id: 'storage', group: 'infrastructure', icon: 'storage', countKey: 'storage' }, { id: 'network', group: 'infrastructure', icon: 'network', countKey: 'network' },
+        { id: 'logs', group: 'host', icon: 'logs' }, { id: 'accounts', group: 'host', icon: 'accounts', countKey: 'accounts' }, { id: 'services', group: 'host', icon: 'services' },
+        { id: 'repositories', group: 'host', icon: 'repositories', countKey: 'repositories' },
+        { id: 'subscriptions', group: 'host', icon: 'subscriptions' },
+        { id: 'terminal', group: 'host', icon: 'terminal' },
       ],
     };
   },
   computed: {
     hostId(): string { return String(this.$route.query.hostId || ''); },
+    activeFilterCount(): number {
+      const keys: Record<string, string[]> = { vms: ['vmFilter', 'vmStateFilter'], storage: ['storageFilter'], network: ['networkFilter', 'networkStateFilter'], accounts: ['accountFilter'], repositories: ['repositoryFilter'], services: ['serviceFilter', 'serviceStateFilter'], logs: ['logFilter', 'logPreset'] };
+      return (keys[this.activeTab] || []).filter((key) => (this as any)[key] !== '' && (this as any)[key] !== 'all').length;
+    },
     inventoryIsStale(): boolean { return Boolean(this.inventoryUpdatedAt) && this.staleClock - Date.parse(this.inventoryUpdatedAt) > 90000; },
     metricsIsStale(): boolean { return Boolean(this.metricsUpdatedAt) && this.staleClock - Date.parse(this.metricsUpdatedAt) > 90000; },
     snapshotRetentionCandidates(): VmSnapshot[] {
@@ -477,6 +525,7 @@ export default defineComponent({
       });
     },
     operationInProgressLabel(): string { return this.t('cloudNative.operationInProgressTitle'); },
+    vmDetailOperationBusy(): boolean { return ['vm-config', 'vm-details-config', 'vm-device', 'vm-disk-resize', 'vm-snapshot'].includes(this.busy); },
     elapsedLabel(): string { const seconds = Math.max(0, Math.floor((this.operationClock - this.operationStartedAt) / 1000)); return `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`; },
     operationLabelForBusy(): string {
       const value = this.busy.toLowerCase();
@@ -510,6 +559,14 @@ export default defineComponent({
     activeExtensionCount(): number { return this.extensions.filter((item) => item.active).length; },
     availableExtensionCount(): number { return this.extensions.filter((item) => !item.active).length; },
     availableTabs(): { id: string; group: string; icon: string; countKey?: string }[] { return this.tabs.filter((tab) => tab.id !== 'terminal' || this.permissions.canAdministerHost); },
+    ipv4AddressSuggestions(): string[] { return [...new Set((this.inventory?.network_connections || []).flatMap((item) => item.ipv4_addresses || []).filter(Boolean))].sort(); },
+    ipv4GatewaySuggestions(): string[] { return [...new Set((this.inventory?.network_connections || []).map((item) => item.ipv4_gateway).filter(Boolean))].sort(); },
+    ipv4DnsSuggestions(): string[] { return [...new Set((this.inventory?.network_connections || []).flatMap((item) => item.ipv4_dns || []).filter(Boolean))].sort(); },
+    ipv6AddressSuggestions(): string[] { return [...new Set((this.inventory?.network_connections || []).flatMap((item) => item.ipv6_addresses || []).filter(Boolean))].sort(); },
+    ipv6GatewaySuggestions(): string[] { return [...new Set((this.inventory?.network_connections || []).map((item) => item.ipv6_gateway).filter(Boolean))].sort(); },
+    ipv6DnsSuggestions(): string[] { return [...new Set((this.inventory?.network_connections || []).flatMap((item) => item.ipv6_dns || []).filter(Boolean))].sort(); },
+    homeDirectorySuggestions(): string[] { const username = this.accountForm?.username.trim(); return [...new Set([...(this.inventory?.accounts || []).map((item) => item.home).filter((path) => path?.startsWith('/')), '/home', '/srv', ...(username ? [`/home/${username}`] : [])])].sort(); },
+    hostBridgeNames(): string[] { return (this.inventory?.network.interfaces || []).filter((iface: any) => String(iface.link_type || '').toLowerCase() === 'bridge' || /^br[0-9A-Za-z_.-]*$/.test(String(iface.ifname || ''))).map((iface: any) => String(iface.ifname || '')).filter(Boolean); },
     runningVmCount(): number { return this.inventory?.vms.filter((vm) => vm.state.toLowerCase().includes('running')).length || 0; },
     vmRunningPercent(): number { return this.inventory?.vms.length ? Math.round(this.runningVmCount / this.inventory.vms.length * 100) : 0; },
     cpuLoadPercent(): number { return Math.min(100, Math.round((this.inventory?.system.load_average?.[0] || 0) / Math.max(1, this.inventory?.system.cpu_count || 1) * 100)); },
@@ -575,15 +632,7 @@ export default defineComponent({
     visibleServices(): Service[] { return this.filteredServices.slice(0, this.serviceLimit); },
     filteredLogs(): string[] {
       const term = this.logFilter.toLowerCase().trim();
-      const patterns: Record<string, RegExp> = {
-        errors: /\b(error|err|failed|failure|critical|crit|alert|emerg|panic|fatal)\b/i,
-        warnings: /\b(warn|warning)\b/i,
-        kernel: /\b(kernel|kworker|systemd-udevd)\b/i,
-        virtualization: /\b(libvirt|libvirtd|virtqemud|virtlogd|virsh|qemu|kvm)\b/i,
-        auth: /\b(sshd|ssh|sudo|pam|polkit|authentication|auth(?:entication)? failed|login failed)\b/i,
-        ha: /\b(pacemaker|corosync|crmsh|crm_mon|stonith|sbd|qdevice|qnetd|hawk)\b/i,
-      };
-      const pattern = patterns[this.logPreset];
+      const pattern = LOG_PRESET_PATTERNS[this.logPreset];
       return (this.inventory?.logs || []).filter((line) => (!term || line.toLowerCase().includes(term)) && (!pattern || pattern.test(line)));
     },
   },
@@ -593,15 +642,26 @@ export default defineComponent({
       if (value) { this.operationStartedAt = Date.now(); this.operationClock = this.operationStartedAt; this.operationPhase = 'applying'; this.operationTimer = window.setInterval(() => { this.operationClock = Date.now(); }, 1000); }
       else { this.operationStartedAt = 0; this.operationPhase = ''; }
     },
-    hostId(newHostId: string, oldHostId: string) { if (newHostId && newHostId !== oldHostId) { this.subscriptionCodeVisible = false; this.load(); } },
+    hostId(newHostId: string, oldHostId: string) { if (newHostId && newHostId !== oldHostId) { this.saveCloudViewState(oldHostId); this.restoreCloudViewState(newHostId); this.subscriptionCodeVisible = false; this.load(); } },
     '$route.query.tab'(tab: string) { if (this.tabs.some((item) => item.id === tab)) this.selectTab(tab); },
     selectedVmName(value: string, previous: string) { if (value && !previous) this.focusDialog(); else if (!value && previous) this.restoreDialogFocus(); },
     selectedResource(value: unknown, previous: unknown) { if (value && !previous) this.focusDialog(); else if (!value && previous) this.restoreDialogFocus(); },
     accountPasswordTarget(value: string, previous: string) { if (value && !previous) this.focusDialog(); else if (!value && previous) this.restoreDialogFocus(); },
-    serviceFilter() { this.serviceLimit = 25; },
-    serviceStateFilter() { this.serviceLimit = 25; },
+    activeTab() { this.saveCloudViewState(); },
+    vmFilter() { this.saveCloudViewState(); },
+    vmStateFilter() { this.saveCloudViewState(); },
+    storageFilter() { this.saveCloudViewState(); },
+    accountFilter() { this.saveCloudViewState(); },
+    repositoryFilter() { this.saveCloudViewState(); },
+    networkFilter() { this.saveCloudViewState(); },
+    networkStateFilter() { this.saveCloudViewState(); },
+    serviceFilter() { this.serviceLimit = 25; this.saveCloudViewState(); },
+    serviceStateFilter() { this.serviceLimit = 25; this.saveCloudViewState(); },
+    logFilter() { this.saveCloudViewState(); },
+    logPreset() { this.saveCloudViewState(); },
   },
   mounted() {
+    this.restoreCloudViewState(this.hostId);
     const initialTab = String(this.$route.query.tab || '');
     if (this.tabs.some((tab) => tab.id === initialTab)) this.selectTab(initialTab);
     this.load();
@@ -610,8 +670,25 @@ export default defineComponent({
     document.addEventListener('visibilitychange', this.onVisibilityChange);
     this.$nextTick(() => this.collapseEmptyProductNav());
   },
-  beforeUnmount() { window.clearInterval(this.metricsTimer); window.clearInterval(this.staleTimer); window.clearInterval(this.operationTimer); document.removeEventListener('visibilitychange', this.onVisibilityChange); this.restoreProductNav(); },
+  beforeUnmount() { window.clearInterval(this.metricsTimer); window.clearInterval(this.staleTimer); window.clearInterval(this.operationTimer); window.clearTimeout(this.poolPathLookupTimer); window.clearTimeout(this.isoSuggestionTimer); document.removeEventListener('visibilitychange', this.onVisibilityChange); this.restoreProductNav(); },
   methods: {
+    saveCloudViewState(hostId?: string) {
+      const targetHostId = hostId || this.hostId;
+      if (!targetHostId) return;
+      const state: Record<string, string> = { activeTab: this.activeTab };
+      CLOUD_FILTER_KEYS.forEach((key) => { state[key] = (this as any)[key]; });
+      try { window.sessionStorage.setItem(`${CLOUD_VIEW_STATE_PREFIX}${targetHostId}`, JSON.stringify(state)); } catch { /* Storage may be unavailable in restricted browser modes. */ }
+    },
+    restoreCloudViewState(hostId: string) {
+      if (!hostId) return;
+      const state = readCloudViewState(hostId);
+      this.activeTab = state.activeTab || 'overview';
+      CLOUD_FILTER_KEYS.forEach((key) => { (this as any)[key] = state[key] ?? CLOUD_FILTER_DEFAULTS[key]; });
+    },
+    clearCurrentFilters() {
+      const keys: Record<string, string[]> = { vms: ['vmFilter', 'vmStateFilter'], storage: ['storageFilter'], network: ['networkFilter', 'networkStateFilter'], accounts: ['accountFilter'], repositories: ['repositoryFilter'], services: ['serviceFilter', 'serviceStateFilter'], logs: ['logFilter', 'logPreset'] };
+      (keys[this.activeTab] || []).forEach((key) => { (this as any)[key] = CLOUD_FILTER_DEFAULTS[key]; });
+    },
     collapseEmptyProductNav() {
       const layout = document.querySelector('.dashboard-content') as HTMLElement | null;
       const sideNav = layout?.querySelector(':scope > .default-side-nav') as HTMLElement | null;
@@ -826,21 +903,61 @@ export default defineComponent({
     },
     onVisibilityChange() { if (!document.hidden) this.refreshMetrics(); },
     async openVmCreateForm() {
-      this.vmCreateError = ''; this.showVmCreateForm = true;
+      this.vmCreateError = ''; this.vmCreateStep = 0; this.showVmCreateForm = true;
+      this.vmCreateForm.iso_url = remoteIsoPresets.find((preset) => preset.id === this.vmCreateForm.iso_preset)?.url || '';
       if (!this.volumesLoaded) await this.loadStorageVolumes();
       if (!this.vmCreateForm.pool && this.availableVmPools.length) this.vmCreateForm.pool = this.availableVmPools[0].name;
       if (!this.vmCreateForm.network && this.activeVmNetworks.length) this.vmCreateForm.network = this.activeVmNetworks[0].name;
       if (!this.vmCreateForm.volume && this.availableVmCreateVolumes.length) this.vmCreateForm.volume = this.availableVmCreateVolumes[0].name;
     },
-    async createVm() {
-      const form = { ...this.vmCreateForm, iso_path: this.vmCreateForm.iso_path.trim() };
-      if (!form.name || !form.pool || !form.volume || !form.network || !Number.isInteger(form.vcpus) || !Number.isInteger(form.memory_mib)) {
+    updateVmIsoPreset() {
+      if (this.vmCreateForm.iso_preset !== 'custom') this.vmCreateForm.iso_url = remoteIsoPresets.find((preset) => preset.id === this.vmCreateForm.iso_preset)?.url || '';
+      else this.vmCreateForm.iso_url = '';
+    },
+    applyLightweightTestDefaults() { this.vmCreateForm.vcpus = 1; this.vmCreateForm.memory_mib = 512; this.vmCreateForm.iso_source = 'internet'; this.vmCreateForm.iso_preset = 'alpine'; this.updateVmIsoPreset(); },
+    advanceVmWizard() {
+      const form = this.vmCreateForm;
+      if (this.vmCreateStep === 0 && (!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/.test(form.name) || !Number.isInteger(form.vcpus) || form.vcpus < 1 || form.vcpus > 512 || !Number.isInteger(form.memory_mib) || form.memory_mib < 128 || form.memory_mib > 1048576 || form.memory_mib % 128 !== 0)) {
         this.vmCreateError = this.t('cloudNative.invalidVmCreate'); return;
+      }
+      if (this.vmCreateStep === 1 && (!form.pool || !form.volume || !form.network)) {
+        this.vmCreateError = this.t('cloudNative.invalidVmCreate'); return;
+      }
+      const remoteIsoValid = form.iso_source === 'internet' && /^https:\/\//i.test(form.iso_url.trim()) && /\.iso(?:$|[?#])/i.test(form.iso_url.trim());
+      if (this.vmCreateStep === 1 && form.boot_source === 'iso' && (form.iso_source === 'internet' ? !remoteIsoValid : (!form.iso_path.trim() || !/^\/.+\.iso$/i.test(form.iso_path.trim())))) {
+        this.vmCreateError = this.t('cloudNative.isoRequiredForInstall'); return;
+      }
+      this.vmCreateError = ''; this.vmCreateStep = Math.min(2, this.vmCreateStep + 1);
+    },
+    async createVm() {
+      const { boot_source, ...form } = this.vmCreateForm;
+      form.iso_path = boot_source === 'iso' ? form.iso_path.trim() : '';
+      form.iso_url = boot_source === 'iso' && form.iso_source === 'internet' ? form.iso_url.trim() : '';
+      delete (form as Record<string, unknown>).iso_source;
+      delete (form as Record<string, unknown>).iso_preset;
+      if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/.test(form.name) || !form.pool || !form.volume || !form.network || !Number.isInteger(form.vcpus) || form.vcpus < 1 || form.vcpus > 512 || !Number.isInteger(form.memory_mib) || form.memory_mib < 128 || form.memory_mib > 1048576 || form.memory_mib % 128 !== 0) {
+        this.vmCreateError = this.t('cloudNative.invalidVmCreate'); return;
+      }
+      if (boot_source === 'iso' && (form.iso_url ? (!/^https:\/\//i.test(form.iso_url) || !/\.iso(?:$|[?#])/i.test(form.iso_url)) : (!form.iso_path || !/^\/.+\.iso$/i.test(form.iso_path)))) {
+        this.vmCreateError = this.t('cloudNative.isoRequiredForInstall'); return;
       }
       this.busy = 'vm-create'; this.vmCreateError = ''; this.actionError = ''; this.actionSuccess = false;
       try {
-        await this.request(`/hosts/${this.hostId}/vms/create`, { method: 'POST', body: JSON.stringify(form) });
-        this.showVmCreateForm = false; this.vmCreateForm = { name: '', pool: '', volume: '', network: form.network, vcpus: 2, memory_mib: 2048, iso_path: '', autostart: false };
+        const result = await this.request(`/hosts/${this.hostId}/vms/create`, { method: 'POST', body: JSON.stringify(form) }) as { job_id?: string; status?: string };
+        if (result.job_id) {
+          this.operationPhase = 'downloading';
+          let status = result.status || 'queued';
+          const deadline = Date.now() + 4 * 60 * 60 * 1000;
+          while (['queued', 'running'].includes(status) && Date.now() < deadline) {
+            await new Promise((resolve) => window.setTimeout(resolve, 3000));
+            const job = await this.request(`/operations/${encodeURIComponent(result.job_id!)}`) as { status: string; results?: { error?: string }[] };
+            status = job.status;
+            this.operationPhase = status === 'running' ? 'downloading' : 'verifying';
+            if (status === 'failed' || status === 'partial') throw new Error(job.results?.find((item) => item.error)?.error || this.t('cloudNative.remoteIsoFailed'));
+          }
+          if (['queued', 'running'].includes(status)) throw new Error(this.t('cloudNative.remoteIsoTimeout'));
+        }
+        this.showVmCreateForm = false; this.vmCreateStep = 0; this.vmCreateForm = { name: '', pool: '', volume: '', network: form.network, vcpus: 2, memory_mib: 2048, boot_source: 'iso', iso_source: 'host', iso_preset: 'opensuse', iso_url: '', iso_path: '', autostart: false };
         await this.load(); this.actionSuccess = true;
       } catch (error) { this.vmCreateError = (error as Error).message; }
       finally { this.busy = ''; }
@@ -864,11 +981,11 @@ export default defineComponent({
       if (action === 'detach_disk') { payload.target = target.target; }
       if (action === 'attach_network') payload.network = this.vmDeviceForm.network;
       if (action === 'detach_network') payload.mac = target.mac;
-      this.busy = 'vm-device'; this.vmDetailError = ''; this.actionError = ''; this.actionSuccess = false;
+      this.busy = 'vm-device'; this.vmDetailError = ''; this.vmDetailMessage = ''; this.actionError = ''; this.actionSuccess = false;
       try {
         await this.request(`/hosts/${this.hostId}/vms/devices?vm_name=${encodeURIComponent(vmName)}`, { method: 'POST', body: JSON.stringify(payload) });
         this.showVmDiskForm = false; this.vmDeviceForm = { pool: '', volume: '', network: this.vmDeviceForm.network };
-        await this.showVmDetails({ ...this.vmDetail, name: vmName }); this.actionSuccess = true;
+        await this.showVmDetails({ ...this.vmDetail, name: vmName }); this.vmDetailMessage = this.t('cloudNative.actionSucceeded'); this.actionSuccess = true;
       } catch (error) { this.vmDetailError = (error as Error).message; }
       finally { this.busy = ''; }
     },
@@ -881,11 +998,11 @@ export default defineComponent({
         this.reviewAction({ title: this.t(action === 'delete' ? 'cloudNative.reviewDeleteSnapshotTitle' : 'cloudNative.reviewRevertSnapshotTitle'), summary: this.t(action === 'delete' ? 'cloudNative.reviewDeleteSnapshot' : 'cloudNative.reviewRevertSnapshot', { vm: vmName, snapshot: selected.name }), warning: this.t('cloudNative.reviewSnapshotWarning'), confirmLabel: this.t(action === 'delete' ? 'cloudNative.deleteSnapshot' : 'cloudNative.revertSnapshot'), execute: () => this.controlVmSnapshot(action, selected, true) });
         return;
       }
-      this.busy = 'vm-snapshot'; this.vmDetailError = ''; this.actionError = ''; this.actionSuccess = false;
+      this.busy = 'vm-snapshot'; this.vmDetailError = ''; this.vmDetailMessage = ''; this.actionError = ''; this.actionSuccess = false;
       try {
         await this.request(`/hosts/${this.hostId}/vms/snapshots?vm_name=${encodeURIComponent(vmName)}`, { method: 'POST', body: JSON.stringify({ action, name: selected.name, description: selected.description }) });
         this.snapshotForm = { name: '', description: '' };
-        await this.showVmDetails({ ...this.vmDetail, name: vmName }); await this.loadSnapshotLibrary(); this.actionSuccess = true;
+        await this.showVmDetails({ ...this.vmDetail, name: vmName }); await this.loadSnapshotLibrary(); this.vmDetailMessage = this.t('cloudNative.actionSucceeded'); this.actionSuccess = true;
       } catch (error) { this.vmDetailError = (error as Error).message; }
       finally { this.busy = ''; }
     },
@@ -900,6 +1017,7 @@ export default defineComponent({
     isVmStopped(vm: Vm) { const state = vm.state.toLowerCase(); return state.includes('shut off') || state.includes('shutoff') || state === 'stopped'; },
     formatSnapshotTime(value: string) { const numeric = Number(value); const date = Number.isFinite(numeric) && numeric > 0 ? new Date(numeric * 1000) : new Date(value); return Number.isNaN(date.getTime()) ? value : date.toLocaleString(); },
     formatSnapshotVersion(version = '', createdAt = '') { const match = version.match(/^v(\d{8})T(\d{6})(\d{6})?Z$/); if (match) return `v${match[1].slice(0, 4)}-${match[1].slice(4, 6)}-${match[1].slice(6)} ${match[2].slice(0, 2)}:${match[2].slice(2, 4)}:${match[2].slice(4)} UTC`; return version.startsWith('legacy-') ? `${this.t('cloudNative.legacySnapshot')} · ${createdAt ? this.formatSnapshotTime(createdAt) : '—'}` : (version || this.t('cloudNative.legacySnapshot')); },
+    snapshotStateClass(state = '') { const value = state.toLowerCase(); return value.includes('running') ? 'ready' : value.includes('paused') ? 'warning-state' : 'unknown'; },
     async actOnService(service: Service, action: 'start' | 'stop' | 'restart') {
       this.busy = service.name; this.actionError = ''; this.actionSuccess = false;
       try { await this.request(`/hosts/${this.hostId}/services/actions?service_name=${encodeURIComponent(service.name)}`, { method: 'POST', body: JSON.stringify({ action }) }); await this.refreshServiceInventory(); this.actionSuccess = true; }
@@ -952,6 +1070,53 @@ export default defineComponent({
       } catch (error) { this.actionError = (error as Error).message; }
       finally { this.busy = ''; }
     },
+    schedulePoolPathSuggestions() {
+      window.clearTimeout(this.poolPathLookupTimer);
+      this.poolPathSuggestionsOpen = true;
+      this.poolPathSuggestionError = false;
+      this.poolPathLookupTimer = window.setTimeout(() => this.loadPoolPathSuggestions(), 400);
+    },
+    async loadPoolPathSuggestions() {
+      const requestedHostId = this.hostId;
+      const path = this.poolForm.target.trim() || '/';
+      if (!path.startsWith('/') || path.includes('\0') || path.length > 512) { this.poolPathSuggestions = []; return; }
+      const sequence = ++this.poolPathRequestSequence;
+      this.poolPathSuggestionsLoading = true;
+      try {
+        const result = await this.request(`/hosts/${requestedHostId}/storage-pools/directories?path=${encodeURIComponent(path)}`);
+        if (sequence === this.poolPathRequestSequence && requestedHostId === this.hostId) this.poolPathSuggestions = Array.isArray(result?.suggestions) ? result.suggestions : [];
+      } catch {
+        if (sequence === this.poolPathRequestSequence) { this.poolPathSuggestions = []; this.poolPathSuggestionError = true; }
+      } finally {
+        if (sequence === this.poolPathRequestSequence) this.poolPathSuggestionsLoading = false;
+      }
+    },
+    selectPoolPathSuggestion(path: string) { this.poolForm.target = path; this.poolPathSuggestionsOpen = false; this.poolPathSuggestions = []; },
+    closePoolPathSuggestionsWhenFocusLeaves(event: FocusEvent) { const container = event.currentTarget as HTMLElement; if (!container.contains(event.relatedTarget as Node | null)) this.poolPathSuggestionsOpen = false; },
+    scheduleIsoSuggestions() {
+      window.clearTimeout(this.isoSuggestionTimer);
+      this.isoSuggestionSequence += 1;
+      this.isoSuggestionsOpen = true;
+      this.isoSuggestionError = false;
+      this.isoSuggestionTimer = window.setTimeout(() => this.loadIsoSuggestions(), 450);
+    },
+    async loadIsoSuggestions() {
+      const requestedHostId = this.hostId;
+      const path = this.vmCreateForm.iso_path.trim() || '/';
+      const sequence = ++this.isoSuggestionSequence;
+      if (!path.startsWith('/') || path.includes('\0') || path.length > 1024) { this.isoSuggestions = []; this.isoSuggestionsLoading = false; return; }
+      this.isoSuggestionsLoading = true;
+      try {
+        const result = await this.request(`/hosts/${requestedHostId}/vms/iso-images?path=${encodeURIComponent(path)}`);
+        if (sequence === this.isoSuggestionSequence && requestedHostId === this.hostId) this.isoSuggestions = Array.isArray(result?.suggestions) ? result.suggestions : [];
+      } catch {
+        if (sequence === this.isoSuggestionSequence) { this.isoSuggestions = []; this.isoSuggestionError = true; }
+      } finally {
+        if (sequence === this.isoSuggestionSequence) this.isoSuggestionsLoading = false;
+      }
+    },
+    selectIsoSuggestion(path: string) { this.vmCreateForm.iso_path = path; this.isoSuggestionsOpen = false; this.isoSuggestions = []; },
+    closeIsoSuggestionsWhenFocusLeaves(event: FocusEvent) { const container = event.currentTarget as HTMLElement; if (!container.contains(event.relatedTarget as Node | null)) this.isoSuggestionsOpen = false; },
     editPool(pool: Inventory['storage_pools'][number]) { this.poolForm = { action: 'edit', name: pool.name, target: pool.target }; this.showPoolForm = true; },
     async deletePool(name: string, reviewed = false) {
       if (!reviewed) {
@@ -1052,8 +1217,13 @@ export default defineComponent({
       catch (error) { this.actionError = (error as Error).message; }
       finally { this.busy = ''; }
     },
-    openLibvirtNetworkForm(network?: Inventory['libvirt_networks'][number]) {
-      this.libvirtNetworkForm = network ? { action: 'edit', name: network.name, forward_mode: (['nat', 'route', 'bridge', 'none'].includes(network.forward_mode) ? network.forward_mode : 'none') as 'nat' | 'route' | 'bridge' | 'none', bridge: network.bridge || '', ipv4_address: network.ipv4_address && network.ipv4_netmask ? `${network.ipv4_address}/${this.netmaskPrefix(network.ipv4_netmask)}` : '', dhcp_start: network.dhcp_start || '', dhcp_end: network.dhcp_end || '', autostart: network.autostart === 'yes', start_after_create: false } : { action: 'create', name: '', forward_mode: 'nat', bridge: '', ipv4_address: '192.168.100.1/24', dhcp_start: '192.168.100.100', dhcp_end: '192.168.100.200', autostart: true, start_after_create: true };
+    openLibvirtNetworkForm(network?: Inventory['libvirt_networks'][number], preset: 'nat' | 'bridge' = 'nat') {
+      const base = `kvm-${preset}`;
+      let name = base; let suffix = 2;
+      const existing = new Set((this.inventory?.libvirt_networks || []).map((item) => item.name));
+      while (existing.has(name)) name = `${base}-${suffix++}`;
+      this.libvirtNetworkForm = network ? { action: 'edit', name: network.name, forward_mode: (['nat', 'route', 'bridge', 'none'].includes(network.forward_mode) ? network.forward_mode : 'none') as 'nat' | 'route' | 'bridge' | 'none', bridge: network.bridge || '', ipv4_address: network.ipv4_address && network.ipv4_netmask ? `${network.ipv4_address}/${this.netmaskPrefix(network.ipv4_netmask)}` : '', dhcp_start: network.dhcp_start || '', dhcp_end: network.dhcp_end || '', autostart: network.autostart === 'yes', start_after_create: false } : { action: 'create', name, forward_mode: preset, bridge: preset === 'bridge' ? (this.hostBridgeNames[0] || '') : '', ipv4_address: preset === 'bridge' ? '' : '192.168.100.1/24', dhcp_start: preset === 'bridge' ? '' : '192.168.100.100', dhcp_end: preset === 'bridge' ? '' : '192.168.100.200', autostart: true, start_after_create: true };
+      this.$nextTick(() => ((this.$refs.libvirtNetworkEditor as HTMLElement | undefined)?.scrollIntoView({ behavior: 'smooth', block: 'center' })));
     },
     netmaskPrefix(mask: string) { try { return mask.split('.').map((part) => Number(part).toString(2).padStart(8, '0')).join('').replace(/0+$/, '').length; } catch { return 24; } },
     async saveLibvirtNetwork(reviewed = false) {
@@ -1109,7 +1279,7 @@ export default defineComponent({
     },
     async showVmDetails(vm: Vm, section = 'overview') {
       if (this.selectedVmName !== vm.name) this.snapshotForm = { name: '', description: '' };
-      this.selectedVmName = vm.name; this.vmDetail = null; this.vmDetailError = ''; this.vmDetailLoading = true;
+      this.selectedVmName = vm.name; this.vmDetail = null; this.vmDetailError = ''; this.vmDetailMessage = ''; this.vmDetailLoading = true;
       this.vmDetailSection = section;
       try { const response: VmDetail = await this.request(`/hosts/${this.hostId}/vms/detail?vm_name=${encodeURIComponent(vm.name)}`); const details = { ...response, disks: Array.isArray(response.disks) ? response.disks : [], interfaces: Array.isArray(response.interfaces) ? response.interfaces.map((item) => ({ ...item, ip_addresses: Array.isArray(item.ip_addresses) ? item.ip_addresses : [] })) : [], snapshots: Array.isArray(response.snapshots) ? response.snapshots : [], boot_order: Array.isArray(response.boot_order) ? response.boot_order : [] }; this.vmDetail = details; this.vmConfigForm = { vcpus: details.configured_vcpus || details.current_vcpus || 1, memory_mib: Math.max(128, Math.round((details.configured_memory_kib || details.memory_kib) / 1024)) }; this.vmDetailsForm = { description: details.description || '', cpu_mode: (['host-model', 'host-passthrough', 'custom'].includes(details.cpu_mode) ? details.cpu_mode : 'custom') as 'host-model' | 'host-passthrough' | 'custom', cpu_model: details.cpu_model || '', boot_order: details.boot_order.join(',') || 'hd', autostart: details.autostart === 'yes' }; this.updateVmFromDetails(details); }
       catch (error) { this.vmDetailError = (error as Error).message; }
@@ -1118,6 +1288,16 @@ export default defineComponent({
     configureVm(vm: Vm) { return this.showVmDetails(vm, 'configuration'); },
     openVmSnapshots(vm: Vm) { return this.showVmDetails(vm, 'snapshots'); },
     diskVolume(disk: { source: string }): StorageVolume | undefined { return this.storageVolumes.find((volume) => volume.path === disk.source); },
+    onVmDetailTabKeydown(event: KeyboardEvent, sectionId: string) {
+      const keys = ['ArrowLeft', 'ArrowRight', 'Home', 'End'];
+      if (!keys.includes(event.key)) return;
+      event.preventDefault();
+      const current = this.vmDetailSections.findIndex((section) => section.id === sectionId);
+      const next = event.key === 'Home' ? 0 : event.key === 'End' ? this.vmDetailSections.length - 1 : (current + (event.key === 'ArrowRight' ? 1 : -1) + this.vmDetailSections.length) % this.vmDetailSections.length;
+      const target = this.vmDetailSections[next];
+      this.selectVmDetailSection(target.id);
+      this.$nextTick(() => document.querySelector<HTMLElement>(`[data-vm-detail-tab="${CSS.escape(target.id)}"]`)?.focus());
+    },
     async selectVmDetailSection(section: string) { this.vmDetailSection = section; if (section === 'devices' && !this.volumesLoaded) await this.loadStorageVolumes(); if (section === 'activity') await this.loadVmActivity(this.selectedVmName); },
     async openVmDiskResize(disk: { source: string }) {
       if (!this.vmDetail || !this.vmDetail.name || this.vmIsRunning(this.vmDetail)) return;
@@ -1132,10 +1312,10 @@ export default defineComponent({
       if (!form || !this.vmDetail || !Number.isFinite(form.capacity_gib) || form.capacity_gib * 1073741824 <= form.current_capacity_bytes || form.capacity_gib > 10240) { this.vmDetailError = this.t('cloudNative.invalidDiskCapacity'); return; }
       if (this.vmIsRunning(this.vmDetail)) { this.vmDetailError = this.t('cloudNative.stopVmBeforeDiskResize'); return; }
       const capacity_bytes = Math.floor(form.capacity_gib * 1073741824);
-      this.busy = 'vm-disk-resize'; this.vmDetailError = ''; this.actionError = ''; this.actionSuccess = false;
+      this.busy = 'vm-disk-resize'; this.vmDetailError = ''; this.vmDetailMessage = ''; this.actionError = ''; this.actionSuccess = false;
       try {
         await this.request(`/hosts/${this.hostId}/storage-volumes`, { method: 'POST', body: JSON.stringify({ action: 'resize', pool: form.pool, name: form.name, capacity_bytes, vm_name: form.vm_name }) });
-        this.vmDiskResizeForm = null; this.volumesLoaded = false; await this.loadStorageVolumes(); await this.showVmDetails({ ...this.vmDetail, name: form.vm_name }); this.vmDetailSection = 'devices'; this.actionSuccess = true;
+        this.vmDiskResizeForm = null; this.volumesLoaded = false; await this.loadStorageVolumes(); await this.showVmDetails({ ...this.vmDetail, name: form.vm_name }); this.vmDetailSection = 'devices'; this.vmDetailMessage = this.t('cloudNative.actionSucceeded'); this.actionSuccess = true;
       } catch (error) { this.vmDetailError = (error as Error).message; }
       finally { this.busy = ''; }
     },
@@ -1145,8 +1325,8 @@ export default defineComponent({
       const boot_order = form.boot_order.split(',').map((item) => item.trim()).filter(Boolean);
       if (!boot_order.length || boot_order.length > 3 || new Set(boot_order).size !== boot_order.length || boot_order.some((item) => !['hd', 'cdrom', 'network'].includes(item))) { this.vmDetailError = this.t('cloudNative.invalidBootOrder'); return; }
       if (form.cpu_mode === 'custom' && !form.cpu_model.trim()) { this.vmDetailError = this.t('cloudNative.customCpuModelRequired'); return; }
-      const name = this.vmDetail.name; this.busy = 'vm-details-config'; this.vmDetailError = ''; this.actionError = ''; this.actionSuccess = false;
-      try { await this.request(`/hosts/${this.hostId}/vms/details-config?vm_name=${encodeURIComponent(name)}`, { method: 'POST', body: JSON.stringify({ description: form.description, cpu_mode: form.cpu_mode, cpu_model: form.cpu_mode === 'custom' ? form.cpu_model : null, boot_order, autostart: form.autostart }) }); await this.showVmDetails({ ...this.vmDetail, name }); this.actionSuccess = true; }
+      const name = this.vmDetail.name; this.busy = 'vm-details-config'; this.vmDetailError = ''; this.vmDetailMessage = ''; this.actionError = ''; this.actionSuccess = false;
+      try { await this.request(`/hosts/${this.hostId}/vms/details-config?vm_name=${encodeURIComponent(name)}`, { method: 'POST', body: JSON.stringify({ description: form.description, cpu_mode: form.cpu_mode, cpu_model: form.cpu_mode === 'custom' ? form.cpu_model : null, boot_order, autostart: form.autostart }) }); await this.showVmDetails({ ...this.vmDetail, name }); this.vmDetailMessage = this.t('cloudNative.actionSucceeded'); this.actionSuccess = true; }
       catch (error) { this.vmDetailError = (error as Error).message; }
       finally { this.busy = ''; }
     },
@@ -1155,19 +1335,19 @@ export default defineComponent({
         this.vmDetailError = this.t('cloudNative.invalidVmConfiguration'); return;
       }
       const vmName = this.vmDetail.name;
-      this.busy = 'vm-config'; this.vmDetailError = ''; this.actionError = ''; this.actionSuccess = false;
+      this.busy = 'vm-config'; this.vmDetailError = ''; this.vmDetailMessage = ''; this.actionError = ''; this.actionSuccess = false;
       try {
         await this.request(`/hosts/${this.hostId}/vms/config?vm_name=${encodeURIComponent(vmName)}`, { method: 'POST', body: JSON.stringify(this.vmConfigForm) });
         await this.showVmDetails({ ...this.vmDetail, name: vmName });
-        this.actionSuccess = true;
+        this.vmDetailMessage = this.t('cloudNative.actionSucceeded'); this.actionSuccess = true;
       } catch (error) { this.vmDetailError = (error as Error).message; }
       finally { this.busy = ''; }
     },
-    closeVmDetails() { this.selectedVmName = ''; this.vmDetail = null; this.vmDetailError = ''; },
+    closeVmDetails() { this.selectedVmName = ''; this.vmDetail = null; this.vmDetailError = ''; this.vmDetailMessage = ''; },
     logLineClass(line: string) { return /\b(err|error|failed|critical|panic)\b/i.test(line) ? 'log-error' : /\b(warn|warning)\b/i.test(line) ? 'log-warning' : ''; },
     usageClass(value: string) { const percent = Number.parseInt(value, 10); return percent >= 90 ? 'usage-high' : percent >= 75 ? 'usage-medium' : 'usage-normal'; },
     usagePercent(value: string) { return Math.max(0, Math.min(100, Number.parseInt(value, 10) || 0)); },
-    selectTab(tab: string) { if (tab !== 'subscriptions') this.subscriptionCodeVisible = false; this.activeTab = tab; if (tab === 'storage') this.loadStorageVolumes(); if (tab === 'subscriptions') this.loadSubscriptionExtensions(); if (tab === 'snapshots') this.loadSnapshotLibrary(); },
+    selectTab(tab: string) { if (!['overview', 'vms'].includes(tab)) { this.showVmCreateForm = false; this.vmCreateError = ''; } this.activeTab = tab; if (tab === 'storage') this.loadStorageVolumes(); if (tab === 'snapshots') this.loadSnapshotLibrary(); },
     async loadSnapshotLibrary() { if (this.snapshotsLoading) return; this.snapshotsLoading = true; this.snapshotsError = ''; try { this.snapshotLibrary = await this.request(`/hosts/${this.hostId}/vms/snapshots`); } catch (error) { this.snapshotsError = (error as Error).message; } finally { this.snapshotsLoading = false; } },
     snapshotKey(snapshot: VmSnapshot) { return `${snapshot.vm_name || ''}/${snapshot.name}`; },
     reviewSnapshotCleanup() { this.selectedSnapshotCleanup = this.snapshotRetentionCandidates.map((snapshot) => this.snapshotKey(snapshot)); this.snapshotCleanupConfirm = false; this.snapshotCleanupReview = true; },
@@ -1203,6 +1383,18 @@ export default defineComponent({
     async saveVolume() {
       this.busy = 'storage-volume'; this.actionError = ''; this.actionSuccess = false;
       try { await this.request(`/hosts/${this.hostId}/storage-volumes`, { method: 'POST', body: JSON.stringify({ action: 'create', pool: this.volumeForm.pool, name: this.volumeForm.name, capacity_bytes: Math.floor(this.volumeForm.capacity_gib * 1024 ** 3), format: this.volumeForm.format }) }); this.showVolumeForm = false; await this.loadStorageVolumes(); this.actionSuccess = true; }
+      catch (error) { this.actionError = (error as Error).message; }
+      finally { this.busy = ''; }
+    },
+    openStorageVolumeResize(volume: StorageVolume) {
+      if (!['qcow2', 'raw'].includes(volume.format.toLowerCase())) { this.actionError = this.t('cloudNative.diskResizeUnsupported'); return; }
+      this.actionError = ''; this.volumeResizeForm = { pool: volume.pool, name: volume.name, current_capacity_bytes: volume.capacity_bytes, capacity_gib: Math.ceil(volume.capacity_bytes / 1073741824 * 1000) / 1000 };
+    },
+    async saveStorageVolumeResize() {
+      const form = this.volumeResizeForm;
+      if (!form || !Number.isFinite(form.capacity_gib) || form.capacity_gib * 1073741824 <= form.current_capacity_bytes || form.capacity_gib > 10240) { this.actionError = this.t('cloudNative.invalidDiskCapacity'); return; }
+      this.busy = 'storage-volume'; this.actionError = ''; this.actionSuccess = false;
+      try { await this.request(`/hosts/${this.hostId}/storage-volumes`, { method: 'POST', body: JSON.stringify({ action: 'resize', pool: form.pool, name: form.name, capacity_bytes: Math.floor(form.capacity_gib * 1073741824) }) }); this.volumeResizeForm = null; this.volumesLoaded = false; await this.loadStorageVolumes(); await this.load(); this.actionSuccess = true; }
       catch (error) { this.actionError = (error as Error).message; }
       finally { this.busy = ''; }
     },
@@ -1261,7 +1453,7 @@ export default defineComponent({
 .eyebrow { color:var(--cn-muted); font-size:10px; font-weight:700; letter-spacing:.11em; }
 .muted,small { color:var(--cn-muted); }
 small { display:block; margin-top:4px; font-size:12px; }
-.toolbar,.filter-bar { display:flex; align-items:center; gap:10px; }
+.toolbar,.filter-bar { display:flex; align-items:center; gap:10px; min-width:0; }
 .toolbar form { margin:0; }
 .permission-badge { padding:5px 9px; border:1px solid var(--cn-border); border-radius:5px; color:var(--cn-muted); background:var(--cn-panel); font-size:11px; font-weight:600; }
 .cluster-summary { display:grid; grid-template-columns:1.35fr repeat(3,1fr); gap:14px; margin:26px 0 28px; }
@@ -1285,6 +1477,7 @@ small { display:block; margin-top:4px; font-size:12px; }
 .admin-tabs { position:sticky; top:16px; display:flex; flex-direction:column; gap:18px; min-width:0; max-height:calc(100vh - 32px); overflow-y:auto; padding:12px 10px 16px 0; border-right:1px solid var(--cn-border); }
 .nav-group { display:grid; gap:3px; }
 .nav-group h2 { margin:0 0 5px; padding:0 12px; color:var(--cn-muted); font-size:10px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; }
+.nav-group:not(:first-child) { padding-top:7px; border-top:1px solid color-mix(in srgb,var(--cn-border) 65%,transparent); }
 .admin-tabs button { display:grid; grid-template-columns:22px minmax(0,1fr) auto; align-items:center; gap:9px; width:100%; border:0; border-radius:5px; padding:9px 11px; color:var(--body-text,#dce1e8); background:transparent; cursor:pointer; text-align:left; font-size:13px; }
 .admin-tabs button:hover { background:rgba(140,160,190,.12); }
 .admin-tabs button.active { color:var(--body-text,#f1f5f9); background:rgba(95,150,125,.23); box-shadow:inset 3px 0 #65c99a; font-weight:600; }
@@ -1296,7 +1489,7 @@ small { display:block; margin-top:4px; font-size:12px; }
 .section-panel h2 { margin:4px 0 6px; font-size:21px; font-weight:600; letter-spacing:-.015em; }
 .section-panel h3 { margin:0 0 14px; font-size:15px; font-weight:600; }
 .section-tools { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:9px; }
-.updated-at { color:var(--cn-muted); font-size:12px; }.updated-at.stale { color:var(--warning-text,var(--body-text)); font-weight:600; }
+.updated-at { color:var(--cn-muted); font-size:12px; }.updated-at.stale { color:var(--warning-text,var(--body-text)); font-weight:600; color:color-mix(in srgb,var(--warning,#d99c30) 45%,var(--body-text,#20252b) 55%); }
 .overview-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
 .info-panel,.pool-card,.network-card { border:1px solid var(--cn-border); border-radius:8px; padding:19px; background:var(--cn-panel); }
 .panel-heading { display:flex; align-items:center; gap:12px; margin-bottom:18px; }
@@ -1309,6 +1502,11 @@ small { display:block; margin-top:4px; font-size:12px; }
 .resource-row:last-child { border-bottom:0; }
 .vm-heading { margin:28px 0 12px; }
 .vm-heading h2 { margin-top:4px; }
+.vm-provisioning-guide { display:flex; align-items:center; justify-content:space-between; gap:20px; margin:25px 0 20px; padding:18px 20px; border:1px solid color-mix(in srgb,var(--primary,#5288e5) 35%,var(--cn-border)); border-radius:8px; background:color-mix(in srgb,var(--primary,#5288e5) 7%,var(--body-bg,#252b33)); }
+.vm-provisioning-guide h3 { margin:4px 0; font-size:16px; }
+.vm-provisioning-guide p { margin:0; color:var(--cn-muted); font-size:13px; }
+.vm-provisioning-guide ol { display:flex; flex-wrap:wrap; gap:8px 24px; margin:12px 0 0; padding-left:18px; color:var(--cn-muted); font-size:12px; }
+.vm-provisioning-guide>.btn { flex:none; }
 .text-button { font-size:13px; }
 .subsection { margin:24px 0 30px; }
 .subsection h3 { display:flex; align-items:center; gap:9px; }
@@ -1323,6 +1521,13 @@ small { display:block; margin-top:4px; font-size:12px; }
 .pool-card>div:first-child strong { font-size:14px; }
 .pool-card dd { overflow-wrap:anywhere; text-align:right; }
 .network-page .section-heading { align-items:flex-end; }
+.network-page-actions { display:grid; gap:10px; justify-items:end; }
+.network-page-actions .filter-bar { justify-content:flex-end; }
+.network-quick-create { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; }
+.volume-resize-form { display:grid; grid-template-columns:minmax(180px,1fr) minmax(150px,.7fr) minmax(150px,.7fr) auto; align-items:end; gap:12px; padding:14px; border:1px solid var(--cn-border); border-radius:7px; background:var(--cn-panel); }
+.volume-resize-form>div p { margin:5px 0 0; font-size:12px; }
+.volume-resize-form label { display:grid; gap:6px; font-size:12px; font-weight:600; }
+.volume-resize-form .row-actions { justify-content:flex-end; padding:0; border:0; }
 .network-summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin:4px 0 28px; }
 .operation-status { display:flex; align-items:center; gap:20px; }.operation-status-copy { display:grid; gap:4px; min-width:0; }.operation-status-copy small { color:var(--cn-muted); }.operation-progress-track { display:block; position:relative; flex:0 0 min(180px,28%); height:5px; overflow:hidden; border-radius:4px; background:color-mix(in srgb,var(--body-text) 14%,var(--body-bg)); }.operation-progress-track i { position:absolute; inset:0 auto 0 0; width:38%; border-radius:inherit; background:var(--primary,#53c99a); animation:kvm-operation-progress 1.4s ease-in-out infinite; }@keyframes kvm-operation-progress { from { transform:translateX(-110%); } to { transform:translateX(280%); } }
 .activity-panel { margin:24px 0 28px; }.activity-list { display:grid; gap:0; margin:0; padding:0; list-style:none; }.activity-list li { display:grid; grid-template-columns:100px minmax(0,1fr); align-items:center; gap:12px; padding:10px 0; border-bottom:1px solid var(--cn-border); }.activity-list li>div { min-width:0; }.activity-list li strong,.activity-list li small { display:block; overflow-wrap:anywhere; }.activity-list li small { margin-top:3px; color:var(--cn-muted); font-size:11px; }.activity-scroll { max-height:156px; overflow-y:auto; overscroll-behavior:contain; scrollbar-color:var(--cn-muted) transparent; scrollbar-width:thin; }.activity-scroll:focus-visible { outline:2px solid var(--primary,#4b91e2); outline-offset:3px; border-radius:4px; }.activity-result { width:max-content; padding:3px 8px; border-radius:12px; font-size:11px; }.activity-result.ready { color:#23733a; background:#e3f5e8; }.activity-result.unreachable { color:#a52822; background:#fde8e7; }.compact-empty { padding:16px; }
@@ -1404,7 +1609,7 @@ small { display:block; margin-top:4px; font-size:12px; }
 :deep(.table tbody tr:hover) { background:rgba(65,110,190,.035); }
 :deep(.table small) { max-width:240px; overflow-wrap:anywhere; }
 :deep(.table .empty-row) { padding:28px; color:var(--cn-muted); text-align:center; }
-.state { display:inline-flex; align-items:center; gap:6px; padding:4px 9px; border-radius:12px; color:#536174; background:#eef1f5; font-size:11px; font-weight:600; white-space:nowrap; }
+.state { display:inline-flex; align-items:center; gap:6px; padding:4px 9px; border-radius:12px; color:var(--body-text,#536174); background:color-mix(in srgb,var(--muted,#8892a0) 12%,var(--body-bg,#fff)); font-size:11px; font-weight:600; white-space:nowrap; }
 .state i { width:6px; height:6px; border-radius:50%; background:currentColor; }
 .state.ready { color:var(--success-text,#287447); background:color-mix(in srgb,var(--success,#45a86d) 17%,var(--body-bg,#fff)); }.state.unreachable { color:var(--error-text,#a52822); background:color-mix(in srgb,var(--error,#d45b52) 15%,var(--body-bg,#fff)); }.state.warning-state { color:var(--warning-text,#8b5a00); background:color-mix(in srgb,var(--warning,#d99c30) 19%,var(--body-bg,#fff)); }.state.unknown { color:var(--body-text,#596579); background:color-mix(in srgb,var(--muted,#8892a0) 15%,var(--body-bg,#fff)); }
 .toggle-pill { border:1px solid var(--cn-border); border-radius:14px; padding:4px 9px; color:#667085; background:transparent; cursor:pointer; font-size:11px; }
@@ -1415,8 +1620,20 @@ small { display:block; margin-top:4px; font-size:12px; }
 .resource-name:hover { text-decoration:underline; }
 .resource-name:focus-visible { outline:2px solid #5288e5; outline-offset:3px; }
 .row-actions .btn,.resource-actions .btn,.connection-actions .btn { min-height:29px; white-space:nowrap; }
-.search-input { min-width:190px; max-width:270px; border:1px solid var(--cn-border); border-radius:var(--border-radius, 4px); padding:9px 11px; color:var(--body-text,#e5e7eb) !important; background:var(--body-bg,#252b33) !important; font-size:13px; }
-.search-input:focus { border-color:#5288e5; outline:2px solid rgba(55,112,215,.13); }
+.search-input { min-width:190px; max-width:270px; min-height:38px; box-sizing:border-box; border:1px solid var(--cn-border); border-radius:var(--border-radius, 4px); padding:8px 11px; color:var(--kvm-control-text,var(--body-text,#243043)) !important; background:var(--kvm-control-bg,var(--body-bg,#fff)) !important; font:inherit; font-size:13px; }
+.search-input:focus { border-color:var(--kvm-focus,#5288e5); outline:2px solid color-mix(in srgb,var(--kvm-focus,#5288e5) 20%,transparent); }
+.pool-path-field { position:relative; display:grid; gap:7px; min-width:0; font-size:13px; font-weight:600; }
+.pool-path-field>.search-input { width:100%; max-width:none; box-sizing:border-box; }
+.pool-path-suggestions { display:grid; gap:2px; max-height:190px; overflow:auto; margin:0; padding:4px; border:1px solid var(--cn-border); border-radius:5px; background:var(--body-bg,#252b33); list-style:none; }
+.pool-path-option button { display:block; width:100%; overflow:hidden; padding:7px 9px; border:0; border-radius:3px; color:var(--body-text,#e5e7eb); background:transparent; font:12px ui-monospace,SFMono-Regular,Menlo,monospace; text-align:left; text-overflow:ellipsis; white-space:nowrap; cursor:pointer; }
+.pool-path-option button:hover,.pool-path-option button:focus-visible { background:color-mix(in srgb,var(--primary,#3d98ff) 14%,var(--body-bg,#252b33)); outline:2px solid transparent; }
+.pool-path-hint { padding:7px 9px; color:var(--cn-muted); font-size:12px; font-weight:400; }
+.iso-path-field { position:relative; display:grid; gap:7px; min-width:0; font-size:13px; font-weight:600; }
+.iso-path-field>.search-input { width:100%; max-width:none; box-sizing:border-box; }
+.path-suggestions { display:grid; gap:2px; max-height:210px; overflow:auto; margin:0; padding:4px; border:1px solid var(--cn-border); border-radius:5px; background:var(--body-bg,#252b33); box-shadow:0 8px 20px rgba(0,0,0,.2); list-style:none; }
+.path-suggestions li button { display:block; width:100%; overflow:hidden; padding:7px 9px; border:0; border-radius:3px; color:var(--body-text,#e5e7eb); background:transparent; font:12px ui-monospace,SFMono-Regular,Menlo,monospace; text-align:left; text-overflow:ellipsis; white-space:nowrap; cursor:pointer; }
+.path-suggestions li button:hover,.path-suggestions li button:focus-visible { background:color-mix(in srgb,var(--primary,#3d98ff) 14%,var(--body-bg,#252b33)); outline:2px solid transparent; }
+.path-suggestion-hint { padding:7px 9px; color:var(--cn-muted); font-size:12px; font-weight:400; }
 .filter-bar { flex-wrap:wrap; justify-content:flex-end; }
 .pagination-row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:11px 3px; color:var(--cn-muted); font-size:12px; }
 .safety-note { margin:12px 2px; color:var(--cn-muted); font-size:12px; }
@@ -1463,6 +1680,20 @@ small { display:block; margin-top:4px; font-size:12px; }
 .guided-admin-form label small { color:var(--cn-muted); font-size:12px; font-weight:400; line-height:1.45; }
 .guided-admin-form .search-input { width:100%; max-width:none; min-height:38px; box-sizing:border-box; }
 .guided-admin-form .row-actions { padding-top:12px; border-top:1px solid var(--cn-border); }
+.wizard-steps { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin:0; padding:0; list-style:none; }
+.wizard-steps li { display:flex; align-items:center; gap:8px; min-width:0; padding:10px 12px; border:1px solid var(--cn-border); border-radius:7px; color:var(--cn-muted); font-size:12px; }
+.wizard-steps li span { display:grid; place-items:center; flex:0 0 22px; width:22px; height:22px; border-radius:50%; color:var(--cn-muted); background:color-mix(in srgb,var(--cn-border) 55%,transparent); font-size:11px; font-weight:700; }
+.wizard-steps li.active { border-color:var(--primary,#5288e5); color:var(--body-text); background:color-mix(in srgb,var(--primary,#5288e5) 9%,var(--body-bg,#252b33)); }
+.wizard-steps li.active span,.wizard-steps li.complete span { color:#fff; background:var(--primary,#5288e5); }
+.wizard-panel { min-height:180px; padding:18px 0 8px; }
+.wizard-panel h4 { margin:0 0 5px; font-size:15px; }
+.wizard-panel>.muted { margin:0 0 18px; }
+.wizard-review { display:grid; grid-template-columns:minmax(140px,.45fr) 1fr; gap:0 18px; margin:18px 0; }
+.wizard-review dt,.wizard-review dd { margin:0; padding:9px 0; border-bottom:1px solid var(--cn-border); overflow-wrap:anywhere; }
+.wizard-review dt { color:var(--cn-muted); }
+.wizard-review dd { font-weight:600; }
+.wizard-footer { position:sticky; bottom:0; display:flex; justify-content:space-between; align-items:center; gap:12px; margin:12px -22px -22px; padding:14px 22px; border-top:1px solid var(--cn-border); background:var(--body-bg,#252b33); }
+.wizard-footer .row-actions { padding:0; border:0; }
 .admin-form h3,.admin-form h4 { margin:0 0 2px; }
 .admin-form label { display:grid; gap:6px; max-width:680px; font-size:13px; font-weight:600; }
 .admin-form .row-actions { justify-content:flex-end; }
@@ -1476,17 +1707,18 @@ small { display:block; margin-top:4px; font-size:12px; }
 .details-content h3 { margin:24px 0 10px; font-size:14px; }.detail-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin:18px 0; }.detail-stats>div { display:flex; flex-direction:column; gap:6px; padding:12px; border:1px solid var(--cn-border); border-radius:6px; }.detail-stats span,.detail-row small { color:var(--cn-muted); font-size:11px; }.detail-stats strong { font-size:14px; }.detail-row { display:grid; grid-template-columns:70px 1fr; gap:4px 10px; padding:11px 0; border-bottom:1px solid var(--cn-border); font-size:12px; overflow-wrap:anywhere; }.detail-row small { grid-column:2; }
 .vm-config-editor { margin:20px 0 26px; padding:16px; border:1px solid var(--cn-border); border-radius:8px; background:var(--body-bg,#252b33); }.vm-config-editor h3 { margin:0 0 6px; }.vm-config-editor>.muted { margin:0; font-size:12px; }.vm-config-editor .admin-form { margin:12px 0 0; }
 .snapshot-library-toolbar { display:flex; align-items:center; justify-content:flex-end; gap:10px; flex-wrap:wrap; }.snapshot-library-toolbar>.search-input { min-width:200px; }.snapshot-version { display:inline-flex; align-items:center; border:1px solid var(--cn-border); border-radius:999px; padding:4px 8px; color:var(--body-text,#dce1e8); font-size:12px; white-space:nowrap; }.snapshot-library td small { display:block; margin-top:4px; color:var(--cn-muted); }.snapshot-library-actions { flex-wrap:wrap; }
-.vm-list-toolbar { display:flex; align-items:center; gap:10px; }.vm-create-form { margin:0 0 20px; }.vm-autostart-option { display:flex !important; align-items:center; gap:8px !important; }.vm-autostart-option input { width:16px; height:16px; }.vm-device-panel,.vm-snapshot-panel { margin:24px 0; padding:16px; border:1px solid var(--cn-border); border-radius:8px; background:var(--body-bg,#252b33); }.vm-device-panel .subsection-heading,.vm-snapshot-panel .subsection-heading { margin-bottom:10px; }.vm-device-panel .subsection-heading h3,.vm-snapshot-panel .subsection-heading h3 { margin:0 0 4px; }.vm-device-panel .subsection-heading p,.vm-snapshot-panel .subsection-heading p { margin:0; color:var(--cn-muted); font-size:12px; }
-.subsection-heading .eyebrow { display:block; margin-bottom:4px; }.vm-device-panel .detail-row { grid-template-columns:minmax(90px,auto) 1fr auto; align-items:center; }.vm-device-panel .detail-row small { grid-column:2; }.vm-network-attach { display:flex; align-items:flex-end; gap:10px; margin:12px 0; }.vm-network-attach label { display:grid; flex:1; gap:6px; max-width:420px; font-size:13px; font-weight:600; }.snapshot-form { grid-template-columns:1fr 1fr auto; align-items:end; }.snapshot-form label { display:grid; gap:6px; font-size:13px; font-weight:600; }.snapshot-row { display:flex; align-items:center; justify-content:space-between; gap:14px; padding:12px 0; border-bottom:1px solid var(--cn-border); }.snapshot-row strong,.snapshot-row small { display:block; }.snapshot-row small { margin-top:4px; color:var(--cn-muted); font-size:11px; }
+.vm-list-toolbar { display:flex; align-items:center; flex-wrap:wrap; gap:10px; min-width:0; }.vm-list-toolbar>.filter-bar { flex:1 1 360px; flex-wrap:wrap; }.vm-list-toolbar>.filter-bar .search-input { flex:1 1 180px; }.vm-list-toolbar>.btn { flex:0 0 auto; }.vm-create-form { margin:0 0 20px; }.vm-autostart-option { display:flex !important; align-items:center; gap:8px !important; }.vm-autostart-option input { width:16px; height:16px; }.vm-device-panel,.vm-snapshot-panel { margin:24px 0; padding:16px; border:1px solid var(--cn-border); border-radius:8px; background:var(--body-bg,#252b33); }.vm-device-panel .subsection-heading,.vm-snapshot-panel .subsection-heading { margin-bottom:10px; }.vm-device-panel .subsection-heading h3,.vm-snapshot-panel .subsection-heading h3 { margin:0 0 4px; }.vm-device-panel .subsection-heading p,.vm-snapshot-panel .subsection-heading p { margin:0; color:var(--cn-muted); font-size:12px; }
+.subsection-heading .eyebrow { display:block; margin-bottom:4px; }.vm-device-panel .detail-row { grid-template-columns:minmax(90px,auto) 1fr auto; align-items:center; }.vm-device-panel .detail-row small { grid-column:2; }.vm-network-attach { display:flex; align-items:flex-end; gap:10px; margin:12px 0; }.vm-network-attach label { display:grid; flex:1; gap:6px; max-width:420px; font-size:13px; font-weight:600; }.snapshot-form { grid-template-columns:1fr 1fr auto; align-items:end; }.snapshot-form label { display:grid; gap:6px; font-size:13px; font-weight:600; }.snapshot-row { display:flex; align-items:center; justify-content:space-between; gap:14px; padding:12px 0; border-bottom:1px solid var(--cn-border); }.snapshot-row strong,.snapshot-row small { display:block; }.snapshot-row small { margin-top:4px; color:var(--cn-muted); font-size:11px; }.snapshot-copy{min-width:0;overflow-wrap:anywhere}.snapshot-state{width:max-content;max-width:100%;margin-top:7px}.snapshot-library td .snapshot-state{margin:0}.vm-detail-feedback{margin:0 0 14px}.vm-detail-progress{display:flex;align-items:center;gap:10px;padding:11px 13px;border:1px solid var(--cn-border);border-radius:6px;color:var(--body-text,#243043);background:color-mix(in srgb,var(--primary,#5288e5) 8%,var(--body-bg,#252b33))}.vm-detail-progress>div{display:grid;gap:3px}.vm-detail-progress small{margin:0;color:var(--cn-muted)}.vm-detail-progress>.spinner{display:block;width:16px;height:16px;flex:0 0 16px;border:2px solid var(--cn-border);border-top-color:var(--primary,#5288e5);border-radius:50%;animation:kvm-detail-spin .8s linear infinite}@keyframes kvm-detail-spin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.vm-detail-progress>.spinner{animation:none}}
 @media (max-width:1100px) { .cluster-summary { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media (max-width:1050px) { .connection-details { grid-template-columns:repeat(2,minmax(0,1fr)); }.gateway-card { grid-template-columns:auto repeat(2,minmax(0,1fr)); }.gateway-card>div:last-child { grid-column:2/-1; } }
 @media (max-width:1000px) { .admin-layout { grid-template-columns:190px minmax(0,1fr); gap:16px; } }
 @media (max-width:820px) { .page-header,.section-heading { align-items:flex-start; flex-direction:column; }.toolbar { flex-wrap:wrap; }.filter-bar { justify-content:flex-start; }.overview-grid { grid-template-columns:1fr; }.admin-layout { display:block; }.mobile-section-picker { display:grid; gap:6px; margin:0 0 16px; color:var(--cn-muted); font-size:12px; font-weight:600; }.mobile-section-picker .search-input { width:100%; max-width:none; }.admin-tabs { display:none; } }
-@media (max-width:820px) { .network-page .section-heading { align-items:flex-start; }.network-summary,.storage-summary { grid-template-columns:repeat(3,minmax(0,1fr)); width:100%; }.network-editor,.libvirt-network-form .admin-field-grid,.vm-details-editor { grid-template-columns:1fr; }.editor-heading,.network-editor-footer,.libvirt-network-form .editor-heading,.libvirt-network-form .safety-note,.libvirt-network-form>.row-actions { grid-column:auto; }.section-tools { justify-content:flex-start; } }
+@media (max-width:820px) { .network-page .section-heading { align-items:flex-start; }.network-page-actions { width:100%; justify-items:start; }.network-page-actions .filter-bar,.network-quick-create { justify-content:flex-start; }.volume-resize-form { grid-template-columns:repeat(2,minmax(0,1fr)); }.volume-resize-form>div { grid-column:1/-1; }.volume-resize-form .row-actions { grid-column:1/-1; justify-content:flex-start; }.network-summary,.storage-summary { grid-template-columns:repeat(3,minmax(0,1fr)); width:100%; }.network-editor,.libvirt-network-form .admin-field-grid,.vm-details-editor { grid-template-columns:1fr; }.editor-heading,.network-editor-footer,.libvirt-network-form .editor-heading,.libvirt-network-form .safety-note,.libvirt-network-form>.row-actions { grid-column:auto; }.section-tools { justify-content:flex-start; } }
 @media (max-width:820px) { .subscription-single-row { grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto; gap:14px 16px; }.subscription-name { grid-column:1/-1; }.subscription-product-code { grid-column:1; }.subscription-single-row>.state { grid-column:2; }.subscription-menu-wrap { grid-column:3; justify-self:end; } }
-@media (max-width:560px) { .subscription-single-row { grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto; gap:12px 8px; }.subscription-name { grid-column:1/-1; }.subscription-product-code { grid-column:1/-1; }.subscription-single-row>.state { grid-column:1/3; }.subscription-menu-wrap { grid-column:3; justify-self:end; } }
+@media (max-width:560px) { .vm-provisioning-guide { align-items:stretch; flex-direction:column; }.vm-provisioning-guide ol { display:grid; gap:5px; }.volume-resize-form { grid-template-columns:1fr; }.volume-resize-form>div,.volume-resize-form .row-actions { grid-column:auto; }.network-quick-create { width:100%; }.network-quick-create .btn { flex:1 1 140px; }.subscription-single-row { grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto; gap:12px 8px; }.subscription-name { grid-column:1/-1; }.subscription-product-code { grid-column:1/-1; }.subscription-single-row>.state { grid-column:1/3; }.subscription-menu-wrap { grid-column:3; justify-self:end; } }
 @media (max-width:560px) { .cloud-native-page { padding:18px 12px 32px; }.cluster-summary { grid-template-columns:1fr; }.host-card { flex-wrap:wrap; }.host-card .state { margin-left:48px; }.admin-tabs { overflow-x:auto; }.search-input { max-width:100%; }.detail-stats,.vm-live-config-stats { grid-template-columns:1fr; }.network-summary,.storage-summary { grid-template-columns:1fr; }.connection-details { grid-template-columns:1fr 1fr; }.network-card-heading,.connection-main { align-items:flex-start; }.gateway-card { grid-template-columns:auto 1fr; }.gateway-card>div:last-child { grid-column:2; }.network-editor-footer { align-items:flex-start; flex-direction:column; }.connection-actions { justify-content:flex-start; }.section-tools,.section-tools>.row-actions { width:100%; }.section-tools>.row-actions { min-width:0; justify-content:flex-start; }.resource-details-panel dl { grid-template-columns:1fr; }.resource-details-panel dt { padding-bottom:3px; border-bottom:0; }.resource-details-panel dd { padding-top:3px; } }
 @media (max-width:680px) { .admin-field-grid { grid-template-columns:1fr; }.admin-field-grid .field-wide { grid-column:auto; }.guided-admin-form { padding:16px; } }
+@media (max-width:560px) { .wizard-steps li { flex-direction:column; align-items:flex-start; padding:8px; font-size:10px; }.wizard-footer { margin:12px -16px -16px; padding:12px 16px; }.wizard-footer .btn { white-space:normal; }.wizard-review { grid-template-columns:1fr; gap:0; }.wizard-review dt { padding-bottom:2px; border:0; }.wizard-review dd { padding-top:2px; } }
 @media (max-width:680px) { .vm-list-toolbar,.vm-network-attach,.snapshot-row { align-items:stretch; flex-direction:column; }.snapshot-form { grid-template-columns:1fr; }.vm-device-panel .detail-row { grid-template-columns:1fr; }.vm-device-panel .detail-row small { grid-column:1; } }
 @media (max-width:680px) { .snapshot-library-toolbar { width:100%; align-items:stretch; flex-direction:column; }.snapshot-library-toolbar>.search-input { width:100%; min-width:0; }.snapshot-library-toolbar>.row-actions { justify-content:flex-start; } }
 @container cloud-native-layout (max-width: 1100px) { .cluster-summary { grid-template-columns:repeat(2,minmax(0,1fr)); }.connection-details { grid-template-columns:repeat(2,minmax(0,1fr)); }.gateway-card { grid-template-columns:auto repeat(2,minmax(0,1fr)); }.gateway-card>div:last-child { grid-column:2/-1; } }
@@ -1514,4 +1746,20 @@ td.row-actions { display:table-cell; }.row-actions .btn,.connection-actions .btn
 .system-mounts .table-wrap { padding:0 8px 8px; }
 @container cloud-native-layout (max-width: 1000px) { .admin-layout { display:block; }.mobile-section-picker { display:grid; }.admin-tabs { display:none; }.page-header,.section-heading { align-items:flex-start; flex-direction:column; }.toolbar,.filter-bar,.section-tools { width:100%; flex-wrap:wrap; }.section-tools>.row-actions { justify-content:flex-start; }.admin-layout>.admin-content { min-width:0; width:100%; } }
 @container cloud-native-layout (max-width: 620px) { .resource-actions-menu .resource-actions-menu-list { min-width:0; max-width:100%; margin-top:5px; }.resource-actions-menu[open] { display:block; width:100%; }.resource-actions-menu[open] .resource-actions-menu-list { display:grid; }.subscription-single-row { align-items:start; }.section-tools>.search-input { min-width:0; width:100%; } }
+.actionable-error { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.actionable-error .btn { flex:0 0 auto; }
+.active-filter-tools { display:flex; justify-content:flex-end; align-items:center; flex-wrap:wrap; gap:8px; min-height:30px; margin:0 0 10px; color:var(--cn-muted); font-size:12px; }
+.vm-empty-state { display:grid; justify-items:center; gap:8px; text-align:center; }
+.vm-empty-state p { max-width:540px; margin:0 0 4px; color:var(--cn-muted); }
+.vm-detail-tabs [role="tab"]:focus-visible { outline:2px solid var(--primary,#4b91e2); outline-offset:2px; }
+@container cloud-native-layout (max-width:620px) { .actionable-error { align-items:flex-start; flex-direction:column; }.active-filter-tools { justify-content:flex-start; } }
+.vm-boot-source{display:flex;flex-wrap:wrap;gap:12px 24px;margin:0;padding:12px 14px;border:1px solid var(--input-border,var(--cn-border));border-radius:6px}.vm-boot-source legend{padding:0 6px;font-weight:600}.vm-boot-source label{display:inline-flex;align-items:center;gap:8px}.vm-boot-source input[type=radio]{width:16px;height:16px;margin:0}.iso-download-fields{display:grid;gap:12px}.iso-download-fields small{color:var(--cn-muted)}.lightweight-test-callout{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px;border:1px solid var(--cn-border);border-radius:8px;background:var(--body-bg,#252b33)}.lightweight-test-callout p{margin:4px 0 0;color:var(--cn-muted);font-size:13px}@media(max-width:640px){.lightweight-test-callout{align-items:flex-start;flex-direction:column}}
+
+.snapshot-section-heading{align-items:flex-end;gap:16px}.snapshot-library-toolbar{display:grid;grid-template-columns:minmax(190px,1fr) auto;align-items:center;gap:8px}.snapshot-library-toolbar>.row-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px}.snapshot-create-action{align-self:center}.snapshot-form>.snapshot-create-actions{grid-column:1/-1;justify-content:flex-end}.snapshot-form>.snapshot-create-actions .snapshot-create-form-action{min-height:36px;white-space:nowrap}.snapshot-library-actions .snapshot-action:not(.snapshot-action-delete),.snapshot-row .snapshot-action:not(.snapshot-action-delete){min-height:30px;border:1px solid var(--input-border,var(--cn-border));color:var(--body-text,#e5e7eb);background:var(--body-bg,#252b33)}
+.quiet-refresh{display:inline-flex;align-items:center;gap:7px;margin-top:5px;color:var(--muted,var(--cn-muted));font-size:11px;font-weight:400}.quiet-refresh i{width:11px;height:11px;border:1.5px solid color-mix(in srgb,var(--muted,var(--cn-muted)) 35%,transparent);border-top-color:var(--primary,#53c99a);border-radius:50%;animation:quiet-refresh-spin .85s linear infinite}@keyframes quiet-refresh-spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.quiet-refresh i{animation:none}}
+.cloud-native-page :is(button,a,input,select,summary,[tabindex]):focus-visible{outline:2px solid var(--kvm-focus,#5288e5);outline-offset:2px}.section-tools>.search-input,.network-page-actions .filter-bar .search-input{min-width:180px}.vm-detail-tabs button:focus-visible{z-index:1}
+@media(max-width:680px){.snapshot-section-heading{align-items:stretch}.snapshot-library-toolbar{grid-template-columns:minmax(0,1fr)}.snapshot-library-toolbar>.row-actions{justify-content:flex-start;flex-wrap:wrap}.snapshot-form>.snapshot-create-actions{justify-content:flex-start}.snapshot-form>.snapshot-create-actions .snapshot-create-form-action{width:100%}}
+@container cloud-native-layout (max-width:820px){.section-tools,.network-page-actions,.network-page-actions .filter-bar{width:100%;justify-content:flex-start}.section-tools>.search-input,.network-page-actions .filter-bar .search-input{min-width:0;flex:1 1 180px}.vm-list-toolbar>.filter-bar{width:100%;flex:1 1 100%}.vm-list-toolbar>.btn{width:100%}.snapshot-row{align-items:flex-start}.snapshot-row .row-actions{justify-content:flex-start}}
+@container cloud-native-layout (max-width:680px){.snapshot-form{grid-template-columns:minmax(0,1fr)}.snapshot-form>.field-wide{grid-column:1}.snapshot-form>.snapshot-create-actions{justify-content:stretch}.snapshot-form>.snapshot-create-actions .snapshot-create-form-action{width:100%}}
 </style>
