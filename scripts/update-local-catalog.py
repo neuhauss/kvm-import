@@ -5,12 +5,14 @@ import argparse
 import base64
 import gzip
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
 import time
 from datetime import datetime, timezone
 import yaml
+from semver import version_key
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -61,13 +63,18 @@ if not new_entry:
     raise SystemExit(f"Version {options.version} is missing from deploy/extension-catalog/index.yaml")
 
 new_entry = dict(new_entry)
-new_entry["urls"] = [f"http://{options.asset_service}/catalog/kvm-manager-{options.version}.tgz"]
 data = live.setdefault("data", {})
 catalog = yaml.safe_load(data.get("index.yaml") or data.get("plugin-index.yaml") or "apiVersion: v1\nentries: {}\n")
 entries = catalog.setdefault("entries", {}).setdefault("kvm-manager", [])
 entries[:] = [entry for entry in entries if entry.get("version") != options.version]
 entries.append(new_entry)
-entries.sort(key=lambda entry: tuple(map(int, entry["version"].split("."))), reverse=True)
+entries.sort(key=lambda entry: version_key(str(entry["version"])), reverse=True)
+chart_repo_url = os.environ.get("CHART_REPO_URL", "").rstrip("/")
+for entry in entries:
+    if chart_repo_url:
+        entry["urls"] = [f"{chart_repo_url}/kvm-manager-{entry['version']}.tgz"]
+    else:
+        entry["urls"] = [f"http://{options.asset_service}/catalog/kvm-manager-{entry['version']}.tgz"]
 catalog["apiVersion"] = "v1"
 catalog["generated"] = datetime.now(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
 catalog_text = yaml.safe_dump(catalog, sort_keys=False, allow_unicode=True)

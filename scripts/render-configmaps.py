@@ -9,7 +9,6 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 import yaml
-from semver import version_key
 
 ROOT = Path(__file__).resolve().parents[1]
 version = json.loads((ROOT / "pkg/kvm-manager/package.json").read_text())["version"]
@@ -19,6 +18,7 @@ if origin_url.scheme != "https" or not origin_url.netloc or origin_url.path not 
     raise SystemExit("RANCHER_PUBLIC_ORIGIN must be an HTTPS origin without a path")
 ingress_class = os.environ.get("KVM_INGRESS_CLASS", "nginx")
 backend_namespace = os.environ.get("KVM_NAMESPACE", "rancher-kvm-registry")
+chart_repo_url = os.environ.get("CHART_REPO_URL", "https://OWNER.github.io/REPOSITORY").rstrip("/")
 bundle_dir = ROOT / "dist-pkg" / f"kvm-manager-{version}"
 bundle_name = f"kvm-manager-{version}.umd.min.js"
 bundle_js = sorted(bundle_dir.glob("*.js"))
@@ -55,8 +55,9 @@ for path in bundle_js:
     assets["data"][path.name] = path.read_text()
 for path in asset_files:
     assets["data"][asset_keys[path]] = path.read_text()
-# The assets ConfigMap is limited to 1 MiB. Keep the current plugin bundle and
-# only the current plus previous charts in the legacy catalog endpoint.
+# Keep only the current plugin bundle in the assets ConfigMap. Chart archives
+# are published on the Helm repository and referenced by URL from the catalog;
+# embedding even two compressed chart archives can push a ConfigMap over 1 MiB.
 for key in list(assets["data"]):
     if key.startswith(("files-", "package-", "kvm-manager-", "asset-")):
         if key not in {f"files-{version}.txt", f"package-{version}.json", f"package-root-{version}.json", *(path.name for path in bundle_js), *asset_keys.values()}:
@@ -77,30 +78,14 @@ for path in bundle_js:
     compressed_bundle_files.add(path.name)
     binary_data[f"{path.name}.gz"] = base64.b64encode(gzip.compress(contents, compresslevel=9, mtime=0)).decode()
 
-available_chart_versions = {
-    path.name.removeprefix("kvm-manager-").removesuffix(".tgz")
-    for path in (ROOT / "deploy/extension-catalog").glob("kvm-manager-*.tgz")
-}
-previous_versions = [item for item in available_chart_versions if item != version]
-kept_chart_versions = {version}
-if previous_versions:
-    kept_chart_versions.add(max(previous_versions, key=version_key))
 for key in list(binary_data):
     if key.startswith("catalog-chart") and key.endswith(".tgz"):
-        archived_version = key.removeprefix("catalog-chart").removesuffix(".tgz").lstrip("-") or "0.1.5"
-        if archived_version not in kept_chart_versions:
-            del binary_data[key]
-for chart_version in kept_chart_versions:
-    archived_chart = ROOT / "deploy/extension-catalog" / f"kvm-manager-{chart_version}.tgz"
-    if archived_chart.is_file():
-        chart_key = "catalog-chart.tgz" if chart_version == "0.1.5" else f"catalog-chart-{chart_version}.tgz"
-        binary_data[chart_key] = base64.b64encode(archived_chart.read_bytes()).decode()
+        del binary_data[key]
 
 legacy_index = yaml.safe_load((ROOT / "deploy/extension-catalog/index.yaml").read_text())
 legacy_entries = legacy_index.get("entries", {}).get("kvm-manager", [])
-legacy_entries = [entry for entry in legacy_entries if str(entry.get("version")) in kept_chart_versions]
 for entry in legacy_entries:
-    entry["urls"] = [f"kvm-manager-{entry['version']}.tgz"]
+    entry["urls"] = [f"{chart_repo_url}/kvm-manager-{entry['version']}.tgz"]
 legacy_index["entries"]["kvm-manager"] = legacy_entries
 assets["data"]["catalog-index.yaml"] = yaml.safe_dump(legacy_index, sort_keys=False, allow_unicode=True, width=1000)
 assets_path.write_text(yaml.safe_dump(assets, sort_keys=False, width=1000))
