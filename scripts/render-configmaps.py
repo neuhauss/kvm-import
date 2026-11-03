@@ -9,6 +9,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 import yaml
+from semver import version_key
 
 ROOT = Path(__file__).resolve().parents[1]
 version = json.loads((ROOT / "pkg/kvm-manager/package.json").read_text())["version"]
@@ -76,8 +77,14 @@ for path in bundle_js:
     compressed_bundle_files.add(path.name)
     binary_data[f"{path.name}.gz"] = base64.b64encode(gzip.compress(contents, compresslevel=9, mtime=0)).decode()
 
-previous_version = f"{version.rsplit('.', 1)[0]}.{int(version.rsplit('.', 1)[1]) - 1}"
-kept_chart_versions = {version, previous_version}
+available_chart_versions = {
+    path.name.removeprefix("kvm-manager-").removesuffix(".tgz")
+    for path in (ROOT / "deploy/extension-catalog").glob("kvm-manager-*.tgz")
+}
+previous_versions = [item for item in available_chart_versions if item != version]
+kept_chart_versions = {version}
+if previous_versions:
+    kept_chart_versions.add(max(previous_versions, key=version_key))
 for key in list(binary_data):
     if key.startswith("catalog-chart") and key.endswith(".tgz"):
         archived_version = key.removeprefix("catalog-chart").removesuffix(".tgz").lstrip("-") or "0.1.5"

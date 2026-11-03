@@ -12,7 +12,7 @@ export function init($plugin: IPlugin, store: any): void {
   $plugin.addProduct({
     name: 'kvm',
     label: 'KVM',
-    sideBar: { icon: { name: 'kvm' }, weight: 95 },
+    sideBar: { icon: { svg: require('./assets/kvm.svg') }, weight: 95 },
     resources: { store: 'management' },
   }, [{
     name: 'hosts',

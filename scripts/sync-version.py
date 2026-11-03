@@ -4,20 +4,13 @@
 import argparse
 import json
 from pathlib import Path
-import re
 
 import yaml
+from semver import version_after, version_key
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "pkg/kvm-manager/package.json"
 CHART = ROOT / "charts/kvm-manager/Chart.yaml"
-
-
-def parts(version: str) -> tuple[int, int, int]:
-    match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", version)
-    if not match:
-        raise ValueError(f"Expected a numeric semver version, got {version!r}")
-    return tuple(map(int, match.groups()))
 
 
 parser = argparse.ArgumentParser()
@@ -28,9 +21,8 @@ args = parser.parse_args()
 package = json.loads(PACKAGE.read_text())
 chart = yaml.safe_load(CHART.read_text())
 version = package["version"]
-if args.installed_version and parts(version) <= parts(args.installed_version):
-    major, minor, patch = parts(args.installed_version)
-    version = f"{major}.{minor}.{patch + 1}"
+if args.installed_version and version_key(version) <= version_key(args.installed_version):
+    version = version_after(args.installed_version)
 
 if args.apply:
     package["version"] = version

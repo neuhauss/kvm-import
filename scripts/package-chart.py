@@ -8,6 +8,7 @@ from pathlib import Path
 import tarfile
 
 import yaml
+from semver import version_key
 
 ROOT = Path(__file__).resolve().parents[1]
 CHART_DIR = ROOT / "charts/kvm-manager"
@@ -22,6 +23,8 @@ history_dir = Path(os.environ.get("CHART_REPO_HISTORY_DIR", "")) if os.environ.g
 # Keep previously published chart packages and index entries. Rancher/Helm needs
 # the version history to offer upgrades and to support rollback.
 history_index = None
+
+
 if history_dir:
     previous_index = history_dir / "index.yaml"
     if previous_index.is_file():
@@ -63,7 +66,7 @@ for item in entries:
     item["urls"] = [f"{base_url}/{name}-{item_version}.tgz"]
     unique_entries[item_version] = item
 entries[:] = list(unique_entries.values())
-entries.sort(key=lambda item: tuple(int(part) if part.isdigit() else part for part in str(item["version"]).replace("-", ".").split(".")), reverse=True)
+entries.sort(key=lambda item: version_key(str(item["version"])), reverse=True)
 index["apiVersion"] = "v1"
 index["generated"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 index_path.write_text(yaml.safe_dump(index, sort_keys=False, allow_unicode=True))

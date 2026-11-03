@@ -20,7 +20,9 @@ export default function(plugin: IPlugin): void {
   plugin.addProduct({
     name: 'kvm',
     label: 'KVM',
-    sideBar: { icon: { name: 'kvm' }, weight: 95 },
+    // KVM is not part of Rancher's built-in icon set. Supplying the SVG here
+    // prevents the product sidebar from falling back to the puzzle icon.
+    sideBar: { icon: { svg: require('./assets/kvm.svg') }, weight: 95 },
     resources: { store: 'management' },
   }, [{
     name: 'hosts',

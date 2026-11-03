@@ -37,6 +37,12 @@ Then find **KVM Manager** in **Apps > Charts** and install it. The chart install
 
 Development requirements: Node.js 24+, Yarn, Python 3, and PyYAML.
 
+The project uses semantic versions. Continuous community testing is published
+as a GitHub prerelease (for example, `0.8.0-unstable.1`); prerelease images are
+published with their exact version tag and do not replace the stable `latest`
+image tag. Treat unstable releases as preview software and review the release
+notes before upgrading a shared installation.
+
 ```sh
 yarn install --frozen-lockfile
 yarn build-pkg kvm-manager
