@@ -1,7 +1,7 @@
 {
   "name": "kvm-manager",
   "description": "Import and inventory existing KVM hosts from Rancher",
-  "version": "0.8.0-unstable.20",
+  "version": "0.8.0-unstable.21",
   "icon": "https://raw.githubusercontent.com/neuhauss/kvm-import/main/pkg/kvm-manager/assets/kvm.svg",
   "private": false,
   "rancher": {
