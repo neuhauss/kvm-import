@@ -14,7 +14,7 @@
           <td class="row-actions" :data-label="t('actions')"><div class="vm-actions">
             <button class="btn role-link btn-sm" @click="$emit('details', vm)">{{ t('details') }}</button>
             <button v-if="canOperate" class="btn role-secondary btn-sm" @click="$emit('snapshots', vm)">{{ t('snapshots') }}</button>
-            <button v-if="canOperate" class="btn role-danger btn-sm" :disabled="busy !== ''" @click="$emit('delete', [vm.name])">{{ t('delete') }}</button>
+            <button v-if="canOperate" class="btn role-danger btn-sm destructive-action" :disabled="busy !== ''" @click="$emit('delete', [vm.name])">{{ t('delete') }}</button>
             <details v-if="canOperate" class="vm-action-menu">
               <summary class="btn role-secondary btn-sm" :aria-label="`${t('actions')}: ${vm.name}`">{{ t('moreActions') }}</summary>
               <div class="vm-action-menu-list">
@@ -22,7 +22,7 @@
               <button v-if="isRunning(vm) || isPaused(vm)" class="btn role-secondary btn-sm" :disabled="busy === vm.name" @click="$emit('action', vm, isPaused(vm) ? 'resume' : 'pause')">{{ isPaused(vm) ? t('resume') : t('pause') }}</button>
               <button v-if="!isRunning(vm) && !isPaused(vm)" class="btn role-primary btn-sm" :disabled="busy === vm.name" @click="$emit('action', vm, 'start')">{{ t('start') }}</button>
               <button v-else class="btn role-secondary btn-sm" :disabled="busy === vm.name" @click="$emit('action', vm, 'shutdown')">{{ t('shutdown') }}</button>
-              <button v-if="isRunning(vm) || isPaused(vm)" class="btn role-danger btn-sm force-stop-action" :disabled="busy === vm.name" @click="$emit('force-stop', vm)">{{ t('forceStop') }}</button>
+              <button v-if="isRunning(vm) || isPaused(vm)" class="btn role-danger btn-sm destructive-action" :disabled="busy === vm.name" @click="$emit('force-stop', vm)">{{ t('forceStop') }}</button>
               <button class="btn role-link btn-sm" :disabled="busy === vm.name || !isRunning(vm)" @click="$emit('action', vm, 'reboot')">{{ t('restart') }}</button>
               </div>
             </details>
@@ -102,21 +102,25 @@ export default defineComponent({
 .vm-action-menu summary::after { content:' ▾'; }
 .vm-action-menu-list { position:static; display:grid; gap:3px; min-width:180px; margin-top:6px; max-width:min(260px,calc(100vw - 32px)); padding:6px; border:1px solid var(--border,#394452); border-radius:6px; background:var(--body-bg,#252b33); box-shadow:0 8px 24px #0003; }
 .vm-action-menu-list .btn { width:100%; margin:0; text-align:left; }
-.vm-action-menu-list .force-stop-action {
+.vm-actions .destructive-action,
+.vm-action-menu-list .destructive-action {
   border: 1px solid #b42318 !important;
   color: #fff !important;
   background-color: #b42318 !important;
   font-weight: 600;
 }
-.vm-action-menu-list .force-stop-action:hover:not(:disabled) {
+.vm-actions .destructive-action:hover:not(:disabled),
+.vm-action-menu-list .destructive-action:hover:not(:disabled) {
   border-color: #912018 !important;
   background-color: #912018 !important;
 }
-.vm-action-menu-list .force-stop-action:focus-visible {
+.vm-actions .destructive-action:focus-visible,
+.vm-action-menu-list .destructive-action:focus-visible {
   outline: 2px solid #fda29b;
   outline-offset: 2px;
 }
-.vm-action-menu-list .force-stop-action:disabled { opacity: .65; }
+.vm-actions .destructive-action:disabled,
+.vm-action-menu-list .destructive-action:disabled { opacity: .65; }
 .vm-action-menu summary:focus-visible { outline:2px solid var(--primary,#4b91e2); outline-offset:2px; }
 .vm-table-wrap :deep(td.row-actions) { display:table-cell; }.vm-actions { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }.vm-table-wrap :deep(.row-actions) { min-width:170px; }
 .vm-table-wrap :deep(.row-actions .btn) { margin:0; }
