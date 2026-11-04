@@ -1,0 +1,86 @@
+name: Publish KVM API image
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v3
+      - name: Check optional Docker Hub credentials
+        id: dockerhub-credentials
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          if [[ -n "$DOCKERHUB_USERNAME" && -n "$DOCKERHUB_TOKEN" ]]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Normalize GHCR image name
+        id: ghcr
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/rancher-kvm-api" >> "$GITHUB_OUTPUT"
+      - name: Read release version
+        id: version
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#kvm-manager-}"
+          if [[ "$version" == "$GITHUB_REF_NAME" ]]; then
+            echo "Release tags must use the kvm-manager-<version> format" >&2
+            exit 1
+          fi
+          echo "tag=$version" >> "$GITHUB_OUTPUT"
+      - name: Prepare image tags
+        id: image-tags
+        env:
+          VERSION: ${{ steps.version.outputs.tag }}
+          IMAGE: ${{ steps.ghcr.outputs.name }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          PRERELEASE: ${{ github.event.release.prerelease }}
+        run: |
+          set -euo pipefail
+          {
+            echo 'ghcr<<EOF'
+            echo "$IMAGE:$VERSION"
+            if [[ "$PRERELEASE" != "true" ]]; then echo "$IMAGE:latest"; fi
+            echo EOF
+            echo 'dockerhub<<EOF'
+            if [[ -n "$DOCKERHUB_USERNAME" ]]; then
+              echo "docker.io/$DOCKERHUB_USERNAME/rancher-kvm-api:$VERSION"
+              if [[ "$PRERELEASE" != "true" ]]; then echo "docker.io/$DOCKERHUB_USERNAME/rancher-kvm-api:latest"; fi
+            fi
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./service
+          file: ./service/Dockerfile
+          push: true
+          tags: ${{ steps.image-tags.outputs.ghcr }}
+      - name: Log in to Docker Hub
+        if: steps.dockerhub-credentials.outputs.enabled == 'true'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Publish optional Docker Hub image
+        if: steps.dockerhub-credentials.outputs.enabled == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: ./service
+          file: ./service/Dockerfile
+          push: true
+          tags: ${{ steps.image-tags.outputs.dockerhub }}

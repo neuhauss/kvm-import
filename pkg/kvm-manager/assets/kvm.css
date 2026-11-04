@@ -1,0 +1,31 @@
+.icon-kvm:before {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  content: "" !important;
+  vertical-align: -0.12em;
+  background: url("./kvm.svg") center / contain no-repeat;
+}
+
+/* Shared semantic tokens keep extension pages aligned with Rancher's active theme. */
+.kvm-page,
+.cloud-native-page {
+  --kvm-danger: var(--error-text, var(--error, #b42318));
+  --kvm-success: var(--success-text, var(--success, #287447));
+  --kvm-warning: var(--warning-text, var(--warning, #8b5a00));
+  --kvm-focus: var(--primary, #5288e5);
+  --kvm-control-bg: var(--input-bg, var(--body-bg, #fff));
+  --kvm-control-text: var(--input-text, var(--body-text, #243043));
+}
+
+.kvm-page .danger-text,
+.cloud-native-page .danger-text { color: var(--kvm-danger) !important; }
+
+.kvm-page .btn,
+.cloud-native-page .btn { min-height: 34px; box-sizing: border-box; }
+
+.kvm-page .btn-sm,
+.cloud-native-page .btn-sm { min-height: 30px; }
+
+.kvm-page :focus-visible,
+.cloud-native-page :focus-visible { outline-color: var(--kvm-focus); }
