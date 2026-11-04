@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 import time
 from datetime import datetime, timezone
 import yaml
@@ -78,7 +79,13 @@ for entry in entries:
 catalog["apiVersion"] = "v1"
 catalog["generated"] = datetime.now(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
 catalog_text = yaml.safe_dump(catalog, sort_keys=False, allow_unicode=True)
-kubectl(["patch", "configmap", options.catalog_configmap, "-n", options.catalog_namespace, "--type=merge", "-p", json.dumps({"data": {"index.yaml": catalog_text, "plugin-index.yaml": catalog_text}})])
+with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", suffix=".json") as patch_file:
+    json.dump({"data": {"index.yaml": catalog_text, "plugin-index.yaml": catalog_text}}, patch_file)
+    patch_file.flush()
+    kubectl([
+        "patch", "configmap", options.catalog_configmap, "-n", options.catalog_namespace,
+        "--type=merge", f"--patch-file={patch_file.name}",
+    ])
 
 # This catalog image serves bundled Helm and plugin indexes unless its
 # extension-owned overlay ConfigMap is mounted over both files. Keep the

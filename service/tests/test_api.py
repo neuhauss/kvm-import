@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+import base64
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -93,6 +95,205 @@ class KvmApiTests(unittest.TestCase):
         self.assertTrue(remote.iso_url)
         self.assertEqual(local.iso_path, "/var/lib/libvirt/images/test.iso")
 
+    def test_vm_create_model_allows_iso_install_to_create_a_new_disk(self):
+        payload = api.VMCreate(
+            name="test-vm", pool="default", network="default", vcpus=1,
+            memory_mib=512, iso_url="https://example.org/alpine.iso",
+            create_disk=True, disk_size_gib=2,
+        )
+        self.assertIsNone(payload.volume)
+        self.assertTrue(payload.create_disk)
+        self.assertEqual(payload.disk_size_gib, 2)
+
+    def test_vm_create_creates_qcow2_boot_disk_without_existing_volume(self):
+        host = self.create_test_host()
+        payload = {
+            "name": "test-vm", "pool": "default", "volume": None,
+            "network": "default", "vcpus": 1, "memory_mib": 512,
+            "iso_path": "/var/lib/libvirt/images/alpine.iso",
+            "create_disk": True, "disk_size_gib": 2,
+        }
+        with patch.object(api, "run_sudo_python", return_value="VM created and started") as remote:
+            response = self.client.post(
+                f"/kvm-api/hosts/{host['id']}/vms/create",
+                headers=self.headers("admin-token"), json=payload,
+            )
+        self.assertEqual(response.status_code, 200, response.text)
+        script = remote.call_args.args[1]
+        self.assertIn("vol-create-as", script)
+        self.assertIn("vol-delete", script)
+        self.assertIn("Creating a new boot disk requires a directory-based storage pool", script)
+        self.assertIn("vol-list','--pool',pool", script)
+        self.assertNotIn("vol-list','--pool',pool,'--name'", script)
+        self.assertIn("net-list','--name'", script)
+        self.assertIn("The selected virtual network is not active", script)
+        self.assertNotIn("net-info',network", script)
+        self.assertIn("os.makedirs(cache_dir,mode=0o755,exist_ok=True)", script)
+        self.assertIn("os.chmod(cache_dir,0o755)", script)
+        compile(script, "<vm-create-remote>", "exec")
+        self.assertEqual(remote.call_args.args[2][-2:], ["true", "2"])
+
+    def test_vm_shutdown_waits_for_real_libvirt_state_and_reports_guest_timeout(self):
+        host = self.create_test_host()
+        with patch.object(api, "create_operation_job", return_value={"job_id": "00000000-0000-4000-8000-000000000001", "status": "queued"}) as queued:
+            response = self.client.post(
+                f"/kvm-api/hosts/{host['id']}/vms/actions?vm_name=test-vm",
+                headers=self.headers("admin-token"), json={"action": "shutdown"},
+            )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["status"], "queued")
+        self.assertEqual(queued.call_args.args[0], "vm_shutdown")
+        perform_action = queued.call_args.args[3]
+        with patch.object(api, "run_sudo_python", return_value="") as remote:
+            self.assertEqual(perform_action(api.cockpit_host_record(host["id"])), {"status": "completed"})
+        script = remote.call_args.args[1]
+        compile(script, "<vm-action-remote>", "exec")
+        self.assertIn("domstate", script)
+        self.assertIn("The guest may not support ACPI shutdown", script)
+
+        encoded_name = base64.b64encode(b"test-vm").decode()
+        state_sequence = iter(("running", "shut off"))
+
+        def successful_transition(command, **_kwargs):
+            operation = command[3]
+            stdout = "test-vm\n" if operation == "list" else next(state_sequence) if operation == "domstate" else ""
+            return subprocess.CompletedProcess(command, 0, stdout, "")
+
+        with patch.object(sys, "argv", ["vm-action", encoded_name, "shutdown"]), \
+             patch.object(subprocess, "run", side_effect=successful_transition), \
+             patch.object(api.time, "monotonic", side_effect=(0, 1)), \
+             patch.object(api.time, "sleep"):
+            exec(compile(script, "<vm-action-remote>", "exec"), {"__name__": "__main__"})
+
+        def guest_ignores_shutdown(command, **_kwargs):
+            operation = command[3]
+            stdout = "test-vm\n" if operation == "list" else "running\n" if operation == "domstate" else ""
+            return subprocess.CompletedProcess(command, 0, stdout, "")
+
+        with patch.object(sys, "argv", ["vm-action", encoded_name, "shutdown"]), \
+             patch.object(subprocess, "run", side_effect=guest_ignores_shutdown), \
+             patch.object(api.time, "monotonic", side_effect=(0, 46)), \
+             patch.object(api.time, "sleep") as sleep:
+            with self.assertRaises(SystemExit) as error:
+                exec(compile(script, "<vm-action-remote>", "exec"), {"__name__": "__main__"})
+        self.assertIn("remained running after 45 seconds", str(error.exception))
+        sleep.assert_not_called()
+
+    def test_vm_force_stop_uses_libvirt_destroy_and_verifies_powered_off_state(self):
+        host = self.create_test_host()
+        route = f"/kvm-api/hosts/{host['id']}/vms/actions?vm_name=test-vm"
+        denied = self.client.post(route, headers=self.headers("viewer-token"), json={"action": "force_stop"})
+        self.assertEqual(denied.status_code, 403)
+
+        fake_job = {"job_id": "00000000-0000-4000-8000-000000000001", "status": "queued"}
+        with patch.object(api, "create_operation_job", return_value=fake_job) as queued:
+            response = self.client.post(route, headers=self.headers("admin-token"), json={"action": "force_stop"})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(queued.call_args.args[0], "vm_force_stop")
+        perform_action = queued.call_args.args[3]
+        with patch.object(api, "run_sudo_python", return_value="") as remote:
+            self.assertEqual(perform_action(api.cockpit_host_record(host["id"])), {"status": "completed"})
+        script = remote.call_args.args[1]
+        compile(script, "<vm-force-stop-remote>", "exec")
+        self.assertIn("'force_stop':'destroy'", script)
+
+        encoded_name = base64.b64encode(b"test-vm").decode()
+        def powered_off(command, **_kwargs):
+            operation = command[3]
+            stdout = "test-vm\n" if operation == "list" else "shut off\n" if operation == "domstate" else ""
+            return subprocess.CompletedProcess(command, 0, stdout, "")
+
+        with patch.object(sys, "argv", ["vm-action", encoded_name, "force_stop"]), \
+             patch.object(subprocess, "run", side_effect=powered_off) as virsh, \
+             patch.object(api.time, "monotonic", return_value=100), \
+             patch.object(api.time, "sleep") as sleep:
+            exec(compile(script, "<vm-force-stop-remote>", "exec"), {"__name__": "__main__"})
+        self.assertTrue(any(command.args[0][3] == "destroy" for command in virsh.call_args_list))
+        sleep.assert_not_called()
+
+    def test_activity_queries_scope_to_host_and_vm_with_target_index(self):
+        host = self.create_test_host()
+        host_id = host["id"]
+        for action, target in (
+            ("host.refresh", host_id),
+            ("vm.start", f"{host_id}/test-vm"),
+            ("vm.configuration", f"{host_id}/test-vm/cpu"),
+            ("vm.start", f"{host_id}/test-vm-extra"),
+            ("vm.start", f"{host_id}-other/test-vm"),
+        ):
+            api.record_audit("user-test", action, target)
+
+        host_events = self.client.get(f"/kvm-api/hosts/{host_id}/activity", headers=self.headers("viewer-token"))
+        self.assertEqual(host_events.status_code, 200, host_events.text)
+        self.assertEqual({event["target"] for event in host_events.json()}, {
+            host_id, f"{host_id}/test-vm", f"{host_id}/test-vm/cpu", f"{host_id}/test-vm-extra",
+        })
+
+        vm_events = self.client.get(f"/kvm-api/hosts/{host_id}/activity?vm_name=test-vm", headers=self.headers("viewer-token"))
+        self.assertEqual(vm_events.status_code, 200, vm_events.text)
+        self.assertEqual({event["target"] for event in vm_events.json()}, {
+            f"{host_id}/test-vm", f"{host_id}/test-vm/cpu",
+        })
+        with api.connect_db() as db:
+            indexes = {row[1] for row in db.execute("PRAGMA index_list(audit_events)")}
+        self.assertIn("idx_audit_events_target_occurred", indexes)
+
+    def test_vm_bulk_delete_is_rbac_protected_validated_and_preserves_storage(self):
+        host = self.create_test_host()
+        route = f"/kvm-api/hosts/{host['id']}/vms/delete"
+        denied = self.client.post(route, headers=self.headers("viewer-token"), json={"vm_names": ["test-vm"]})
+        self.assertEqual(denied.status_code, 403)
+        duplicate = self.client.post(route, headers=self.headers("admin-token"), json={"vm_names": ["test-vm", "test-vm"]})
+        self.assertEqual(duplicate.status_code, 422)
+        invalid = self.client.post(route, headers=self.headers("admin-token"), json={"vm_names": ["x" * 256]})
+        self.assertEqual(invalid.status_code, 422)
+
+        fake_job = {"job_id": "00000000-0000-4000-8000-000000000001", "status": "queued"}
+        remote_json = '{"vms":[{"name":"test-vm","status":"deleted","message":"Virtual machine definition removed; storage volumes were preserved."}]}'
+        with patch.object(api, "create_operation_job", return_value=fake_job) as create_job:
+            response = self.client.post(route, headers=self.headers("admin-token"), json={"vm_names": ["test-vm"]})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(create_job.call_args.args[0], "vm_delete")
+        perform_delete = create_job.call_args.args[3]
+        with patch.object(api, "run_sudo_python", return_value=remote_json) as remote:
+            result = perform_delete(api.cockpit_host_record(host["id"]))
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["vms"][0]["status"], "deleted")
+        self.assertEqual(remote.call_args.kwargs["stdin_data"], '["test-vm"]')
+        script = remote.call_args.args[1]
+        compile(script, "<vm-delete-remote>", "exec")
+        self.assertIn("['undefine',name]", script)
+        self.assertNotIn("--remove-all-storage", script)
+        self.assertNotIn("test-vm", script)
+
+    def test_vm_device_attach_network_rejects_duplicate_configured_network(self) -> None:
+        host = self.create_test_host()
+        with patch.object(api, "run_sudo_python", return_value="Persistent VM device configuration updated") as remote:
+            response = self.client.post(
+                f"/kvm-api/hosts/{host['id']}/vms/devices?vm_name=test-vm",
+                headers=self.headers("admin-token"),
+                json={"action": "attach_network", "network": "kvm-nat"},
+            )
+        self.assertEqual(response.status_code, 200, response.text)
+        script = remote.call_args.args[1]
+        compile(script, "<vm-device-remote>", "exec")
+        self.assertIn("configured_networks", script)
+        self.assertIn("This virtual network is already configured on this VM", script)
+
+    def test_vm_detail_reports_persistent_networks_and_live_status(self) -> None:
+        host = self.create_test_host()
+        with patch.object(api, "run_sudo_python", return_value='{"interfaces":[]}') as remote:
+            response = self.client.get(
+                f"/kvm-api/hosts/{host['id']}/vms/detail?vm_name=test-vm",
+                headers=self.headers("admin-token"),
+            )
+        self.assertEqual(response.status_code, 200, response.text)
+        script = remote.call_args.args[1]
+        compile(script, "<vm-detail-remote>", "exec")
+        self.assertIn("dumpxml','--inactive'", script)
+        self.assertIn("active_interfaces", script)
+        self.assertIn("'active':bool(live)", script)
+
     def create_test_host(self, *, token: str = "admin-token", name: str = "test-host") -> dict:
         response = self.client.post("/kvm-api/hosts", headers=self.headers(token), json={
             "name": name, "address": "192.0.2.20", "port": 22,
@@ -109,6 +310,10 @@ class KvmApiTests(unittest.TestCase):
         response = self.client.get("/healthz")
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json().get("status"))
+
+    def test_database_file_is_private_after_api_startup(self) -> None:
+        database_mode = api.DB_PATH.stat().st_mode & 0o777
+        self.assertEqual(database_mode, 0o600)
 
     def test_viewer_can_read_but_cannot_import_host(self) -> None:
         headers = self.headers("viewer-token")
@@ -254,13 +459,17 @@ class KvmApiTests(unittest.TestCase):
         )
         self.assertEqual(denied.status_code, 403)
 
-        with patch.object(api, "run_sudo_python", return_value="") as remote:
+        with patch.object(api, "create_operation_job", return_value={"job_id": "00000000-0000-4000-8000-000000000002", "status": "queued"}) as queued:
             response = self.client.post(
                 f"/kvm-api/hosts/{host['id']}/vms/actions?vm_name=test-vm",
                 headers=self.headers("admin-token"), json={"action": "start"},
             )
         self.assertEqual(response.status_code, 200, response.text)
-        self.assertTrue(response.json()["success"])
+        self.assertEqual(response.json()["status"], "queued")
+        self.assertEqual(queued.call_args.args[0], "vm_start")
+        perform_action = queued.call_args.args[3]
+        with patch.object(api, "run_sudo_python", return_value="") as remote:
+            self.assertEqual(perform_action(api.cockpit_host_record(host["id"])), {"status": "completed"})
         self.assertIn("virsh", remote.call_args.args[1])
 
     def test_vm_cpu_memory_update_validates_limits_and_calls_remote_boundary(self) -> None:

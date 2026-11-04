@@ -125,6 +125,7 @@ def initialize_database() -> None:
     with connect_db() as db:
         initialize_schema(db)
         db.execute("CREATE INDEX IF NOT EXISTS idx_audit_events_occurred_at ON audit_events(occurred_at DESC)")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_audit_events_target_occurred ON audit_events(target,occurred_at DESC)")
         db.execute("UPDATE operation_jobs SET status='failed',updated_at=? WHERE status IN ('queued','running')",
                    (now(),))
         for row in db.execute("SELECT id,results_json FROM operation_jobs WHERE status='failed'"):
@@ -145,6 +146,13 @@ def initialize_database() -> None:
         )
         db.execute("DELETE FROM operation_jobs WHERE created_at < ?",
                    ((datetime.now(timezone.utc) - timedelta(days=30)).isoformat(),))
+    # The database contains encrypted host and backup credentials plus host
+    # inventory. Keep it private even when the PVC or process umask is broader.
+    for path in (DB_PATH, Path(f"{DB_PATH}-wal"), Path(f"{DB_PATH}-shm")):
+        try:
+            path.chmod(0o600)
+        except FileNotFoundError:
+            continue
 
 
 class HostInput(BaseModel):
@@ -160,7 +168,11 @@ class HostInput(BaseModel):
 
 
 class VMAction(BaseModel):
-    action: Literal["start", "shutdown", "reboot", "pause", "resume"]
+    action: Literal["start", "shutdown", "reboot", "pause", "resume", "force_stop"]
+
+
+class VMDeleteRequest(BaseModel):
+    vm_names: list[str] = Field(min_length=1, max_length=10)
 
 
 class ClusterPreflightRequest(BaseModel):
@@ -245,12 +257,14 @@ class VMDetailsConfig(BaseModel):
 class VMCreate(BaseModel):
     name: str = Field(min_length=1, max_length=64)
     pool: str = Field(min_length=1, max_length=128)
-    volume: str = Field(min_length=1, max_length=128)
+    volume: str | None = Field(default=None, min_length=1, max_length=128)
     network: str = Field(min_length=1, max_length=128)
     vcpus: int = Field(ge=1, le=512)
     memory_mib: int = Field(ge=128, le=1048576)
     iso_path: str | None = Field(default=None, max_length=1024)
     iso_url: str | None = Field(default=None, max_length=2048)
+    create_disk: bool = False
+    disk_size_gib: int = Field(default=20, ge=1, le=10240)
     autostart: bool = False
 
 
@@ -2973,10 +2987,23 @@ for line in run(['virsh','-c','qemu:///system','domblklist',name,'--details']).s
     if len(parts) == 4 and parts[0] in ('file','block','dir','network','volume'):
         disks.append({'type':parts[0], 'device':parts[1], 'target':parts[2], 'source':parts[3], 'format':disk_formats.get(parts[2],'unknown')})
 interfaces = []
+active_interfaces = {}
 for line in run(['virsh','-c','qemu:///system','domiflist',name]).splitlines():
     parts = line.split(None,4)
     if len(parts) == 5 and parts[0] not in ('Interface','-'):
-        interfaces.append({'name':parts[0], 'type':parts[1], 'source':parts[2], 'model':parts[3], 'mac':parts[4], 'ip_addresses':[]})
+        active_interfaces[parts[4].lower()] = {'name':parts[0], 'type':parts[1], 'source':parts[2], 'model':parts[3]}
+configured_devices = config_domain.find('./devices')
+for iface in configured_devices.findall('./interface') if configured_devices is not None else []:
+    mac_node = iface.find('./mac')
+    mac = mac_node.get('address','') if mac_node is not None else ''
+    source_node = iface.find('./source')
+    source_value = next((source_node.get(key,'') for key in ('network','bridge','dev','name') if source_node is not None and source_node.get(key)), '')
+    model_node = iface.find('./model')
+    target_node = iface.find('./target')
+    live = active_interfaces.get(mac.lower(), {}) if mac else {}
+    interfaces.append({'name':live.get('name') or (target_node.get('dev','') if target_node is not None else ''),
+        'type':iface.get('type','unknown'), 'source':source_value, 'model':model_node.get('type','unknown') if model_node is not None else 'unknown',
+        'mac':mac, 'active':bool(live), 'ip_addresses':[]})
 # Query the guest agent first, then libvirt DHCP leases/ARP. This is read-only;
 # guests without an agent or lease simply show no address in the UI.
 by_mac = {item['mac'].lower(): item for item in interfaces if item.get('mac')}
@@ -3348,14 +3375,14 @@ def list_host_activity(host_id: str, vm_name: str | None = None, limit: int = 50
             prefix = f"{host_id}/{vm_name}"
             rows = db.execute(
                 "SELECT occurred_at,action,target,outcome FROM audit_events "
-                "WHERE target=? OR target LIKE ? ORDER BY occurred_at DESC LIMIT ?",
-                (prefix, prefix + "/%", limit),
+                "WHERE target=? OR target GLOB ? ORDER BY occurred_at DESC LIMIT ?",
+                (prefix, prefix + "/*", limit),
             )
         else:
             rows = db.execute(
                 "SELECT occurred_at,action,target,outcome FROM audit_events "
-                "WHERE target=? OR target LIKE ? ORDER BY occurred_at DESC LIMIT ?",
-                (host_id, host_id + "/%", limit),
+                "WHERE target=? OR target GLOB ? ORDER BY occurred_at DESC LIMIT ?",
+                (host_id, host_id + "/*", limit),
             )
         return [dict(row) for row in rows]
 
@@ -3373,11 +3400,20 @@ def create_vm(host_id: str, payload: VMCreate, access: AuthorizationContext = De
             payload.iso_url = validate_public_iso_url(payload.iso_url)
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from exc
+    if payload.create_disk:
+        if payload.volume:
+            raise HTTPException(422, "Choose a new disk or an existing disk volume, not both")
+        if not (payload.iso_path or payload.iso_url):
+            raise HTTPException(422, "A new boot disk requires an installer ISO")
+    elif not payload.volume:
+        raise HTTPException(422, "Select an existing bootable disk volume")
     host = cockpit_host_record(host_id)
     creation_script = r'''import hashlib,ipaddress,os,re,shutil,socket,ssl,subprocess,sys,tempfile,urllib.request,xml.etree.ElementTree as ET
-name,pool,volume,network,vcpu_text,memory_text,iso_path,iso_url,autostart=sys.argv[1:]
+name,pool,volume,network,vcpu_text,memory_text,iso_path,iso_url,autostart,create_disk,disk_size_gib=sys.argv[1:]
 if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,63}',name): raise SystemExit('Invalid VM name')
 vcpus=int(vcpu_text); memory_mib=int(memory_text)
+create_disk=create_disk=='true'; disk_size_bytes=int(disk_size_gib)*1024**3
+if create_disk and not 1<=int(disk_size_gib)<=10240: raise SystemExit('New disk size must be between 1 and 10240 GiB')
 base=['virsh','-c','qemu:///system']
 def run(args):
  r=subprocess.run(args,capture_output=True,text=True,timeout=40)
@@ -3390,17 +3426,21 @@ pool_xml=ET.fromstring(run(base+['pool-dumpxml',pool]))
 pool_type=pool_xml.get('type','')
 pool_target=pool_xml.find('./target/path')
 pool_path=pool_target.text.strip() if pool_target is not None and pool_target.text else ''
+if create_disk and pool_type!='dir': raise SystemExit('Creating a new boot disk requires a directory-based storage pool; select a running directory pool or use an existing volume')
 if iso_url and (pool_type not in ('dir','netfs','fs') or not pool_path or not os.path.isdir(pool_path)): raise SystemExit('Remote ISO downloads require an active directory-based storage pool')
-volume_xml=ET.fromstring(run(base+['vol-dumpxml',volume,'--pool',pool]))
-volume_format=volume_xml.find('./target/format')
-disk_format=volume_format.get('type','') if volume_format is not None else ''
-if disk_format not in ('qcow2','raw'): raise SystemExit('The selected disk volume must use qcow2 or raw format')
-disk_path=run(base+['vol-path',volume,'--pool',pool]).strip()
-if not disk_path or not os.path.exists(disk_path): raise SystemExit('The selected disk volume path is not present on the host')
+if not create_disk:
+ volume_xml=ET.fromstring(run(base+['vol-dumpxml',volume,'--pool',pool]))
+ volume_format=volume_xml.find('./target/format')
+ disk_format=volume_format.get('type','') if volume_format is not None else ''
+ if disk_format not in ('qcow2','raw'): raise SystemExit('The selected disk volume must use qcow2 or raw format')
+ disk_path=run(base+['vol-path',volume,'--pool',pool]).strip()
+ if not disk_path or not os.path.exists(disk_path): raise SystemExit('The selected disk volume path is not present on the host')
+# Keep the all-networks existence check separate from the active-only check.
+# `net-list --name` returns active networks without parsing localized `net-info` text.
 network_names=[line.strip() for line in run(base+['net-list','--all','--name']).splitlines() if line.strip()]
 if network not in network_names: raise SystemExit('The selected virtual network does not exist')
-net_info=run(base+['net-info',network])
-if not any(line.strip().lower()=='active: yes' for line in net_info.splitlines()): raise SystemExit('Start the selected virtual network before creating this VM')
+active_networks={line.strip() for line in run(base+['net-list','--name']).splitlines() if line.strip()}
+if network not in active_networks: raise SystemExit('The selected virtual network is not active. Start it in Network > Libvirt virtual networks, then retry.')
 if iso_path:
  if not os.path.isabs(iso_path) or not iso_path.lower().endswith('.iso') or not os.path.isfile(iso_path): raise SystemExit('The installer ISO path is invalid or the file does not exist')
 if iso_url:
@@ -3421,7 +3461,12 @@ if iso_url:
  safe_name=re.sub(r'[^A-Za-z0-9_.+-]','_',safe_name)[:180]
  if not safe_name.lower().endswith('.iso'): raise SystemExit('The remote file name must end in .iso')
  cache_dir=os.path.join(pool_path,'.rancher-kvm-iso-cache')
- os.makedirs(cache_dir,mode=0o750,exist_ok=True)
+ # Installer ISOs are readable artifacts consumed by the unprivileged QEMU
+ # process. Every parent directory must be traversable by that account too.
+ # Keep the shared cache directory world-traversable/readable and repair its
+ # mode on existing pools created by an earlier extension release.
+ os.makedirs(cache_dir,mode=0o755,exist_ok=True)
+ os.chmod(cache_dir,0o755)
  iso_path=os.path.join(cache_dir,hashlib.sha256(iso_url.encode()).hexdigest()[:16]+'-'+safe_name)
  if not os.path.isfile(iso_path) or os.path.getsize(iso_path)<40960:
   if shutil.disk_usage(cache_dir).free < reserve+40960: raise SystemExit('The selected storage pool does not have enough free space for an ISO download')
@@ -3452,6 +3497,27 @@ if iso_url:
    except FileNotFoundError: pass
    if isinstance(exc,RuntimeError): raise SystemExit(str(exc))
    raise SystemExit('ISO download failed. Check host internet access, the source URL, and storage free space.')
+disk_created=False
+if create_disk:
+ volume=name+'.qcow2'
+ existing=[]
+ for line in run(base+['vol-list','--pool',pool]).splitlines():
+  fields=line.split()
+  if not fields or fields[0].lower()=='name' or set(fields[0])<={'-'}: continue
+  existing.append(fields[0])
+ if volume in existing: raise SystemExit('A storage volume with the new disk name already exists; choose another VM name or remove the unused volume')
+ pool_info=run(base+['pool-info','--bytes',pool])
+ if not any(line.lower().startswith('state:') and 'running' in line.lower() for line in pool_info.splitlines()): raise SystemExit('Start the selected storage pool before creating a new boot disk')
+ available=next((int(line.split(':',1)[1].strip()) for line in pool_info.splitlines() if line.lower().startswith('available:')),0)
+ if available<disk_size_bytes: raise SystemExit('The selected storage pool does not have enough free space for the new boot disk')
+ run(base+['vol-create-as',pool,volume,str(disk_size_bytes),'--format','qcow2'])
+ disk_created=True; disk_format='qcow2'
+ try:
+  disk_path=run(base+['vol-path',volume,'--pool',pool]).strip()
+  if not disk_path or not os.path.exists(disk_path): raise SystemExit('The newly created boot disk path is not available on the host')
+ except SystemExit:
+  subprocess.run(base+['vol-delete',volume,'--pool',pool],capture_output=True,text=True,timeout=30)
+  raise
 domain=ET.Element('domain',{'type':'kvm'})
 ET.SubElement(domain,'name').text=name
 ET.SubElement(domain,'memory',{'unit':'MiB'}).text=str(memory_mib)
@@ -3488,32 +3554,44 @@ ET.SubElement(serial,'target',{'port':'0'})
 console=ET.SubElement(devices,'console',{'type':'pty'})
 ET.SubElement(console,'target',{'type':'serial','port':'0'})
 fd,path=tempfile.mkstemp(prefix='kvm-vm-create-',suffix='.xml')
+domain_defined=False
 try:
  with os.fdopen(fd,'w',encoding='utf-8') as f: f.write(ET.tostring(domain,encoding='unicode'))
  run(base+['define',path])
+ domain_defined=True
  if autostart=='true': run(base+['autostart',name])
  run(base+['start',name])
+except SystemExit:
+ if disk_created and not domain_defined:
+  subprocess.run(base+['vol-delete',volume,'--pool',pool],capture_output=True,text=True,timeout=30)
+ raise
 finally:
  try: os.unlink(path)
  except FileNotFoundError: pass
-print('VM created and started')
 '''
+    def safe_creation_diagnostic(error: Exception) -> str:
+        detail = str(error).strip() or "The remote command failed without returning a diagnostic"
+        for secret in (host.get("password"), host.get("private_key"), host.get("key_passphrase"), payload.iso_url, payload.iso_path):
+            if secret:
+                detail = detail.replace(secret, "[redacted]")
+        return re.sub(r"\s+", " ", detail).strip()[:500]
+
     if payload.iso_url:
         def download_and_create(remote_host: dict[str, Any]) -> dict[str, Any]:
             try:
-                output = run_sudo_python(remote_host, creation_script, [payload.name, payload.pool, payload.volume, payload.network, str(payload.vcpus), str(payload.memory_mib), payload.iso_path or "", payload.iso_url or "", str(payload.autostart).lower()], timeout=14400)
-                record_audit(access.user_id, "vm.create", f"{host_id}/{payload.name}", detail=f"pool={payload.pool}; volume={payload.volume}; vcpus={payload.vcpus}; memory_mib={payload.memory_mib}; remote_iso=true")
+                output = run_sudo_python(remote_host, creation_script, [payload.name, payload.pool, payload.volume or "", payload.network, str(payload.vcpus), str(payload.memory_mib), payload.iso_path or "", payload.iso_url or "", str(payload.autostart).lower(), str(payload.create_disk).lower(), str(payload.disk_size_gib)], timeout=14400)
+                record_audit(access.user_id, "vm.create", f"{host_id}/{payload.name}", detail=f"pool={payload.pool}; disk={'new-qcow2' if payload.create_disk else payload.volume}; vcpus={payload.vcpus}; memory_mib={payload.memory_mib}; remote_iso=true")
                 return {"status": "completed", "vm_name": payload.name, "message": output[:240]}
             except Exception as exc:
                 record_audit(access.user_id, "vm.create", f"{host_id}/{payload.name}", "failure", "Could not create VM using the selected remote ISO")
-                raise RuntimeError("Could not create the VM with the remote ISO. Check the KVM host internet access, directory storage pool, and available disk space.") from exc
+                raise RuntimeError(safe_creation_diagnostic(exc)) from exc
         return create_operation_job("vm_create", access.user_id, [host], download_and_create)
     try:
-        run_sudo_python(host, creation_script, [payload.name, payload.pool, payload.volume, payload.network, str(payload.vcpus), str(payload.memory_mib), payload.iso_path or "", payload.iso_url or "", str(payload.autostart).lower()], timeout=14400 if payload.iso_url else 75)
+        run_sudo_python(host, creation_script, [payload.name, payload.pool, payload.volume or "", payload.network, str(payload.vcpus), str(payload.memory_mib), payload.iso_path or "", payload.iso_url or "", str(payload.autostart).lower(), str(payload.create_disk).lower(), str(payload.disk_size_gib)], timeout=14400 if payload.iso_url else 75)
     except Exception as exc:
         record_audit(access.user_id, "vm.create", f"{host_id}/{payload.name}", "failure", "Could not create VM with the selected resources")
-        raise HTTPException(502, "Could not create the VM. Confirm its disk, active virtual network, and optional ISO are available on the host.") from exc
-    record_audit(access.user_id, "vm.create", f"{host_id}/{payload.name}", detail=f"pool={payload.pool}; volume={payload.volume}; vcpus={payload.vcpus}; memory_mib={payload.memory_mib}")
+        raise HTTPException(502, f"Could not create the VM on {host.get('name', host_id)}: {safe_creation_diagnostic(exc)}") from exc
+    record_audit(access.user_id, "vm.create", f"{host_id}/{payload.name}", detail=f"pool={payload.pool}; disk={'new-qcow2' if payload.create_disk else payload.volume}; vcpus={payload.vcpus}; memory_mib={payload.memory_mib}")
     return {"success": True}
 
 
@@ -3563,8 +3641,10 @@ elif action=='attach_network':
  if not network: raise SystemExit('Choose a libvirt network')
  networks=[line.strip() for line in run(base+['net-list','--all','--name']).splitlines() if line.strip()]
  if network not in networks: raise SystemExit('The selected libvirt network does not exist')
- info=run(base+['net-info',network])
- if not any(line.strip().lower()=='active: yes' for line in info.splitlines()): raise SystemExit('Start the selected libvirt network before attaching it')
+ configured_networks={source.get('network','') for source in devices.findall('./interface/source') if source.get('network')}
+ if network in configured_networks: raise SystemExit('This virtual network is already configured on this VM')
+ active_networks={line.strip() for line in run(base+['net-list','--name']).splitlines() if line.strip()}
+ if network not in active_networks: raise SystemExit('The selected libvirt network is not active. Start it in Network > Libvirt virtual networks, then retry.')
  iface=ET.SubElement(devices,'interface',{'type':'network'})
  ET.SubElement(iface,'source',{'network':network})
  ET.SubElement(iface,'model',{'type':'virtio'})
@@ -4693,27 +4773,108 @@ def run_sudo_python(host: dict[str, Any], script: str, args: list[str] | None = 
 
 
 @app.post("/kvm-api/hosts/{host_id}/vms/actions")
-def control_vm(host_id: str, payload: VMAction, vm_name: str, access: AuthorizationContext = Depends(require_permission("vm_operator"))) -> dict[str, bool]:
+def control_vm(host_id: str, payload: VMAction, vm_name: str, access: AuthorizationContext = Depends(require_permission("vm_operator"))) -> dict[str, Any]:
     host = cockpit_host_record(host_id)
     encoded_name = base64.b64encode(vm_name.encode()).decode()
-    action_script = r'''import base64,subprocess,sys
+    action_script = r'''import base64,subprocess,sys,time
 name=base64.b64decode(sys.argv[1]).decode()
 action=sys.argv[2]
-if action not in ('start','shutdown','reboot','pause','resume'): raise SystemExit('Action not allowed')
+if action not in ('start','shutdown','reboot','pause','resume','force_stop'): raise SystemExit('Action not allowed')
 listing=subprocess.run(['virsh','-c','qemu:///system','list','--all','--name'],capture_output=True,text=True,timeout=20)
 if listing.returncode: raise SystemExit(listing.stderr.strip() or listing.stdout.strip() or 'Could not query libvirt')
 if name not in listing.stdout.splitlines(): raise SystemExit('Virtual machine not found')
-command={'pause':'suspend','resume':'resume'}.get(action,action)
+command={'pause':'suspend','resume':'resume','force_stop':'destroy'}.get(action,action)
 result=subprocess.run(['virsh','-c','qemu:///system',command,name],capture_output=True,text=True,timeout=30)
 if result.returncode: raise SystemExit(result.stderr.strip() or result.stdout.strip() or 'The libvirt action failed')
+target={'start':'running','shutdown':'shut off','force_stop':'shut off','pause':'paused','resume':'running'}.get(action)
+if target:
+ timeout=45 if action in ('start','shutdown') else 15
+ deadline=time.monotonic()+timeout
+ while True:
+  state=subprocess.run(['virsh','-c','qemu:///system','domstate',name],capture_output=True,text=True,timeout=10)
+  if state.returncode: raise SystemExit(state.stderr.strip() or state.stdout.strip() or 'Could not verify the virtual machine state')
+  current=state.stdout.strip().lower().splitlines()[0] if state.stdout.strip() else 'unknown'
+  if (target=='shut off' and (current.startswith('shut off') or current.startswith('shutoff'))) or (target!='shut off' and current==target): break
+  if time.monotonic()>=deadline:
+   if action=='shutdown': raise SystemExit('Libvirt accepted the graceful shutdown request, but the VM remained running after 45 seconds. The guest may not support ACPI shutdown or may be busy. Shut it down from inside the guest and check its power-management configuration, then retry. If graceful shutdown is impossible, use Force off only after reviewing the risk of unsaved-data loss.')
+   raise SystemExit('Libvirt accepted the action, but the VM did not reach the expected state ('+target+') within '+str(timeout)+' seconds; current state: '+current)
+  time.sleep(1)
 '''
-    try:
-        run_sudo_python(host, action_script, [encoded_name, payload.action], timeout=45)
-    except Exception as exc:
-        record_audit(access.user_id, f"vm.{payload.action}", f"{host_id}/{vm_name}", "failure", str(exc))
-        raise HTTPException(502, f"Could not perform the libvirt action: {exc}") from exc
-    record_audit(access.user_id, f"vm.{payload.action}", f"{host_id}/{vm_name}")
-    return {"success": True}
+
+    def perform_action(operation_host: dict[str, Any]) -> dict[str, str]:
+        try:
+            run_sudo_python(operation_host, action_script, [encoded_name, payload.action], timeout=70)
+        except Exception as exc:
+            record_audit(access.user_id, f"vm.{payload.action}", f"{host_id}/{vm_name}", "failure", str(exc)[:500])
+            raise
+        record_audit(access.user_id, f"vm.{payload.action}", f"{host_id}/{vm_name}")
+        return {"status": "completed"}
+
+    # Keep host-side state verification off the synchronous Rancher proxy path.
+    # The UI polls this durable job and displays the guest/libvirt diagnostic.
+    return create_operation_job(f"vm_{payload.action}", access.user_id, [host], perform_action)
+
+
+@app.post("/kvm-api/hosts/{host_id}/vms/delete")
+def delete_vms(host_id: str, payload: VMDeleteRequest, access: AuthorizationContext = Depends(require_permission("vm_operator"))) -> dict[str, Any]:
+    """Remove stopped libvirt definitions while deliberately preserving disks."""
+    names = [name.strip() for name in payload.vm_names]
+    if any(not name or len(name) > 255 or "\x00" in name for name in names):
+        raise HTTPException(422, "Each virtual machine name must contain 1–255 valid characters")
+    if len(set(names)) != len(names):
+        raise HTTPException(422, "The virtual machine selection contains duplicate names")
+    host = cockpit_host_record(host_id)
+    # Names travel as JSON on stdin and are passed to virsh as argv elements;
+    # they are never interpolated into shell source or command text.
+    delete_script = r'''import json,subprocess,sys
+names=json.load(sys.stdin)
+def run(args):
+ try: return subprocess.run(['virsh','-c','qemu:///system']+args,capture_output=True,text=True,timeout=8)
+ except subprocess.TimeoutExpired: return subprocess.CompletedProcess(args,124,'','Libvirt did not respond within 8 seconds; check the host libvirt service and retry.')
+listing=run(['list','--all','--name'])
+if listing.returncode: raise SystemExit(listing.stderr.strip() or listing.stdout.strip() or 'Could not query libvirt')
+known=set(line for line in listing.stdout.splitlines() if line)
+results=[]
+for name in names:
+ if name not in known:
+  results.append({'name':name,'status':'error','message':'Virtual machine was not found on this host.'})
+  continue
+ state=run(['domstate',name])
+ if state.returncode:
+  results.append({'name':name,'status':'error','message':state.stderr.strip() or state.stdout.strip() or 'Could not check the virtual machine state.'})
+  continue
+ normalized=' '.join(state.stdout.strip().lower().split())
+ if normalized not in ('shut off','shutoff'):
+  results.append({'name':name,'status':'error','message':'Shut down this virtual machine before deleting it. The extension will not power it off automatically.'})
+  continue
+ removed=run(['undefine',name])
+ if removed.returncode:
+  results.append({'name':name,'status':'error','message':removed.stderr.strip() or removed.stdout.strip() or 'Libvirt could not remove the virtual machine definition. Check snapshots or firmware metadata, then retry.'})
+ else:
+  results.append({'name':name,'status':'deleted','message':'Virtual machine definition removed; storage volumes were preserved.'})
+print(json.dumps({'vms':results}))
+    '''
+
+    def perform_delete(operation_host: dict[str, Any]) -> dict[str, Any]:
+        try:
+            output = run_sudo_python(operation_host, delete_script, timeout=180, stdin_data=json.dumps(names))
+            result = json.loads(output or "{}")
+            vm_results = result.get("vms")
+            if not isinstance(vm_results, list) or len(vm_results) != len(names):
+                raise RuntimeError("The host returned an incomplete virtual machine deletion result")
+        except Exception as exc:
+            record_audit(access.user_id, "vm.delete", host_id, "failure", str(exc)[:500])
+            raise
+        deleted = [item for item in vm_results if item.get("status") == "deleted"]
+        failures = [item for item in vm_results if item.get("status") != "deleted"]
+        for item in deleted:
+            record_audit(access.user_id, "vm.delete", f"{host_id}/{item.get('name', '')}", detail="definition removed; storage preserved")
+        for item in failures:
+            record_audit(access.user_id, "vm.delete", f"{host_id}/{item.get('name', '')}", "failure", str(item.get("message", ""))[:500])
+        return {"status": "failed" if failures else "completed", "vms": vm_results,
+                "error": f"{len(failures)} virtual machine(s) could not be deleted" if failures else None}
+
+    return create_operation_job("vm_delete", access.user_id, [host], perform_delete)
 
 
 @app.post("/kvm-api/hosts/{host_id}/vms/autostart")

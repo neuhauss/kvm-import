@@ -180,6 +180,7 @@ kvmManager:
     activityFailed: Falhou
     activityVmStart: Iniciar máquina virtual
     activityVmShutdown: Desligar máquina virtual
+    activityVmForceStop: Desligamento forçado de máquina virtual
     activityVmReboot: Reiniciar máquina virtual
     activityVmPause: Pausar máquina virtual
     activitySnapshotCreate: Criar snapshot da VM
@@ -241,6 +242,17 @@ kvmManager:
     reviewRevertSnapshotTitle: Revisar restauração do snapshot
     reviewRevertSnapshot: "Restaurar a máquina virtual {vm} para o snapshot {snapshot}."
     reviewSnapshotWarning: Restaurar altera o estado da VM e pode descartar mudanças feitas após o snapshot. Excluir remove este ponto de recuperação.
+    reviewDeleteVmTitle: Revisar exclusão de máquina virtual
+    reviewDeleteVmSingle: "Remover a definição libvirt de {name}."
+    reviewDeleteVmMultiple: "Remover as definições libvirt de {count} máquinas virtuais selecionadas: {names}."
+    reviewDeleteVmWarning: Só é possível remover máquinas virtuais desligadas. A extensão não as desligará automaticamente. Os volumes de disco serão preservados e não serão excluídos.
+    deleteVmConfirm: "Excluir {count} VM(s)"
+    vmDeleteTimeout: "A operação de exclusão não terminou em quatro minutos. Atualize o inventário para confirmar quais VMs foram removidas antes de tentar novamente."
+    vmDeletePartial: "Excluídas: {deleted}; não foi possível excluir: {failed}. {details}"
+    vmDeleteSelectionLimit: Selecione no máximo 10 máquinas virtuais por lote de exclusão.
+    selectedVms: "{count} selecionada(s)"
+    clearSelection: Limpar seleção
+    deleteSelectedVms: "Excluir selecionadas ({count})"
     lastUpdatedAt: "Métricas do host atualizadas: {time} · atualização automática a cada 30 segundos"
     updateFailedAt: "A atualização falhou. Alguns dados exibidos podem estar desatualizados."
     updateStaleAt: "Os dados podem estar desatualizados. Última atualização bem-sucedida: {time}."
@@ -314,7 +326,10 @@ kvmManager:
     createVmHelp: 'Escolha como iniciar a VM: instale um sistema por uma ISO que já esteja no host KVM ou use um disco inicializável existente.'
     vmName: Nome da máquina virtual
     storagePool: Pool de armazenamento
-    bootDisk: Volume do disco de inicialização
+    bootDisk: Volume de disco inicializável existente
+    newDiskSize: Novo tamanho do disco (GiB)
+    newDiskSummary: Novo disco qcow2 ({size} GiB)
+    newDiskHelp: Cria um disco qcow2 esparso no pool de diretório ativo selecionado. A ISO do instalador será conectada separadamente.
     virtualNetwork: Rede virtual
     installerIsoPath: Caminho da ISO de instalação no host
     installerIsoPathPlaceholder: /var/lib/libvirt/images/instalador.iso
@@ -342,12 +357,15 @@ kvmManager:
     isoRequiredForInstall: Escolha um caminho local de ISO válido, uma URL HTTPS de ISO ou inicie de um disco já inicializável.
     selectVolume: Selecione um volume de disco
     selectNetwork: Selecione uma rede virtual
-    invalidVmCreate: Informe o nome da VM, CPU, memória, um volume disponível e uma rede virtual ativa.
+    invalidVmCreate: Informe nome da VM, CPU, memória, tamanho do disco ou disco inicializável existente e uma rede virtual ativa.
     confirmVmCreate: "Criar e iniciar {name} com {vcpus} vCPUs, {memory} de memória, disco {disk} e rede {network}?"
     vmDisks: Discos virtuais e mídia de instalação
     vmNetworks: Interfaces de rede virtual
     volume: "Volume"
     vmDeviceRestartNote: As alterações são salvas no libvirt e passam a valer após reiniciar a VM. Remover um disco mantém o volume de armazenamento.
+    interfaceActive: Ativa
+    interfacePendingRestart: Pendente de reinicialização
+    interfaceConfigured: Configurada
     attachDisk: Anexar disco
     detachDisk: Remover disco
     ejectInstaller: Ejetar mídia de instalação
@@ -385,7 +403,7 @@ kvmManager:
     confirmSnapshotCreate: "Criar o snapshot {name} para {vm}? A VM precisa estar desligada."
     confirmSnapshotDelete: "Excluir o snapshot {name} de {vm}? Esta ação não pode ser desfeita."
     confirmSnapshotRevert: "Restaurar {vm} para o snapshot {name}? O estado atual do disco após esse snapshot será descartado."
-    runningStopped: "{running} em execução · {stopped} paradas"
+    runningPausedStopped: "{running} em execução · {paused} pausadas · {stopped} paradas"
     hostCpu: "CPU do host"
     cores: "núcleos"
     memory: "Memória"
@@ -494,7 +512,7 @@ kvmManager:
     vmWizardCompute: Identidade e capacidade
     vmWizardComputeHelp: Defina o nome da máquina virtual e os recursos de processamento e memória.
     vmWizardResources: Armazenamento e rede
-    vmWizardResourcesHelp: Selecione o pool, o disco e a rede. Depois escolha instalar por ISO ou iniciar de um disco já preparado.
+    vmWizardResourcesHelp: Selecione um pool de armazenamento e uma rede ativa. A instalação por ISO cria um disco novo; para iniciar um sistema existente, selecione um volume existente.
     vmWizardReview: Revisar configuração
     vmWizardReviewHelp: Confira os recursos e dispositivos antes de criar a máquina virtual.
     vmWizardBack: Voltar
@@ -760,6 +778,10 @@ kvmManager:
     pauseVm: "Pausar"
     resumeVm: "Retomar"
     shutdownVm: "Desligar"
+    forceStop: Desligar à força
+    reviewForceStopTitle: Desligar a máquina virtual à força?
+    reviewForceStopVm: "Desligar {name} imediatamente pelo libvirt."
+    reviewForceStopWarning: "Isso equivale a cortar a energia. O sistema convidado não recebe um evento de desligamento, e dados não salvos ou alterações no sistema de arquivos podem ser perdidos. Tente Desligar primeiro."
     rebootVm: "Reiniciar"
     autostartOn: "Ativado"
     autostartOff: "Desativado"
@@ -767,6 +789,7 @@ kvmManager:
     hostRequired: "Nenhum host especificado. Volte à lista e escolha a interface Cloud Native de um host."
     loadError: "Não foi possível obter alguns dados"
     actionFailed: "A ação falhou"
+    vmActionTimeout: "A operação da VM não terminou em dois minutos. Atualize o inventário para verificar o estado atual antes de tentar novamente."
     confirmAction: "{action} a máquina virtual {name}?"
     confirmService: "{action} o serviço {name}? Isso pode afetar o host."
     host: "Host"
@@ -1459,9 +1482,14 @@ kvmManager:
     pause: "Pausar"
     start: "Iniciar"
     shutdown: "Desligar"
+    forceStop: Desligar à força
     restart: "Reiniciar"
     empty: "Nenhuma máquina virtual encontrada."
     moreActions: "Mais ações"
+    delete: Excluir
+    selectVm: Selecionar máquina virtual
+    selectVisibleVms: Selecionar todas as máquinas virtuais visíveis
+    selectVmNamed: "Selecionar máquina virtual {name}"
   managedClusters:
     eyebrow: VIRTUALIZAÇÃO KVM
     title: Grupos de hosts KVM

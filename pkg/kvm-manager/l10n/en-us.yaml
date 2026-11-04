@@ -180,6 +180,7 @@ kvmManager:
     activityFailed: Failed
     activityVmStart: Start virtual machine
     activityVmShutdown: Shut down virtual machine
+    activityVmForceStop: Force off virtual machine
     activityVmReboot: Restart virtual machine
     activityVmPause: Pause virtual machine
     activitySnapshotCreate: Create VM snapshot
@@ -241,6 +242,17 @@ kvmManager:
     reviewRevertSnapshotTitle: Review snapshot restore
     reviewRevertSnapshot: "Restore virtual machine {vm} to snapshot {snapshot}."
     reviewSnapshotWarning: Restoring changes the VM state and may discard changes made after the snapshot. Deleting removes this recovery point.
+    reviewDeleteVmTitle: Review virtual machine deletion
+    reviewDeleteVmSingle: "Remove the libvirt definition for {name}."
+    reviewDeleteVmMultiple: "Remove the libvirt definitions for {count} selected virtual machines: {names}."
+    reviewDeleteVmWarning: Only stopped virtual machines can be removed. The extension will not power them off automatically. Disk volumes are preserved and are not deleted.
+    deleteVmConfirm: "Delete {count} VM(s)"
+    vmDeleteTimeout: "The deletion job did not finish within four minutes. Refresh the inventory to verify which virtual machines were removed before retrying."
+    vmDeletePartial: "Deleted {deleted}; could not delete {failed}. {details}"
+    vmDeleteSelectionLimit: Select up to 10 virtual machines per deletion batch.
+    selectedVms: "{count} selected"
+    clearSelection: Clear selection
+    deleteSelectedVms: "Delete selected ({count})"
     lastUpdatedAt: "Host metrics updated: {time} · auto-refresh every 30 seconds"
     updateFailedAt: "A refresh failed. Some displayed data may be outdated."
     updateStaleAt: "Data may be stale. Last successful refresh: {time}."
@@ -314,7 +326,10 @@ kvmManager:
     createVmHelp: 'Choose how the VM will boot: install an operating system from an ISO already on the KVM host, or use an existing bootable disk.'
     vmName: Virtual machine name
     storagePool: Storage pool
-    bootDisk: Boot disk volume
+    bootDisk: Existing boot disk volume
+    newDiskSize: New disk size (GiB)
+    newDiskSummary: New qcow2 disk ({size} GiB)
+    newDiskHelp: Creates a sparse qcow2 disk in the selected running directory pool. The installer ISO will be attached separately.
     virtualNetwork: Virtual network
     installerIsoPath: Installer ISO path on host
     installerIsoPathPlaceholder: /var/lib/libvirt/images/installer.iso
@@ -342,12 +357,15 @@ kvmManager:
     isoRequiredForInstall: Choose a valid local ISO path, an HTTPS ISO URL, or boot from an existing bootable disk.
     selectVolume: Select a disk volume
     selectNetwork: Select a virtual network
-    invalidVmCreate: Enter a VM name, CPU and memory values, an available disk volume, and an active virtual network.
+    invalidVmCreate: Enter the VM name, CPU, memory, disk size or existing boot disk, and an active virtual network.
     confirmVmCreate: "Create and start {name} with {vcpus} vCPUs, {memory} memory, disk {disk}, and network {network}?"
     vmDisks: Virtual disks and installer media
     vmNetworks: Virtual network interfaces
     volume: Volume
     vmDeviceRestartNote: Device changes are saved in libvirt and take effect after the next VM restart. Detaching a disk keeps its storage volume.
+    interfaceActive: Active
+    interfacePendingRestart: Pending restart
+    interfaceConfigured: Configured
     attachDisk: Attach disk
     detachDisk: Detach disk
     ejectInstaller: Eject installer media
@@ -385,7 +403,7 @@ kvmManager:
     confirmSnapshotCreate: "Create snapshot {name} for {vm}? The VM must be shut down."
     confirmSnapshotDelete: "Delete snapshot {name} from {vm}? This cannot be undone."
     confirmSnapshotRevert: "Restore {vm} to snapshot {name}? Current disk state after the snapshot will be discarded."
-    runningStopped: "{running} running · {stopped} stopped"
+    runningPausedStopped: "{running} running · {paused} paused · {stopped} stopped"
     hostCpu: Host CPU
     cores: cores
     memory: Memory
@@ -494,7 +512,7 @@ kvmManager:
     vmWizardCompute: Identity and capacity
     vmWizardComputeHelp: Set the virtual machine name and its processor and memory resources.
     vmWizardResources: Storage and network
-    vmWizardResourcesHelp: Select the storage pool, disk, and network, then choose ISO installation or an existing bootable disk.
+    vmWizardResourcesHelp: Select a storage pool and active network. ISO installation creates a new disk; booting an existing system requires an existing volume.
     vmWizardReview: Review configuration
     vmWizardReviewHelp: Review the selected resources and devices before creating the virtual machine.
     vmWizardBack: Back
@@ -760,6 +778,10 @@ kvmManager:
     pauseVm: Pause
     resumeVm: Resume
     shutdownVm: Shut down
+    forceStop: Force off
+    reviewForceStopTitle: Force off virtual machine?
+    reviewForceStopVm: "Immediately power off {name} through libvirt."
+    reviewForceStopWarning: "This is equivalent to removing power. The guest receives no shutdown event, so unsaved data and filesystem changes may be lost. Try Shut down first."
     rebootVm: Restart
     autostartOn: Enabled
     autostartOff: Disabled
@@ -767,6 +789,7 @@ kvmManager:
     hostRequired: Host not specified. Return to the list and choose Cloud Native interface from a host.
     loadError: Some data could not be retrieved
     actionFailed: Action failed
+    vmActionTimeout: "The VM operation did not finish within two minutes. Refresh the inventory to verify its current state before retrying."
     confirmAction: "{action} virtual machine {name}?"
     confirmService: "{action} service {name}? This can affect the host."
     host: Host
@@ -1459,9 +1482,14 @@ kvmManager:
     pause: Pause
     start: Start
     shutdown: Shut down
+    forceStop: Force off
     restart: Restart
     empty: No virtual machines found.
     moreActions: More actions
+    delete: Delete
+    selectVm: Select virtual machine
+    selectVisibleVms: Select all visible virtual machines
+    selectVmNamed: "Select virtual machine {name}"
   managedClusters:
     eyebrow: KVM VIRTUALIZATION
     title: KVM host groups

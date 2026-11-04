@@ -17,6 +17,8 @@ spec:
         app.kubernetes.io/name: kvm-extension-assets
         app.kubernetes.io/part-of: rancher-kvm
     spec:
+      # Static assets are served over HTTP and do not need Kubernetes API access.
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000

@@ -20,6 +20,8 @@ spec:
         app.kubernetes.io/name: kvm-api
         app.kubernetes.io/part-of: rancher-kvm
     spec:
+      # The API authenticates through Rancher and does not call the Kubernetes API.
+      automountServiceAccountToken: false
       {{- with .Values.backend.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}

@@ -1,9 +1,10 @@
 <template>
   <div class="table-wrap vm-table-wrap">
     <table class="table">
-      <thead><tr><th>{{ t('vm') }}</th><th>{{ t('state') }}</th><th>{{ t('ipAddresses') }}</th><th>vCPU</th><th>{{ t('memory') }}</th><th>{{ t('autostart') }}</th><th>{{ t('actions') }}</th></tr></thead>
+      <thead><tr><th v-if="canOperate"><input type="checkbox" :checked="allVisibleSelected" :aria-label="t('selectVisibleVms')" :title="t('selectVisibleVms')" @change="toggleVisibleSelection(($event.target as HTMLInputElement).checked)" /></th><th>{{ t('vm') }}</th><th>{{ t('state') }}</th><th>{{ t('ipAddresses') }}</th><th>vCPU</th><th>{{ t('memory') }}</th><th>{{ t('autostart') }}</th><th>{{ t('actions') }}</th></tr></thead>
       <tbody>
         <tr v-for="vm in vms" :key="vm.uuid || vm.name">
+          <td v-if="canOperate" class="vm-select-cell" :data-label="t('selectVm')"><input type="checkbox" :checked="selectedVmNames.includes(vm.name)" :aria-label="t('selectVmNamed', { name: vm.name })" @change="toggleVmSelection(vm.name, ($event.target as HTMLInputElement).checked)" /></td>
           <td :data-label="t('vm')"><button class="vm-name" @click="$emit('details', vm)">{{ vm.name }}</button></td>
           <td :data-label="t('state')"><span class="state" :class="stateClass(vm.state)"><i></i>{{ vm.state }}</span></td>
           <td class="vm-addresses" :data-label="t('ipAddresses')">{{ vm.ip_addresses?.join(', ') || '—' }}</td>
@@ -13,6 +14,7 @@
           <td class="row-actions" :data-label="t('actions')"><div class="vm-actions">
             <button class="btn role-link btn-sm" @click="$emit('details', vm)">{{ t('details') }}</button>
             <button v-if="canOperate" class="btn role-secondary btn-sm" @click="$emit('snapshots', vm)">{{ t('snapshots') }}</button>
+            <button v-if="canOperate" class="btn role-danger btn-sm" :disabled="busy !== ''" @click="$emit('delete', [vm.name])">{{ t('delete') }}</button>
             <details v-if="canOperate" class="vm-action-menu">
               <summary class="btn role-secondary btn-sm" :aria-label="`${t('actions')}: ${vm.name}`">{{ t('moreActions') }}</summary>
               <div class="vm-action-menu-list">
@@ -20,12 +22,13 @@
               <button v-if="isRunning(vm) || isPaused(vm)" class="btn role-secondary btn-sm" :disabled="busy === vm.name" @click="$emit('action', vm, isPaused(vm) ? 'resume' : 'pause')">{{ isPaused(vm) ? t('resume') : t('pause') }}</button>
               <button v-if="!isRunning(vm) && !isPaused(vm)" class="btn role-primary btn-sm" :disabled="busy === vm.name" @click="$emit('action', vm, 'start')">{{ t('start') }}</button>
               <button v-else class="btn role-secondary btn-sm" :disabled="busy === vm.name" @click="$emit('action', vm, 'shutdown')">{{ t('shutdown') }}</button>
+              <button v-if="isRunning(vm) || isPaused(vm)" class="btn role-danger btn-sm force-stop-action" :disabled="busy === vm.name" @click="$emit('force-stop', vm)">{{ t('forceStop') }}</button>
               <button class="btn role-link btn-sm" :disabled="busy === vm.name || !isRunning(vm)" @click="$emit('action', vm, 'reboot')">{{ t('restart') }}</button>
               </div>
             </details>
           </div></td>
         </tr>
-        <tr v-if="!vms.length"><td colspan="7" class="empty-row">{{ t('empty') }}</td></tr>
+        <tr v-if="!vms.length"><td :colspan="canOperate ? 8 : 7" class="empty-row">{{ t('empty') }}</td></tr>
       </tbody>
     </table>
   </div>
@@ -38,14 +41,19 @@ type VmRow = { name: string; uuid: string; state: string; vcpus: number; current
 
 export default defineComponent({
   name: 'KvmVmTable',
-  props: { vms: { type: Array as PropType<VmRow[]>, required: true }, busy: { type: String, default: '' }, canOperate: { type: Boolean, default: false } },
-  emits: ['action', 'details', 'snapshots', 'configure', 'autostart'],
+  props: { vms: { type: Array as PropType<VmRow[]>, required: true }, busy: { type: String, default: '' }, canOperate: { type: Boolean, default: false }, selectedVmNames: { type: Array as PropType<string[]>, default: () => [] } },
+  emits: ['action', 'force-stop', 'details', 'snapshots', 'configure', 'autostart', 'selection-change', 'delete'],
+  computed: {
+    allVisibleSelected(): boolean { return this.vms.length > 0 && this.vms.every((vm) => this.selectedVmNames.includes(vm.name)); },
+  },
   methods: {
-    t(key: string): string { const translate = (this as any).$store?.getters?.['i18n/t']; return translate ? translate(`kvmManager.vmTable.${key}`) : key; },
+    t(key: string, args?: Record<string, unknown>): string { const translate = (this as any).$store?.getters?.['i18n/t']; return translate ? translate(`kvmManager.vmTable.${key}`, args) : key; },
     isRunning(vm: VmRow) { return vm.state.toLowerCase().includes('running'); },
     isPaused(vm: VmRow) { return vm.state.toLowerCase().includes('paused'); },
     isAutostart(vm: VmRow) { return vm.autostart === 'enable' || vm.autostart === 'yes'; },
     stateClass(state: string) { const value = state.toLowerCase(); return value.includes('running') ? 'ready' : value.includes('paused') ? 'warning-state' : 'unknown'; },
+    toggleVmSelection(name: string, selected: boolean) { const next = new Set(this.selectedVmNames); selected ? next.add(name) : next.delete(name); this.$emit('selection-change', [...next]); },
+    toggleVisibleSelection(selected: boolean) { const next = new Set(this.selectedVmNames); this.vms.forEach((vm) => selected ? next.add(vm.name) : next.delete(vm.name)); this.$emit('selection-change', [...next]); },
   },
 });
 </script>
@@ -67,6 +75,8 @@ export default defineComponent({
   overflow-wrap: anywhere;
 }
 .vm-name:hover { text-decoration: underline; }
+.vm-select-cell { width:36px; text-align:center; }
+.vm-select-cell input,.vm-table-wrap thead input { width:16px; height:16px; accent-color:var(--primary,#4b91e2); cursor:pointer; }
 .vm-addresses { min-width: 120px; max-width: 240px; white-space: normal !important; overflow-wrap: anywhere; }
 .toggle-pill {
   min-width: 70px;
@@ -92,6 +102,21 @@ export default defineComponent({
 .vm-action-menu summary::after { content:' ▾'; }
 .vm-action-menu-list { position:static; display:grid; gap:3px; min-width:180px; margin-top:6px; max-width:min(260px,calc(100vw - 32px)); padding:6px; border:1px solid var(--border,#394452); border-radius:6px; background:var(--body-bg,#252b33); box-shadow:0 8px 24px #0003; }
 .vm-action-menu-list .btn { width:100%; margin:0; text-align:left; }
+.vm-action-menu-list .force-stop-action {
+  border: 1px solid #b42318 !important;
+  color: #fff !important;
+  background-color: #b42318 !important;
+  font-weight: 600;
+}
+.vm-action-menu-list .force-stop-action:hover:not(:disabled) {
+  border-color: #912018 !important;
+  background-color: #912018 !important;
+}
+.vm-action-menu-list .force-stop-action:focus-visible {
+  outline: 2px solid #fda29b;
+  outline-offset: 2px;
+}
+.vm-action-menu-list .force-stop-action:disabled { opacity: .65; }
 .vm-action-menu summary:focus-visible { outline:2px solid var(--primary,#4b91e2); outline-offset:2px; }
 .vm-table-wrap :deep(td.row-actions) { display:table-cell; }.vm-actions { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }.vm-table-wrap :deep(.row-actions) { min-width:170px; }
 .vm-table-wrap :deep(.row-actions .btn) { margin:0; }

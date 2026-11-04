@@ -93,6 +93,13 @@ python3 scripts/apply-assets-configmap.py \
   --file deploy/kvm-extension-assets-configmap.yaml
 k apply --server-side --force-conflicts -f deploy/ui-extension.yaml
 
+# Neither extension-owned workload needs a Kubernetes API token. Keep the
+# setting in Helm templates and enforce it for existing preview installations.
+k patch deployment kvm-api -n "$KVM_NAMESPACE" --type=merge \
+  -p '{"spec":{"template":{"spec":{"automountServiceAccountToken":false}}}}'
+k patch deployment kvm-extension-assets -n "$KVM_NAMESPACE" --type=merge \
+  -p '{"spec":{"template":{"spec":{"automountServiceAccountToken":false}}}}'
+
 if [[ "$CURRENT_API_HASH" != "$DESIRED_API_HASH" ]]; then
   echo "KVM API source changed; restarting only the extension API."
   k rollout restart "deployment/kvm-api" -n "$KVM_NAMESPACE"
@@ -101,6 +108,7 @@ else
   echo "KVM API source is unchanged; leaving its pod running."
 fi
 
+k rollout status "deployment/kvm-api" -n "$KVM_NAMESPACE" --timeout=180s
 k rollout status "deployment/kvm-extension-assets" -n "$KVM_NAMESPACE" --timeout=180s
 LIVE_VERSION="$(k get uiplugin kvm-manager -n "$PLUGIN_NAMESPACE" -o jsonpath='{.spec.plugin.version}')"
 LIVE_ENDPOINT="$(k get uiplugin kvm-manager -n "$PLUGIN_NAMESPACE" -o jsonpath='{.spec.plugin.endpoint}')"
