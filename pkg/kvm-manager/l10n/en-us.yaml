@@ -338,11 +338,14 @@ kvmManager:
     isoSourceHost: Already on the KVM host
     isoSourceInternet: Download from the internet
     isoPreset: Operating system image
+    isoPresetHelp: Choose a ready-to-download installer image, or select a custom HTTPS URL.
     isoPreset_opensuse: openSUSE Leap 16 installer
     isoPreset_rocky: Rocky Linux 10 boot ISO
     isoPreset_ubuntu: Ubuntu Server 26.04.1
     isoPreset_alpine: Alpine Linux 3.24.3 Virt (lightweight VM test)
     isoPreset_custom: Custom HTTPS URL
+    vmDomainExistsRefreshed: Libvirt confirms that “{name}” already exists. The VM list has been refreshed and filtered to that name; inspect the listed domain before trying another name.
+    vmDomainConflictNotVisible: The host’s libvirt registry reports that “{name}” exists, but it is missing from the refreshed VM inventory. Check the host connection and its qemu:///system domains before retrying.
     isoUrl: ISO download URL
     remoteIsoHelp: The KVM host downloads the image into the selected directory-based storage pool. HTTPS only, public internet access required, maximum 8 GiB; redirects to private addresses are blocked. The first download may take several minutes.
     lightweightTest: Lightweight network-install test

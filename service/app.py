@@ -3419,7 +3419,15 @@ def run(args):
  r=subprocess.run(args,capture_output=True,text=True,timeout=40)
  if r.returncode: raise SystemExit(r.stderr.strip() or r.stdout.strip() or 'Libvirt command failed')
  return r.stdout
-if name in [line.strip() for line in run(base+['list','--all','--name']).splitlines()]: raise SystemExit('A VM with this name already exists')
+domain_names={line.strip() for line in run(base+['list','--all','--name']).splitlines() if line.strip()}
+if name in domain_names:
+ info={}
+ for line in run(base+['dominfo',name]).splitlines():
+  if ':' in line:
+   key,value=line.split(':',1); info[key.strip().lower()]=value.strip()
+ identity=(' (UUID '+info['uuid']+')') if info.get('uuid') else ''
+ state=('; state: '+info['state']) if info.get('state') else ''
+ raise SystemExit('Libvirt already has a domain named '+name+identity+state+'. It may be stopped or hidden by the current inventory filter; refresh the VM list and check this host before retrying.')
 pool_names=[line.strip() for line in run(base+['pool-list','--all','--name']).splitlines() if line.strip()]
 if pool not in pool_names: raise SystemExit('The selected storage pool does not exist')
 pool_xml=ET.fromstring(run(base+['pool-dumpxml',pool]))
