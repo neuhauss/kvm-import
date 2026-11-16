@@ -1,0 +1,13 @@
+{{- if .Values.rancher.caBundle }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kvm-rancher-ca
+  namespace: {{ .Values.backend.namespace }}
+  labels:
+    app.kubernetes.io/name: kvm-api
+    app.kubernetes.io/part-of: rancher-kvm
+data:
+  ca.crt: |-
+{{ .Values.rancher.caBundle | nindent 4 }}
+{{- end }}

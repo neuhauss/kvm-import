@@ -1,0 +1,15 @@
+{{- $assets := .Files.Get "files/assets-data.yaml" | fromYaml -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kvm-extension-assets-{{ .Chart.Version | replace "." "-" }}
+  namespace: {{ .Values.backend.namespace }}
+  labels:
+    app.kubernetes.io/name: kvm-extension-assets
+    app.kubernetes.io/part-of: rancher-kvm
+data:
+{{ toYaml $assets.data | indent 2 }}
+{{- with $assets.binaryData }}
+binaryData:
+{{ toYaml . | indent 2 }}
+{{- end }}

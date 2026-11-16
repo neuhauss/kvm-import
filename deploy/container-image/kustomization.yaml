@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - kvm-api.yaml
+images:
+  - name: python:3.12-slim
+    newName: ghcr.io/your-github-owner/rancher-kvm-api
+    newTag: 0.7.15
+patches:
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: kvm-api
+      namespace: rancher-kvm-registry
+    patch: |-
+      - op: remove
+        path: /spec/template/spec/containers/0/workingDir
+      - op: remove
+        path: /spec/template/spec/containers/0/command
+      - op: remove
+        path: /spec/template/spec/containers/0/args
+      - op: remove
+        path: /spec/template/spec/containers/0/volumeMounts/1
+      - op: remove
+        path: /spec/template/spec/volumes/1

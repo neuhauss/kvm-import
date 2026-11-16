@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: kvm-api
+  namespace: {{ .Values.backend.namespace }}
+  labels:
+    app.kubernetes.io/name: kvm-api
+    app.kubernetes.io/part-of: rancher-kvm
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: kvm-api
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP

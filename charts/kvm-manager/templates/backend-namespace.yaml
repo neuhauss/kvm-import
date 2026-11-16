@@ -1,0 +1,10 @@
+{{- if not (lookup "v1" "Namespace" "" .Values.backend.namespace) }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.backend.namespace }}
+  labels:
+    app.kubernetes.io/part-of: rancher-kvm
+  annotations:
+    helm.sh/resource-policy: keep
+{{- end }}

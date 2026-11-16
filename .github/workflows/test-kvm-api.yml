@@ -1,0 +1,25 @@
+name: Test KVM API
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  api-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install API dependencies
+        run: python -m pip install -r service/requirements.txt
+      - name: Run isolated API regression tests
+        env:
+          KVM_CREDENTIAL_KEY: offline-test-key-that-is-not-a-real-secret
+          RANCHER_API_URL: https://rancher.invalid
+        run: python -m unittest discover -s service/tests -v

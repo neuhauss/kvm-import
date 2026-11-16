@@ -1,0 +1,8 @@
+apiVersion: catalog.cattle.io/v1
+kind: ClusterRepo
+metadata:
+  name: kvm-extension-catalog
+spec:
+  url: https://OWNER.github.io/REPOSITORY
+  refreshInterval: 300
+  enabled: true
