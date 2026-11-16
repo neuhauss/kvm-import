@@ -25,10 +25,14 @@ if args.installed_version and version_key(version) <= version_key(args.installed
     version = version_after(args.installed_version)
 
 if args.apply:
+    icon_url = f"https://raw.githubusercontent.com/neuhauss/kvm-import/kvm-manager-{version}/pkg/kvm-manager/assets/kvm.svg"
     package["version"] = version
+    package["icon"] = icon_url
     PACKAGE.write_text(json.dumps(package, indent=2) + "\n")
     chart["version"] = version
     chart["appVersion"] = version
+    chart["icon"] = icon_url
+    chart.setdefault("annotations", {})["catalog.cattle.io/ui-icon"] = icon_url
     CHART.write_text(yaml.safe_dump(chart, sort_keys=False, allow_unicode=True))
 
 print(version)

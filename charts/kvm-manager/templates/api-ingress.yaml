@@ -3,6 +3,8 @@
 {{- $hostWithPort := regexReplaceAll "^https?://([^/]+).*$" $origin "$1" -}}
 {{- $host := regexReplaceAll "^([^:]+):[0-9]+$" $hostWithPort "$1" -}}
 {{- $ipHost := or (regexMatch "^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+$" $host) (contains ":" $host) -}}
+{{- $annotations := dict "nginx.ingress.kubernetes.io/proxy-body-size" "8g" "nginx.ingress.kubernetes.io/proxy-read-timeout" "3600" "nginx.ingress.kubernetes.io/proxy-send-timeout" "3600" "nginx.ingress.kubernetes.io/proxy-request-buffering" "off" -}}
+{{- if .Values.ingress.annotations }}{{- $annotations = mergeOverwrite $annotations .Values.ingress.annotations }}{{- end }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -11,10 +13,8 @@ metadata:
   labels:
     app.kubernetes.io/name: kvm-api
     app.kubernetes.io/part-of: rancher-kvm
-  {{- with .Values.ingress.annotations }}
   annotations:
-    {{- toYaml . | nindent 4 }}
-  {{- end }}
+    {{- toYaml $annotations | nindent 4 }}
 spec:
   {{- with .Values.ingress.className }}
   ingressClassName: {{ . | quote }}

@@ -60,7 +60,7 @@
             </div>
           </section>
 
-          <section class="host-form-section host-trust-section" aria-label="SSH host verification">
+          <section class="host-form-section host-trust-section" :aria-label="t('hosts.sshHostVerification')">
             <label v-if="editing" class="rancher-check">
               <input v-model="form.remove_ssh_key" type="checkbox">
               <span>{{ t('hosts.removeSavedKey') }}</span>
@@ -102,7 +102,7 @@
     <section v-if="showingAudit" class="table-wrap">
       <h2>{{ t('hosts.auditTitle') }}</h2>
       <p class="text-muted">{{ t('hosts.auditDescription') }}</p>
-      <div class="audit-filters"><input v-model="auditSearch" class="search-input" :placeholder="t('hosts.auditSearch')" /><select v-model="auditHost" class="search-input"><option value="">{{ t('hosts.allHosts') }}</option><option v-for="host in hosts" :key="host.id" :value="host.id">{{ host.hostname || host.name }}</option></select><select v-model="auditOutcome" class="search-input"><option value="">{{ t('hosts.allResults') }}</option><option value="success">success</option><option value="failure">failure</option></select><button class="btn role-secondary" :disabled="auditLoading" @click="exportAudit">{{ t('hosts.exportCsv') }}</button></div>
+      <div class="audit-filters"><input v-model="auditSearch" class="search-input" :placeholder="t('hosts.auditSearch')" /><select v-model="auditHost" class="search-input"><option value="">{{ t('hosts.allHosts') }}</option><option v-for="host in hosts" :key="host.id" :value="host.id">{{ host.hostname || host.name }}</option></select><select v-model="auditOutcome" class="search-input"><option value="">{{ t('hosts.allResults') }}</option><option value="success">{{ t('hosts.success') }}</option><option value="failure">{{ t('hosts.failure') }}</option></select><button class="btn role-secondary" :disabled="auditLoading" @click="exportAudit">{{ t('hosts.exportCsv') }}</button></div>
       <div v-if="auditLoading">{{ t('hosts.loading') }}</div>
       <div v-else-if="auditError" class="banner error">{{ auditError }}</div>
       <table v-else class="table"><thead><tr><th>{{ t('hosts.date') }}</th><th>{{ t('hosts.rancherUser') }}</th><th>{{ t('hosts.action') }}</th><th>{{ t('hosts.target') }}</th><th>{{ t('hosts.result') }}</th></tr></thead>
@@ -457,8 +457,8 @@ small { display: block; font-size: 12px; margin-top: 4px; }
 .clear-filters-button { margin-bottom:4px; }
 .actionable-error { display:flex; align-items:center; justify-content:space-between; gap:12px; }
 .actionable-error .btn { flex:0 0 auto; }
-.table thead.hosts-table-head { background:#20252b; }
-.table thead.hosts-table-head th { padding:12px; color:#e5e7eb; background:#20252b; border-bottom:1px solid #414852; font-size:12px; font-weight:600; }
+.table thead.hosts-table-head { background:var(--kvm-surface); }
+.table thead.hosts-table-head th { padding:12px; color:var(--body-text); background:var(--kvm-surface); border-bottom:1px solid var(--kvm-border); font-size:12px; font-weight:600; }
 .hosts-filter-empty { padding:24px !important; color:var(--muted,#929baa) !important; text-align:center !important; }
 .state { display: inline-block; padding: 3px 9px; border-radius: 12px; color:var(--body-text,#243043); background:color-mix(in srgb,var(--muted,#8892a0) 12%,var(--body-bg,#fff)); }
 .state.ready { background:color-mix(in srgb,var(--success,#45a86d) 16%,var(--body-bg,#fff)); color:var(--success-text,var(--success,#287447)); }
@@ -476,7 +476,7 @@ small { display: block; font-size: 12px; margin-top: 4px; }
 .host-identity strong { display:block; }
 .host-actions { display:inline-flex; align-items:center; justify-content:flex-end; gap:6px; flex:0 0 auto; }
 .host-actions .btn-sm { margin:0; }
-.danger-text { color: #b42318; }
+.danger-text { color: var(--kvm-danger, #b42318); }
 .banner { padding: 12px; border-radius: 4px; margin: 12px 0; }
 .error { background: color-mix(in srgb,#d45b52 16%,var(--body-bg,#252b33)); color:var(--body-text); }
 .empty-state { padding: 64px 16px; text-align: center; border: 1px dashed var(--border, #d8dde6); }

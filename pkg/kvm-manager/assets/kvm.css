@@ -16,6 +16,11 @@
   --kvm-focus: var(--primary, #5288e5);
   --kvm-control-bg: var(--input-bg, var(--body-bg, #fff));
   --kvm-control-text: var(--input-text, var(--body-text, #243043));
+  --kvm-surface: var(--alternate-row, var(--body-bg, #fff));
+  --kvm-border: var(--border, #d9dee8);
+  --kvm-muted: var(--muted, #657286);
+  color: var(--body-text, #243043);
+  min-width: 0;
 }
 
 .kvm-page .danger-text,
@@ -29,3 +34,13 @@
 
 .kvm-page :focus-visible,
 .cloud-native-page :focus-visible { outline-color: var(--kvm-focus); }
+
+@media (prefers-reduced-motion: reduce) {
+  .kvm-page *,
+  .cloud-native-page * {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

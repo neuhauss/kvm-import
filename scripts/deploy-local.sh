@@ -50,6 +50,18 @@ fi
 KVM_INGRESS_CLASS="${KVM_INGRESS_CLASS:-nginx}"
 export RANCHER_PUBLIC_ORIGIN KVM_INGRESS_CLASS
 
+# The host image library streams large ISO/QCOW2 bodies through the API
+# ingress. Set the generous request limit only on the extension-owned API
+# ingress when using the supported NGINX preview path.
+if [[ "$KVM_INGRESS_CLASS" == "nginx" ]]; then
+  k annotate ingress kvm-api -n "$KVM_NAMESPACE" \
+    nginx.ingress.kubernetes.io/proxy-body-size=8g \
+    nginx.ingress.kubernetes.io/proxy-read-timeout=3600 \
+    nginx.ingress.kubernetes.io/proxy-send-timeout=3600 \
+    nginx.ingress.kubernetes.io/proxy-request-buffering=off \
+    --overwrite
+fi
+
 INSTALLED_VERSION=""
 if INSTALLED_VERSION="$(k get uiplugin kvm-manager -n "$PLUGIN_NAMESPACE" -o jsonpath='{.spec.plugin.version}' 2>/dev/null)"; then
   :
@@ -114,8 +126,8 @@ LIVE_VERSION="$(k get uiplugin kvm-manager -n "$PLUGIN_NAMESPACE" -o jsonpath='{
 LIVE_ENDPOINT="$(k get uiplugin kvm-manager -n "$PLUGIN_NAMESPACE" -o jsonpath='{.spec.plugin.endpoint}')"
 LIVE_NO_CACHE="$(k get uiplugin kvm-manager -n "$PLUGIN_NAMESPACE" -o jsonpath='{.spec.plugin.noCache}')"
 LIVE_UI_COMPONENT="$(k get uiplugin kvm-manager -n "$PLUGIN_NAMESPACE" -o jsonpath='{.spec.plugin.metadata.catalog\.cattle\.io/ui-component}')"
-if [[ "$LIVE_VERSION" != "$VERSION" || "$LIVE_ENDPOINT" != "$RANCHER_PUBLIC_ORIGIN/kvm-manager/$VERSION" || "$LIVE_NO_CACHE" != "true" || "$LIVE_UI_COMPONENT" != "plugins" ]]; then
-  echo "Plugin spec verification failed (expected version=$VERSION endpoint=$RANCHER_PUBLIC_ORIGIN/kvm-manager/$VERSION noCache=true ui-component=plugins; found version=$LIVE_VERSION endpoint=$LIVE_ENDPOINT noCache=$LIVE_NO_CACHE ui-component=$LIVE_UI_COMPONENT)." >&2
+if [[ "$LIVE_VERSION" != "$VERSION" || "$LIVE_ENDPOINT" != "$RANCHER_PUBLIC_ORIGIN/kvm-manager/$VERSION" || "$LIVE_NO_CACHE" != "false" || "$LIVE_UI_COMPONENT" != "plugins" ]]; then
+  echo "Plugin spec verification failed (expected version=$VERSION endpoint=$RANCHER_PUBLIC_ORIGIN/kvm-manager/$VERSION noCache=false ui-component=plugins; found version=$LIVE_VERSION endpoint=$LIVE_ENDPOINT noCache=$LIVE_NO_CACHE ui-component=$LIVE_UI_COMPONENT)." >&2
   exit 1
 fi
 

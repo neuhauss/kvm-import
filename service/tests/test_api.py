@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import os
 import base64
+import json
 import subprocess
+import shlex
 import sys
 import tempfile
 import unittest
-from contextlib import ExitStack
+from contextlib import ExitStack, redirect_stdout
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -21,8 +23,15 @@ sys.path.insert(0, str(SERVICE_DIR))
 os.environ["KVM_CREDENTIAL_KEY"] = "offline-test-key-that-is-not-a-real-secret"
 os.environ["KVM_ALLOWED_GLOBAL_ROLES"] = "admin"
 os.environ["KVM_VIEWER_GLOBAL_ROLES"] = "kvm-viewer"
+os.environ["KVM_VM_OPERATOR_GLOBAL_ROLES"] = "kvm-vm-operator"
+os.environ["KVM_HOST_OPERATOR_GLOBAL_ROLES"] = "kvm-host-operator"
 os.environ["KVM_NETWORK_OPERATOR_GLOBAL_ROLES"] = "kvm-network-operator"
 os.environ["KVM_STORAGE_OPERATOR_GLOBAL_ROLES"] = "kvm-storage-operator"
+os.environ["KVM_SOFTWARE_OPERATOR_GLOBAL_ROLES"] = "kvm-software-operator"
+os.environ["KVM_SUBSCRIPTION_OPERATOR_GLOBAL_ROLES"] = "kvm-subscription-operator"
+os.environ["KVM_ACCOUNT_OPERATOR_GLOBAL_ROLES"] = "kvm-account-operator"
+os.environ["KVM_SERVICE_OPERATOR_GLOBAL_ROLES"] = "kvm-service-operator"
+os.environ["KVM_CLUSTER_OPERATOR_GLOBAL_ROLES"] = "kvm-cluster-operator"
 os.environ["KVM_S3_ALLOWED_ENDPOINT_HOSTS"] = ""
 os.environ["RANCHER_API_URL"] = "https://rancher.invalid"
 _test_data = tempfile.TemporaryDirectory(prefix="rancher-kvm-tests-")
@@ -33,12 +42,103 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 
 class KvmApiTests(unittest.TestCase):
+    def test_cluster_resource_mutation_model_accepts_clone_modes_and_rejects_unknown_mode(self) -> None:
+        standard = api.ClusterResourceMutation.model_validate({
+            "action": "create_clone", "resource_id": "web-clone", "child_id": "web", "clone_type": "standard",
+        })
+        promotable = api.ClusterResourceMutation.model_validate({
+            "action": "create_clone", "resource_id": "db-clone", "child_id": "db", "clone_type": "promotable",
+        })
+        delete_clone = api.ClusterResourceMutation.model_validate({
+            "action": "delete_clone", "resource_id": "db-clone", "child_id": "db",
+        })
+        self.assertEqual(standard.clone_type, "standard")
+        self.assertEqual(promotable.clone_type, "promotable")
+        self.assertEqual(delete_clone.action, "delete_clone")
+        self.assertEqual(delete_clone.child_id, "db")
+        fencing = api.ClusterResourceMutation.model_validate({
+            "action": "create_stonith", "resource_id": "fence-node-a", "agent": "stonith:fence_ipmilan",
+            "fencing_target": "node-a", "parameters": {"password": "test-secret"},
+        })
+        fencing_edit = api.ClusterResourceMutation.model_validate({
+            "action": "edit_stonith", "resource_id": "fence-node-a", "agent": "stonith:fence_ipmilan",
+            "fencing_target": "node-a", "parameters": {"password": "replacement-secret"},
+            "parameter_removals": ["lanplus"],
+        })
+        self.assertEqual(fencing.fencing_target, "node-a")
+        self.assertEqual(fencing.monitor_interval, "30min")
+        self.assertEqual(fencing_edit.action, "edit_stonith")
+        self.assertEqual(fencing_edit.parameter_removals, ["lanplus"])
+        with self.assertRaises(ValueError):
+            api.ClusterResourceMutation.model_validate({
+                "action": "create_clone", "resource_id": "db-clone", "child_id": "db", "clone_type": "unsupported",
+            })
+
+    def test_fencing_mutation_does_not_echo_or_audit_device_credentials_on_failure(self) -> None:
+        host = self.create_test_host(name="fencing-cluster-node")
+        cluster_status = json.dumps({"nodes": [{"name": "node-a"}, {"name": "node-b"}], "resources": []})
+        secret = "test-device-password-not-for-logs"
+        def remote(_host, script, **_kwargs):
+            if script == api.HA_CLUSTER_STATUS_SCRIPT:
+                return cluster_status
+            if script == api.HA_RESOURCE_MUTATION_SCRIPT:
+                raise RuntimeError(f"crm configure rejected password={secret}")
+            raise AssertionError("Unexpected remote SUSE HA script")
+        with patch.object(api, "cockpit_host_record", return_value=host), patch.object(api, "run_sudo_python", side_effect=remote):
+            response = self.client.post(
+                f"/kvm-api/clusters/{host['id']}/resources/config", headers=self.headers("cluster-token"),
+                json={"action": "create_stonith", "resource_id": "fence-node-a", "agent": "stonith:fence_ipmilan",
+                      "fencing_target": "node-a", "parameters": {"password": secret}},
+            )
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertNotIn(secret, response.text)
+        self.assertIn("[redacted]", response.text)
+        with api.connect_db() as db:
+            audit = db.execute("SELECT action,target,detail FROM audit_events ORDER BY occurred_at DESC LIMIT 1").fetchone()
+        self.assertIsNotNone(audit)
+        self.assertEqual(audit["action"], "cluster.resource.create_stonith")
+        self.assertNotIn(secret, " ".join(str(value or "") for value in audit))
+
+    def test_fencing_edit_mutation_redacts_replacement_credentials(self) -> None:
+        host = self.create_test_host(name="fencing-edit-node")
+        cluster_status = json.dumps({"nodes": [{"name": "node-a"}], "resources": []})
+        secret = "new-fencing-password-never-returned"
+        def remote(_host, script, **_kwargs):
+            if script == api.HA_CLUSTER_STATUS_SCRIPT:
+                return cluster_status
+            if script == api.HA_RESOURCE_MUTATION_SCRIPT:
+                raise RuntimeError(f"crmsh error near {secret}")
+            raise AssertionError("Unexpected remote SUSE HA script")
+        with patch.object(api, "cockpit_host_record", return_value=host), patch.object(api, "run_sudo_python", side_effect=remote):
+            response = self.client.post(
+                f"/kvm-api/clusters/{host['id']}/resources/config", headers=self.headers("cluster-token"),
+                json={"action": "edit_stonith", "resource_id": "fence-node-a", "agent": "stonith:fence_ipmilan",
+                      "fencing_target": "node-a", "parameters": {"password": secret}},
+            )
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertNotIn(secret, response.text)
+        with api.connect_db() as db:
+            audit = db.execute("SELECT action,target,detail FROM audit_events ORDER BY occurred_at DESC LIMIT 1").fetchone()
+        self.assertIsNotNone(audit)
+        self.assertEqual(audit["action"], "cluster.resource.edit_stonith")
+        self.assertNotIn(secret, " ".join(str(value or "") for value in audit))
+
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory(prefix="rancher-kvm-case-")
         self.role_by_token = {
-            "admin-token": "admin",
-            "viewer-token": "kvm-viewer",
-            "network-token": "kvm-network-operator",
+            "admin-token": ("admin",),
+            "viewer-token": ("kvm-viewer",),
+            "vm-operator-token": ("kvm-vm-operator",),
+            "host-operator-token": ("kvm-host-operator",),
+            "network-token": ("kvm-network-operator",),
+            "storage-token": ("kvm-storage-operator",),
+            "software-token": ("kvm-software-operator",),
+            "subscription-token": ("kvm-subscription-operator",),
+            "account-token": ("kvm-account-operator",),
+            "service-token": ("kvm-service-operator",),
+            "cluster-token": ("kvm-cluster-operator",),
+            "network-storage-token": ("kvm-network-operator", "kvm-storage-operator"),
+            "unmapped-token": (),
         }
         self.stack = ExitStack()
         self.stack.enter_context(patch.object(api, "DB_PATH", Path(self.temp_dir.name) / "test.sqlite3"))
@@ -53,14 +153,14 @@ class KvmApiTests(unittest.TestCase):
     def fake_rancher_get(self, path: str, token: str | None = None, session_cookie: str | None = None):
         if not token and not session_cookie:
             raise AssertionError("The API tried to contact Rancher without test credentials")
-        user_id = "user-test"
+        user_id = f"user-{token or 'cookie-test'}"
         if path == "/v3/token":
             return {"userId": user_id}
         if path == f"/v3/users/{user_id}":
             return {"id": user_id, "username": "test-user"}
         if path == f"/v3/globalRoleBindings?userId={user_id}":
-            role = self.role_by_token.get(token or "", "")
-            return {"data": [{"globalRoleId": role}] if role else []}
+            roles = self.role_by_token.get(token or "", ())
+            return {"data": [{"globalRoleId": role} for role in roles]}
         raise AssertionError(f"Unexpected Rancher API request in offline test: {path}")
 
     @staticmethod
@@ -131,7 +231,46 @@ class KvmApiTests(unittest.TestCase):
         self.assertIn("os.makedirs(cache_dir,mode=0o755,exist_ok=True)", script)
         self.assertIn("os.chmod(cache_dir,0o755)", script)
         compile(script, "<vm-create-remote>", "exec")
-        self.assertEqual(remote.call_args.args[2][-2:], ["true", "2"])
+        self.assertEqual(remote.call_args.args[2][-3:], ["true", "2", ""])
+
+    def test_vm_create_can_use_library_qcow2_and_queues_an_independent_copy(self):
+        host = self.create_test_host()
+        image_id = "a" * 32
+        payload = {"name": "template-vm", "pool": "default", "network": "default", "vcpus": 2,
+                   "memory_mib": 1024, "create_disk": True, "image_id": image_id}
+        queued_job = {"job_id": "00000000-0000-4000-8000-000000000001", "status": "queued"}
+        with patch.object(api, "create_operation_job", return_value=queued_job) as queue:
+            response = self.client.post(f"/kvm-api/hosts/{host['id']}/vms/create", headers=self.headers("admin-token"), json=payload)
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json(), queued_job)
+        operation = queue.call_args.args[3]
+        with patch.object(api, "run_sudo_python", return_value="VM created") as remote:
+            result = operation(api.cockpit_host_record(host["id"]))
+        self.assertEqual(result["status"], "completed")
+        script = remote.call_args.args[1]
+        self.assertIn("qemu-img','convert", script)
+        self.assertIn("without backing files", script)
+        self.assertIn("independent copy", script)
+        self.assertEqual(remote.call_args.args[2][-1], image_id)
+        compile(script, "<vm-image-library-create>", "exec")
+
+    def test_image_library_scripts_compile_and_upload_requires_storage_admin(self):
+        host = self.create_test_host()
+        for script in (api.IMAGE_LIBRARY_LIST_SCRIPT, api.IMAGE_LIBRARY_IMPORT_SCRIPT, api.IMAGE_LIBRARY_DELETE_SCRIPT):
+            compile(script, "<image-library-remote>", "exec")
+        denied = self.client.post(
+            f"/kvm-api/hosts/{host['id']}/images?pool=default&name=iso&image_type=iso&filename=test.iso",
+            headers={**self.headers("viewer-token"), "Content-Type": "application/octet-stream"}, content=b"x" * 40960,
+        )
+        self.assertEqual(denied.status_code, 403)
+        bad_type = self.client.post(
+            f"/kvm-api/hosts/{host['id']}/images?pool=default&name=iso&image_type=iso&filename=test.iso",
+            headers={**self.headers("admin-token"), "Content-Type": "application/json"}, content=b"x" * 40960,
+        )
+        self.assertEqual(bad_type.status_code, 415)
+        self.assertIn("checksum", api.IMAGE_LIBRARY_IMPORT_SCRIPT)
+        self.assertIn("backing-filename", api.IMAGE_LIBRARY_IMPORT_SCRIPT)
+        self.assertIn("attached to virtual machine", api.IMAGE_LIBRARY_DELETE_SCRIPT)
 
     def test_vm_shutdown_waits_for_real_libvirt_state_and_reports_guest_timeout(self):
         host = self.create_test_host()
@@ -294,6 +433,127 @@ class KvmApiTests(unittest.TestCase):
         self.assertIn("active_interfaces", script)
         self.assertIn("'active':bool(live)", script)
 
+    def test_virtualdomain_preflight_compares_vm_and_agent_across_mapped_nodes(self) -> None:
+        host_a = self.create_test_host(name="node-a")
+        response = self.client.post("/kvm-api/hosts", headers=self.headers("admin-token"), json={
+            "name": "node-b", "address": "192.0.2.21", "port": 22,
+            "username": "operator", "password": "test-password",
+        })
+        self.assertEqual(response.status_code, 201, response.text)
+        host_b = response.json()
+        status = {"nodes": [{"name": "node-a"}, {"name": "node-b"}]}
+        detail = {
+            "name": "ha-guest", "uuid": "guest-uuid", "state": "shut off",
+            "persistent": "yes", "autostart": "no", "configured_vcpus": 2,
+            "configured_memory_kib": 1048576,
+            "disks": [{"type": "file", "target": "vda", "source": "/shared/guest.qcow2", "format": "qcow2"}],
+            "interfaces": [{"type": "network", "source": "ha-net", "model": "virtio", "mac": "52:54:00:00:00:01"}],
+        }
+        def remote(host, script, *args, **kwargs):
+            if script is api.VM_DETAIL_SCRIPT:
+                return json.dumps(detail)
+            if script is api.HA_RESOURCE_AGENTS_SCRIPT:
+                return json.dumps({"agents": ["ocf:heartbeat:VirtualDomain"], "virtualization_locking": {
+                    "profile": "suse-sle-ha-15-sp7", "lock_manager": "lockd",
+                    "lock_manager_is_lockd": True, "file_lockspace_dir": "/shared/lockd",
+                    "lockspace_directory_exists": True, "virtlockd_active": True,
+                }})
+            if script is api.VM_HA_STORAGE_PROBE_SCRIPT:
+                self.assertEqual(json.loads(args[0][1]), [{"path": "/shared/guest.qcow2", "writable": True}])
+                return json.dumps({"config": None, "disk_paths": [{
+                    "path": "/shared/guest.qcow2", "exists": True, "readable": True,
+                    "configured_identity_access": "read_write", "kind": "file",
+                }], "qemu_identity": {"user": "qemu", "group": "qemu"}, "ssh_peer_auth": []})
+            self.fail("Unexpected remote script")
+        with patch.object(api, "require_verified_ha_cluster", return_value=(api.cockpit_host_record(host_a["id"]), status)), \
+             patch.object(api, "run_sudo_python", side_effect=remote):
+            response = self.client.get(
+                f"/kvm-api/clusters/{host_a['id']}/vms/virtualdomain-preflight?vm_name=ha-guest",
+                headers=self.headers("admin-token"),
+            )
+        self.assertEqual(response.status_code, 200, response.text)
+        result = response.json()
+        self.assertTrue(result["mapping_complete"])
+        self.assertTrue(result["source_vm_found"])
+        self.assertTrue(result["virtualdomain_agent_on_all_nodes"])
+        self.assertTrue(result["vm_uuid_consistent"])
+        self.assertTrue(result["disk_layout_consistent"])
+        self.assertTrue(result["network_mapping_consistent"])
+        self.assertEqual({node["host_id"] for node in result["nodes"]}, {host_a["id"], host_b["id"]})
+        self.assertTrue(all(node["virtualization_locking"]["lock_manager_is_lockd"] for node in result["nodes"]))
+        self.assertIsNotNone(result["storage_checks"])
+        self.assertEqual(result["storage_checks"]["config_path"], "")
+        self.assertTrue(all(node["qemu_identity"]["user"] == "qemu" for node in result["storage_checks"]["nodes"]))
+
+    def test_virtualdomain_preflight_reports_unmapped_cluster_members(self) -> None:
+        host = self.create_test_host(name="node-a")
+        status = {"nodes": [{"name": "node-a"}, {"name": "unregistered-node"}]}
+        with patch.object(api, "require_verified_ha_cluster", return_value=(api.cockpit_host_record(host["id"]), status)), \
+             patch.object(api, "run_sudo_python", return_value='{}'):
+            response = self.client.get(
+                f"/kvm-api/clusters/{host['id']}/vms/virtualdomain-preflight?vm_name=ha-guest",
+                headers=self.headers("admin-token"),
+            )
+        self.assertEqual(response.status_code, 200, response.text)
+        result = response.json()
+        self.assertFalse(result["mapping_complete"])
+        unresolved = next(node for node in result["nodes"] if node["cluster_node"] == "unregistered-node")
+        self.assertEqual(unresolved["mapping_status"], "unmapped")
+        self.assertEqual(unresolved["vm_status"], "not_checked")
+
+    def test_virtualdomain_preflight_reports_storage_paths_as_candidate_only(self) -> None:
+        host_a = self.create_test_host(name="node-a")
+        response = self.client.post("/kvm-api/hosts", headers=self.headers("admin-token"), json={
+            "name": "node-b", "address": "192.0.2.21", "port": 22,
+            "username": "operator", "password": "test-password",
+        })
+        host_b = response.json()
+        status = {"nodes": [{"name": "node-a"}, {"name": "node-b"}]}
+        detail = {"name": "ha-guest", "uuid": "guest-uuid", "state": "shut off",
+                  "disks": [{"type": "file", "target": "vda", "source": "/shared/guest.qcow2", "format": "qcow2"}],
+                  "interfaces": []}
+        def remote(_host, script, *args, **kwargs):
+            if script is api.VM_DETAIL_SCRIPT:
+                return json.dumps(detail)
+            if script is api.HA_RESOURCE_AGENTS_SCRIPT:
+                return json.dumps({"agents": ["ocf:heartbeat:VirtualDomain"]})
+            if script is api.VM_HA_STORAGE_PROBE_SCRIPT:
+                self.assertEqual(json.loads(args[0][1]), [{"path": "/shared/guest.qcow2", "writable": True}])
+                self.assertEqual(json.loads(args[0][2]), ["node-b"])
+                return json.dumps({
+                    "config": {"path": args[0][0], "parent_path": "/shared/vm-configs",
+                               "parent_exists": True, "file_exists": False,
+                               "parent_mount": {"source": "nas:/exports/ha", "fstype": "nfs4", "uuid": None}},
+                    "disk_paths": [{"path": "/shared/guest.qcow2", "exists": True, "readable": True,
+                                    "kind": "file", "mount": {"source": "nas:/exports/ha", "fstype": "nfs4", "uuid": None}}],
+                })
+            self.fail("Unexpected remote script")
+        with patch.object(api, "require_verified_ha_cluster", return_value=(api.cockpit_host_record(host_a["id"]), status)), \
+             patch.object(api, "run_sudo_python", side_effect=remote):
+            response = self.client.get(
+                f"/kvm-api/clusters/{host_a['id']}/vms/virtualdomain-preflight",
+                params={"vm_name": "ha-guest", "config_path": "/shared/vm-configs/ha-guest.xml"},
+                headers=self.headers("admin-token"),
+            )
+        self.assertEqual(response.status_code, 200, response.text)
+        checks = response.json()["storage_checks"]
+        self.assertTrue(checks["shared_mount_candidate"])
+        self.assertFalse(checks["is_proof_of_shared_storage"])
+        self.assertTrue(checks["disk_paths"][0]["exists_on_all_nodes"])
+        self.assertTrue(checks["disk_paths"][0]["same_mount_candidate"])
+        self.assertTrue(all(node["config"]["parent_exists"] for node in checks["nodes"]))
+
+    def test_virtualdomain_preflight_rejects_unsafe_configuration_path(self) -> None:
+        host = self.create_test_host(name="node-a")
+        with patch.object(api, "require_verified_ha_cluster") as cluster_status:
+            response = self.client.get(
+                f"/kvm-api/clusters/{host['id']}/vms/virtualdomain-preflight",
+                params={"vm_name": "ha-guest", "config_path": "/shared/../etc/guest.xml"},
+                headers=self.headers("admin-token"),
+            )
+        self.assertEqual(response.status_code, 422, response.text)
+        cluster_status.assert_not_called()
+
     def create_test_host(self, *, token: str = "admin-token", name: str = "test-host") -> dict:
         response = self.client.post("/kvm-api/hosts", headers=self.headers(token), json={
             "name": name, "address": "192.0.2.20", "port": 22,
@@ -336,6 +596,57 @@ class KvmApiTests(unittest.TestCase):
             headers=self.headers("network-token"),
             json={"action": "delete", "pool": "default", "name": "test-volume"},
         )
+        self.assertEqual(response.status_code, 403)
+
+    def test_rancher_role_matrix_grants_only_configured_kvm_permissions(self) -> None:
+        cases = {
+            "viewer-token": {"canView": True},
+            "vm-operator-token": {"canView": True, "canOperateVms": True},
+            "network-token": {"canManageNetwork": True},
+            "storage-token": {"canManageStorage": True},
+            "software-token": {"canManageRepositories": True},
+            "subscription-token": {"canManageSubscriptions": True},
+            "account-token": {"canManageAccounts": True},
+            "service-token": {"canManageServices": True},
+            "cluster-token": {"canManageClusters": True},
+        }
+        managed_permissions = {
+            "canOperateVms", "canManageHostResources", "canManageNetwork", "canManageStorage",
+            "canManageRepositories", "canManageSubscriptions", "canManageAccounts",
+            "canManageServices", "canManageClusters", "canAdministerHost",
+        }
+        for token, expected_true in cases.items():
+            with self.subTest(token=token):
+                response = self.client.get("/kvm-api/permissions", headers=self.headers(token))
+                self.assertEqual(response.status_code, 200, response.text)
+                permissions = response.json()
+                for permission in managed_permissions:
+                    self.assertEqual(permissions[permission], permission in expected_true, permission)
+                self.assertTrue(permissions["canView"])
+
+        host_operator = self.client.get("/kvm-api/permissions", headers=self.headers("host-operator-token"))
+        self.assertEqual(host_operator.status_code, 200, host_operator.text)
+        self.assertEqual(host_operator.json()["accessLevel"], "host_operator")
+        self.assertTrue(all(host_operator.json()[permission] for permission in managed_permissions - {"canAdministerHost"}))
+        self.assertFalse(host_operator.json()["canAdministerHost"])
+
+        host_admin = self.client.get("/kvm-api/permissions", headers=self.headers("admin-token"))
+        self.assertEqual(host_admin.status_code, 200, host_admin.text)
+        self.assertTrue(all(host_admin.json()[permission] for permission in managed_permissions))
+
+    def test_multiple_scoped_roles_combine_without_escalating_to_host_admin(self) -> None:
+        response = self.client.get("/kvm-api/permissions", headers=self.headers("network-storage-token"))
+        self.assertEqual(response.status_code, 200, response.text)
+        permissions = response.json()
+        self.assertEqual(permissions["accessLevel"], "scoped_operator")
+        self.assertTrue(permissions["canManageNetwork"])
+        self.assertTrue(permissions["canManageStorage"])
+        self.assertFalse(permissions["canManageAccounts"])
+        self.assertFalse(permissions["canOperateVms"])
+        self.assertFalse(permissions["canAdministerHost"])
+
+    def test_unmapped_rancher_role_is_denied(self) -> None:
+        response = self.client.get("/kvm-api/permissions", headers=self.headers("unmapped-token"))
         self.assertEqual(response.status_code, 403)
 
     def test_host_import_pins_key_and_never_returns_saved_credentials(self) -> None:
@@ -381,6 +692,546 @@ class KvmApiTests(unittest.TestCase):
         self.assertEqual(group.status_code, 201, group.text)
         deletion = self.client.delete(f"/kvm-api/hosts/{host_ids[0]}", headers=headers)
         self.assertEqual(deletion.status_code, 409)
+
+    def test_kvm_group_inventory_passes_viewer_rbac_context_to_host_inventory(self) -> None:
+        host = self.create_test_host(name="inventory-node")
+        created = self.client.post(
+            "/kvm-api/managed-clusters",
+            headers=self.headers("admin-token"),
+            json={"name": "inventory-group", "host_ids": [host["id"], self.create_test_host(name="inventory-node-2")["id"]]},
+        )
+        self.assertEqual(created.status_code, 201, created.text)
+        host_inventory = {
+            "system": {"cpu_count": 8, "memory_total_kib": 16384, "memory_available_kib": 8192},
+            "vms": [{"name": "guest-a", "state": "running"}],
+            "storage": {"filesystems": [{"device": "nas.example:/exports/vms", "type": "nfs4", "mountpoint": "/srv/vms"}]},
+            "network": {"interfaces": [{"ifname": "br0", "mtu": 9000, "operstate": "UP"}]}, "libvirt_networks": [], "storage_pools": [],
+            "subscription": {"products": [{"registration_code": "must-not-be-returned"}]},
+        }
+
+        with patch.object(api, "run_sudo_python", return_value=json.dumps(host_inventory)) as remote:
+            response = self.client.get(
+                f"/kvm-api/managed-clusters/{created.json()['id']}/inventory",
+                headers=self.headers("viewer-token"),
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        result = response.json()
+        self.assertEqual(result["hosts"][0]["status"], "ready")
+        self.assertEqual(result["hosts"][0]["metrics"]["cpu_count"], 8)
+        self.assertEqual(result["hosts"][0]["filesystems"][0]["type"], "nfs4")
+        self.assertEqual(result["hosts"][0]["filesystems"][0]["device"], "nas.example:/exports/vms")
+        self.assertEqual(result["hosts"][0]["network_interfaces"][0]["ifname"], "br0")
+        self.assertEqual(result["vms"][0]["name"], "guest-a")
+        self.assertEqual(remote.call_count, 2)
+        self.assertNotIn("must-not-be-returned", response.text)
+
+    def test_kvm_group_inventory_returns_actionable_safe_errors_without_remote_diagnostics(self) -> None:
+        headers = self.headers("admin-token")
+        first = self.create_test_host(name="inventory-error-node")
+        second = self.create_test_host(name="inventory-error-peer")
+        created = self.client.post("/kvm-api/managed-clusters", headers=headers,
+                                   json={"name": "inventory-error-group", "host_ids": [first["id"], second["id"]]})
+        self.assertEqual(created.status_code, 201, created.text)
+
+        with patch.object(api, "get_host_cloud_native", side_effect=api.HTTPException(
+            502, "Could not load host administration data: password=test-password /private/path/key"
+        )):
+            response = self.client.get(
+                f"/kvm-api/managed-clusters/{created.json()['id']}/inventory",
+                headers=self.headers("viewer-token"),
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        hosts = response.json()["hosts"]
+        self.assertEqual([host["error_code"] for host in hosts], ["inventory_failed", "inventory_failed"])
+        self.assertNotIn("error", hosts[0])
+        self.assertNotIn("test-password", response.text)
+        self.assertNotIn("/private/path/key", response.text)
+        self.assertEqual(api.managed_cluster_inventory_error_code(api.HTTPException(502, "SSH authentication failed")), "ssh_auth_failed")
+        self.assertEqual(api.managed_cluster_inventory_error_code(TimeoutError("connection timed out")), "ssh_unreachable")
+        self.assertEqual(api.managed_cluster_inventory_error_code(RuntimeError("virsh connection unavailable")), "host_services_unavailable")
+
+    def test_cluster_plan_is_a_private_draft_and_never_contains_preflight_or_credentials(self) -> None:
+        headers = self.headers("cluster-token")
+        first = self.create_test_host(name="draft-node-a")
+        second = self.create_test_host(name="draft-node-b")
+        payload = {"name": "test-ha", "host_ids": [first["id"], second["id"]], "template_id": "nfs",
+                   "step": 2, "quorum": "qdevice", "qnetd_host": "witness.example.invalid",
+                   "qnetd_outside_cluster": True, "fencing": "sbd",
+                   "password": "must-not-persist", "preflight_results": [{"secret": "must-not-persist"}]}
+        created = self.client.post("/kvm-api/cluster-plans", headers=headers, json=payload)
+        self.assertEqual(created.status_code, 201, created.text)
+        plan = created.json()
+        self.assertEqual(plan["state"], "draft")
+        self.assertTrue(plan["preflight_required"])
+        self.assertNotIn("password", plan)
+        self.assertNotIn("preflight_results", plan)
+        self.assertEqual(plan["config"]["qnetd_host"], "witness.example.invalid")
+        with api.connect_db() as db:
+            stored_config = db.execute("SELECT config_json FROM cluster_plans WHERE id=?", (plan["id"],)).fetchone()["config_json"]
+        self.assertNotIn("must-not-persist", stored_config)
+        listed = self.client.get("/kvm-api/cluster-plans", headers=headers)
+        self.assertEqual([item["id"] for item in listed.json()], [plan["id"]])
+        self.assertEqual(self.client.get("/kvm-api/cluster-plans", headers=self.headers("viewer-token")).json(), [])
+        self.assertEqual(self.client.get("/kvm-api/managed-clusters", headers=headers).json(), [])
+        self.assertEqual(self.client.put(f"/kvm-api/cluster-plans/{plan['id']}", headers=self.headers("viewer-token"), json=payload).status_code, 403)
+        payload["name"] = "resumed-ha"
+        updated = self.client.put(f"/kvm-api/cluster-plans/{plan['id']}", headers=headers, json=payload)
+        self.assertEqual(updated.status_code, 200, updated.text)
+        self.assertEqual(updated.json()["name"], "resumed-ha")
+        self.assertEqual(self.client.delete(f"/kvm-api/cluster-plans/{plan['id']}", headers=headers).status_code, 204)
+
+    def test_suse_ha_cluster_registry_requires_live_membership_and_tracks_membership_changes(self) -> None:
+        headers = self.headers("cluster-token")
+        first = self.create_test_host(name="node-a")
+        second = self.create_test_host(name="node-b")
+        live = {"cluster_name": "ha-lab", "nodes": [{"name": "node-a", "online": True}]}
+        with patch.object(api, "run_sudo_python", side_effect=lambda *_args, **_kwargs: json.dumps(live)):
+            created = self.client.post("/kvm-api/suse-ha-clusters", headers=headers, json={"host_id": first["id"]})
+            self.assertEqual(created.status_code, 201, created.text)
+            record = created.json()
+            self.assertEqual(record["name"], "ha-lab")
+            self.assertEqual(record["members"][0]["host_id"], first["id"])
+            self.assertNotIn("password", created.text)
+
+            listed = self.client.get("/kvm-api/suse-ha-clusters", headers=self.headers("viewer-token"))
+            self.assertEqual(listed.status_code, 200, listed.text)
+            self.assertEqual([item["id"] for item in listed.json()], [record["id"]])
+
+            live["nodes"] = [{"name": "node-a", "online": True}, {"name": "node-b", "online": True}]
+            updated = self.client.post("/kvm-api/suse-ha-clusters", headers=headers, json={"host_id": first["id"]})
+            self.assertEqual(updated.status_code, 201, updated.text)
+            self.assertEqual(updated.json()["id"], record["id"])
+            self.assertEqual({member["host_id"] for member in updated.json()["members"]}, {first["id"], second["id"]})
+
+            forbidden = self.client.post("/kvm-api/suse-ha-clusters", headers=self.headers("viewer-token"), json={"host_id": first["id"]})
+            self.assertEqual(forbidden.status_code, 403)
+
+    def test_suse_ha_cluster_registry_rejects_hosts_without_live_membership(self) -> None:
+        host = self.create_test_host(name="standalone-node")
+        with patch.object(api, "run_sudo_python", return_value=json.dumps({"cluster_name": "", "nodes": []})):
+            response = self.client.post("/kvm-api/suse-ha-clusters", headers=self.headers("cluster-token"), json={"host_id": host["id"]})
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertIn("not reporting an initialized SUSE HA cluster", response.json()["detail"])
+
+    def test_cluster_plan_canonicalizes_corosync_network_hints_and_bootstrap_requires_fresh_review(self) -> None:
+        headers = self.headers("cluster-token")
+        first = self.create_test_host(name="corosync-node-a")
+        second = self.create_test_host(name="corosync-node-b")
+        payload = {
+            "name": "corosync-plan", "host_ids": [first["id"], second["id"]],
+            "quorum": "standard", "fencing": "hardware",
+            "corosync_networks": ["10.20.0.11/24", "192.0.2.22/24"],
+            "corosync_network_reviewed": True,
+        }
+        created = self.client.post("/kvm-api/cluster-plans", headers=headers, json=payload)
+        self.assertEqual(created.status_code, 201, created.text)
+        plan = created.json()
+        self.assertEqual(plan["config"]["corosync_networks"], ["10.20.0.0/24", "192.0.2.0/24"])
+        actor = api.require_permission("cluster_admin")("Bearer cluster-token", None)
+        context, _hosts = api.cluster_bootstrap_context(plan["id"], first["id"], "init", actor)
+        self.assertEqual(context["config"]["corosync_networks"], ["10.20.0.0/24", "192.0.2.0/24"])
+
+        payload["corosync_networks"] = ["10.20.0.0/24", "10.20.0.0/24"]
+        duplicate = self.client.post("/kvm-api/cluster-plans", headers=headers, json=payload)
+        self.assertEqual(duplicate.status_code, 422, duplicate.text)
+        payload["corosync_networks"] = ["not-a-subnet"]
+        invalid = self.client.post("/kvm-api/cluster-plans", headers=headers, json=payload)
+        self.assertEqual(invalid.status_code, 422, invalid.text)
+
+        payload["corosync_networks"] = ["10.20.0.0/24"]
+        payload["corosync_network_reviewed"] = False
+        updated = self.client.put(f"/kvm-api/cluster-plans/{plan['id']}", headers=headers, json=payload)
+        self.assertEqual(updated.status_code, 200, updated.text)
+        with self.assertRaisesRegex(api.HTTPException, "Review static Corosync addressing"):
+            api.cluster_bootstrap_context(plan["id"], first["id"], "init", actor)
+
+    def test_cluster_plan_rejects_duplicate_nodes_and_qnetd_inside_selected_nodes(self) -> None:
+        headers = self.headers("cluster-token")
+        first = self.create_test_host(name="draft-node-a")
+        second = self.create_test_host(name="draft-node-b")
+        duplicate = self.client.post("/kvm-api/cluster-plans", headers=headers, json={"host_ids": [first["id"], first["id"]]})
+        self.assertEqual(duplicate.status_code, 422)
+        inside = self.client.post("/kvm-api/cluster-plans", headers=headers, json={
+            "host_ids": [first["id"], second["id"]], "quorum": "qdevice", "qnetd_host": "draft-node-a"})
+        self.assertEqual(inside.status_code, 422)
+
+    def test_cluster_plan_normalizes_qnetd_dns_and_ip_before_external_witness_check(self) -> None:
+        headers = self.headers("cluster-token")
+        first = self.create_test_host(name="draft-node-a")
+        second = self.create_test_host(name="draft-node-b")
+        with api.connect_db() as db:
+            db.execute("UPDATE hosts SET hostname='draft-node-a.' WHERE id=?", (first["id"],))
+            db.execute("UPDATE hosts SET address='2001:0db8:0:0::2' WHERE id=?", (second["id"],))
+        for witness in ("draft-node-a", "2001:db8::2"):
+            response = self.client.post("/kvm-api/cluster-plans", headers=headers, json={
+                "host_ids": [first["id"], second["id"]], "quorum": "qdevice", "qnetd_host": witness,
+                "qnetd_outside_cluster": True,
+            })
+            self.assertEqual(response.status_code, 422, response.text)
+
+    def test_cluster_mutations_require_verified_live_membership(self) -> None:
+        host = self.create_test_host(name="not-yet-clustered")
+        mutations = (
+            (f"/kvm-api/clusters/{host['id']}/actions", {"action": "node_standby", "target": "node-a"}),
+            (f"/kvm-api/clusters/{host['id']}/resources/config", {
+                "action": "create", "resource_id": "test-vip", "agent": "ocf:heartbeat:IPaddr2",
+            }),
+            (f"/kvm-api/clusters/{host['id']}/constraints/config", {
+                "action": "create_location", "constraint_id": "prefer-node-a",
+                "resource": "test-vip", "node": "node-a", "score": "INFINITY",
+            }),
+        )
+        for path, payload in mutations:
+            with self.subTest(path=path), \
+                 patch.object(api, "cockpit_host_record", return_value={"id": host["id"], "name": host["name"]}), \
+                 patch.object(api, "run_sudo_python", return_value=json.dumps({"nodes": [{"name": "node-a"}]})) as remote:
+                response = self.client.post(path, headers=self.headers("cluster-token"), json=payload)
+                self.assertEqual(response.status_code, 409, response.text)
+                self.assertIn("at least two reported members", response.json()["detail"])
+                remote.assert_called_once_with(
+                    {"id": host["id"], "name": host["name"]}, api.HA_CLUSTER_STATUS_SCRIPT, timeout=35,
+                )
+
+    def test_cluster_host_mutation_locks_reject_overlaps_and_allow_independent_hosts(self) -> None:
+        first = api.acquire_cluster_host_mutation_locks(["host-a", "host-b"])
+        self.assertIsNotNone(first)
+        independent = None
+        retry = None
+        try:
+            self.assertIsNone(api.acquire_cluster_host_mutation_locks(["host-b", "host-c"]))
+            independent = api.acquire_cluster_host_mutation_locks(["host-c"])
+            self.assertIsNotNone(independent)
+        finally:
+            if independent is not None:
+                api.release_cluster_host_mutation_locks(independent)
+            if first is not None:
+                api.release_cluster_host_mutation_locks(first)
+        retry = api.acquire_cluster_host_mutation_locks(["host-a", "host-b"])
+        self.assertIsNotNone(retry)
+        if retry is not None:
+            api.release_cluster_host_mutation_locks(retry)
+
+    def test_cluster_node_and_resource_actions_reject_targets_missing_from_live_status(self) -> None:
+        host = self.create_test_host(name="active-cluster-node")
+        live_status = json.dumps({
+            "nodes": [{"name": "node-a"}, {"name": "node-b"}],
+            "resources": [{"id": "web-vip"}],
+        })
+        cases = (
+            ("node_standby", "not-a-member", "node is not in the current SUSE HA membership"),
+            ("resource_stop", "not-a-resource", "Pacemaker resource is not in the current cluster status"),
+        )
+        for action, target, message in cases:
+            with self.subTest(action=action), \
+                 patch.object(api, "cockpit_host_record", return_value={"id": host["id"], "name": host["name"]}), \
+                 patch.object(api, "run_sudo_python", return_value=live_status) as remote:
+                response = self.client.post(
+                    f"/kvm-api/clusters/{host['id']}/actions",
+                    headers=self.headers("cluster-token"), json={"action": action, "target": target},
+                )
+                self.assertEqual(response.status_code, 422, response.text)
+                self.assertIn(message, response.json()["detail"])
+                remote.assert_called_once()
+
+    def test_cluster_preflight_checks_registered_ssh_ports_from_each_selected_host(self) -> None:
+        first = self.create_test_host(name="preflight-node-a")
+        second = self.create_test_host(name="preflight-node-b")
+        with api.connect_db() as db:
+            db.execute("UPDATE hosts SET address='192.0.2.31',port=2222 WHERE id=?", (first["id"],))
+            db.execute("UPDATE hosts SET address='192.0.2.32',port=22 WHERE id=?", (second["id"],))
+        def inspect(_host, _script, *, args, **_kwargs):
+            peers = json.loads(args[0])["peers"]
+            return json.dumps({"hostname": "test-node", "ssh_peer_connectivity": [
+                {**peer, "reachable": peer["port"] == 22} for peer in peers
+            ]})
+
+        with patch.object(api, "run_sudo_python", side_effect=inspect) as remote:
+            response = self.client.post("/kvm-api/clusters/preflight", headers=self.headers("viewer-token"),
+                                        json={"host_ids": [first["id"], second["id"]]})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(remote.call_count, 2)
+        peer_sets = [json.loads(call.kwargs["args"][0])["peers"] for call in remote.call_args_list]
+        expected = [
+            [{"host_name": "kvm-test.example.invalid", "address": "192.0.2.32", "port": 22}],
+            [{"host_name": "kvm-test.example.invalid", "address": "192.0.2.31", "port": 2222}],
+        ]
+        self.assertEqual(sorted(peer_sets, key=lambda peers: peers[0]["address"]),
+                         sorted(expected, key=lambda peers: peers[0]["address"]))
+        results = {result["host_id"]: result for result in response.json()}
+        self.assertEqual(results[first["id"]]["checks"]["ssh_peer_connectivity"][0]["host_name"], "kvm-test.example.invalid")
+        self.assertTrue(results[first["id"]]["checks"]["ssh_peer_connectivity"][0]["reachable"])
+        self.assertFalse(results[second["id"]]["checks"]["ssh_peer_connectivity"][0]["reachable"])
+
+    def test_cluster_preflight_rejects_non_list_host_ids_before_connecting_to_hosts(self) -> None:
+        with patch.object(api, "run_sudo_python") as remote:
+            response = self.client.post(
+                "/kvm-api/clusters/preflight",
+                headers=self.headers("viewer-token"),
+                json={"host_ids": {"type": "click"}},
+            )
+
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertEqual(response.headers.get("X-KVM-API-Version"), api.app.version)
+        self.assertEqual(response.headers.get("X-KVM-Preflight-Host-Ids-Type"), "dict")
+        self.assertTrue(any("host_ids" in error.get("loc", []) for error in response.json()["detail"]))
+        remote.assert_not_called()
+
+    def test_cluster_preflight_accepts_json_encoded_host_id_list(self) -> None:
+        first = self.create_test_host(name="preflight-json-node-a")
+        second = self.create_test_host(name="preflight-json-node-b")
+        with patch.object(api, "run_sudo_python", return_value=json.dumps({"hostname": "test-node"})) as remote:
+            response = self.client.post(
+                "/kvm-api/clusters/preflight",
+                headers=self.headers("viewer-token"),
+                json={"host_ids": json.dumps([first["id"], second["id"]])},
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.headers.get("X-KVM-API-Version"), api.app.version)
+        self.assertEqual(remote.call_count, 2)
+
+    def test_cluster_preflight_accepts_known_legacy_selection_wrappers(self) -> None:
+        first = self.create_test_host(name="preflight-wrapper-node-a")
+        second = self.create_test_host(name="preflight-wrapper-node-b")
+        expected_ids = [first["id"], second["id"]]
+        payloads = [
+            {"host_ids": {"host_ids": expected_ids}},
+            {"host_ids": {expected_ids[0]: True, expected_ids[1]: True}},
+        ]
+
+        with patch.object(api, "run_sudo_python", return_value=json.dumps({"hostname": "test-node"})) as remote:
+            for payload in payloads:
+                with self.subTest(payload=payload):
+                    response = self.client.post(
+                        "/kvm-api/clusters/preflight",
+                        headers=self.headers("viewer-token"),
+                        json=payload,
+                    )
+                    self.assertEqual(response.status_code, 200, response.text)
+                    self.assertEqual({item["host_id"] for item in response.json()}, set(expected_ids))
+
+        self.assertEqual(remote.call_count, 4)
+
+    def test_template_workload_fix_installs_unit_without_enabling_or_starting_service(self) -> None:
+        calls: list[list[str]] = []
+
+        def fake_run(command, **_kwargs):
+            calls.append(command)
+            if command[:2] == ["rpm", "-q"]:
+                return api.subprocess.CompletedProcess(command, 1, "", "package is not installed")
+            if command[:2] == ["systemctl", "show"]:
+                return api.subprocess.CompletedProcess(command, 0, "loaded\n", "")
+            return api.subprocess.CompletedProcess(command, 0, "", "")
+
+        output = io.StringIO()
+        with patch.object(sys, "argv", ["template-workload", "nfs"]), \
+             patch.object(api.subprocess, "run", side_effect=fake_run), \
+             patch.object(Path, "is_file", return_value=False), \
+             redirect_stdout(output):
+            exec(api.TEMPLATE_WORKLOAD_PACKAGE_SCRIPT, {"__name__": "__main__"})
+
+        self.assertIn("zypper", [command[0] for command in calls])
+        self.assertTrue(any(command[:3] == ["systemctl", "show", "-p"] for command in calls))
+        self.assertFalse(any(command[:2] == ["systemctl", "enable"] for command in calls))
+        self.assertFalse(any(command[:2] == ["systemctl", "start"] for command in calls))
+        self.assertIn("not enabled or started", output.getvalue())
+
+    def test_cluster_preflight_probes_qnetd_on_fixed_port_for_cluster_admin(self) -> None:
+        first = self.create_test_host(name="qnetd-node-a")
+        second = self.create_test_host(name="qnetd-node-b")
+
+        def inspect(_host, _script, *, args, **_kwargs):
+            request = json.loads(args[0])
+            self.assertEqual(request["qnetd_host"], "witness.example.invalid")
+            return json.dumps({"hostname": "test-node", "qnetd_tcp_connectivity": {
+                "host": request["qnetd_host"], "port": 5403, "reachable": True
+            }})
+
+        with patch.object(api, "run_sudo_python", side_effect=inspect) as remote:
+            response = self.client.post("/kvm-api/clusters/preflight", headers=self.headers("cluster-token"), json={
+                "host_ids": [first["id"], second["id"]], "qnetd_host": "witness.example.invalid"
+            })
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(remote.call_count, 2)
+        for result in response.json():
+            check = result["checks"]["qnetd_tcp_connectivity"]
+            self.assertEqual(check, {"host": "witness.example.invalid", "port": 5403, "reachable": True})
+
+    def test_cluster_preflight_rejects_qnetd_probe_from_non_cluster_admin(self) -> None:
+        first = self.create_test_host(name="qnetd-viewer-a")
+        second = self.create_test_host(name="qnetd-viewer-b")
+        response = self.client.post("/kvm-api/clusters/preflight", headers=self.headers("viewer-token"), json={
+            "host_ids": [first["id"], second["id"]], "qnetd_host": "witness.example.invalid"
+        })
+        self.assertEqual(response.status_code, 403)
+
+    def test_suse_bootstrap_commands_are_fixed_and_preserve_selected_node_order(self) -> None:
+        first = {"id": "node-a", "username": "sles", "address": "192.0.2.41"}
+        second = {"id": "node-b", "username": "sles", "address": "192.0.2.42"}
+        hosts = [first, second]
+        plan = {"id": "plan-1", "name": "ha-lab", "host_ids": ["node-a", "node-b"]}
+
+        self.assertEqual(
+            api.cluster_bootstrap_command(plan, hosts, "init", "node-a"),
+            "crm cluster init --name ha-lab",
+        )
+        self.assertEqual(
+            shlex.split(api.cluster_bootstrap_command(plan, hosts, "join", "node-b")),
+            ["crm", "cluster", "join", "-c", "sles@192.0.2.41"],
+        )
+        with self.assertRaises(api.HTTPException):
+            api.cluster_bootstrap_command(plan, hosts, "init", "node-b")
+        with self.assertRaises(api.HTTPException):
+            api.cluster_bootstrap_command(plan, hosts, "join", "node-a")
+
+    def test_suse_bootstrap_preflight_blocks_when_a_peer_is_unreachable(self) -> None:
+        first = {"id": "node-a", "hostname": "node-a", "address": "192.0.2.41", "port": 22, "username": "sles"}
+        second = {"id": "node-b", "hostname": "node-b", "address": "192.0.2.42", "port": 22, "username": "sles"}
+        plan = {"id": "plan-1", "name": "ha-lab", "host_ids": ["node-a", "node-b"]}
+
+        def preflight(host, _script, *, args, **_kwargs):
+            peers = json.loads(args[0])["peers"]
+            return json.dumps({
+                "compatibility_supported": True, "ha_active": True,
+                "time_synchronized": True,
+                "tools": {"crm": True, "crm_mon": True, "corosync-cfgtool": True},
+                "ssh_peer_connectivity": [{**peer, "reachable": host["id"] == "node-a"} for peer in peers],
+                "cluster_configured": False, "cluster_detected": False, "cluster_name": "",
+            })
+
+        with patch.object(api, "cockpit_host_record", side_effect=lambda host_id: {"id": host_id}), \
+             patch.object(api, "run_sudo_python", side_effect=preflight):
+            with self.assertRaisesRegex(RuntimeError, "cannot reach the SSH port"):
+                api.cluster_bootstrap_preflight(plan, [first, second], "init", "node-a")
+
+    def test_suse_bootstrap_preflight_blocks_a_corosync_subnet_missing_from_a_node(self) -> None:
+        first = {"id": "node-a", "hostname": "node-a", "address": "192.0.2.41", "port": 22, "username": "sles"}
+        second = {"id": "node-b", "hostname": "node-b", "address": "192.0.2.42", "port": 22, "username": "sles"}
+        plan = {"id": "plan-1", "name": "ha-lab", "host_ids": ["node-a", "node-b"],
+                "config": {"corosync_networks": ["10.20.0.0/24"]}}
+
+        def preflight(host, _script, *, args, **_kwargs):
+            return json.dumps({
+                "compatibility_supported": True, "ha_active": True, "time_synchronized": True,
+                "tools": {"crm": True, "crm_mon": True, "corosync-cfgtool": True},
+                "ssh_peer_connectivity": [],
+                "interfaces": [{"name": "eth1", "subnets": ["10.20.0.0/24"]}] if host["id"] == "node-a" else [],
+                "cluster_configured": False, "cluster_detected": False, "cluster_name": "",
+            })
+
+        with patch.object(api, "cockpit_host_record", side_effect=lambda host_id: {"id": host_id}), \
+             patch.object(api, "run_sudo_python", side_effect=preflight):
+            with self.assertRaisesRegex(RuntimeError, "no longer reports planned Corosync subnet"):
+                api.cluster_bootstrap_preflight(plan, [first, second], "join", "node-b")
+
+    def test_suse_bootstrap_init_blocks_mixed_sle_ha_product_releases(self) -> None:
+        first = {"id": "node-a", "hostname": "node-a", "address": "192.0.2.41", "port": 22, "username": "sles"}
+        second = {"id": "node-b", "hostname": "node-b", "address": "192.0.2.42", "port": 22, "username": "sles"}
+        plan = {"id": "plan-1", "name": "ha-lab", "host_ids": ["node-a", "node-b"]}
+
+        def preflight(host, _script, *, args, **_kwargs):
+            peers = json.loads(args[0])["peers"]
+            return json.dumps({
+                "compatibility_supported": True, "ha_active": True,
+                "ha_product": "sle-ha/15.6/x86_64" if host["id"] == "node-a" else "sle-ha/15.7/x86_64",
+                "time_synchronized": True,
+                "tools": {"crm": True, "crm_mon": True, "corosync-cfgtool": True},
+                "ssh_peer_connectivity": [{**peer, "reachable": True, "hosts_file_entry_present": True} for peer in peers],
+                "cluster_configured": False, "cluster_detected": False, "cluster_name": "",
+            })
+
+        with patch.object(api, "cockpit_host_record", side_effect=lambda host_id: {"id": host_id}), \
+             patch.object(api, "run_sudo_python", side_effect=preflight):
+            with self.assertRaisesRegex(RuntimeError, "different active SLE HA product releases"):
+                api.cluster_bootstrap_preflight(plan, [first, second], "init", "node-a")
+
+    def test_suse_bootstrap_join_allows_temporary_mixed_product_releases(self) -> None:
+        first = {"id": "node-a", "hostname": "node-a", "address": "192.0.2.41", "port": 22, "username": "sles"}
+        second = {"id": "node-b", "hostname": "node-b", "address": "192.0.2.42", "port": 22, "username": "sles"}
+        plan = {"id": "plan-1", "name": "ha-lab", "host_ids": ["node-a", "node-b"]}
+
+        def preflight(host, _script, *, args, **_kwargs):
+            peers = json.loads(args[0])["peers"]
+            is_anchor = host["id"] == "node-a"
+            return json.dumps({
+                "compatibility_supported": True, "ha_active": True,
+                "ha_product": "sle-ha/15.6/x86_64" if is_anchor else "sle-ha/15.7/x86_64",
+                "time_synchronized": True,
+                "tools": {"crm": True, "crm_mon": True, "corosync-cfgtool": True},
+                "ssh_peer_connectivity": [{**peer, "reachable": True, "hosts_file_entry_present": True} for peer in peers],
+                "cluster_configured": is_anchor, "cluster_detected": is_anchor,
+                "cluster_name": "ha-lab" if is_anchor else "",
+            })
+
+        with patch.object(api, "cockpit_host_record", side_effect=lambda host_id: {"id": host_id}), \
+             patch.object(api, "run_sudo_python", side_effect=preflight):
+            api.cluster_bootstrap_preflight(plan, [first, second], "join", "node-b")
+
+    def test_suse_bootstrap_init_blocks_when_active_sle_ha_product_is_unknown(self) -> None:
+        first = {"id": "node-a", "hostname": "node-a", "address": "192.0.2.41", "port": 22, "username": "sles"}
+        second = {"id": "node-b", "hostname": "node-b", "address": "192.0.2.42", "port": 22, "username": "sles"}
+        plan = {"id": "plan-1", "name": "ha-lab", "host_ids": ["node-a", "node-b"]}
+
+        def preflight(host, _script, *, args, **_kwargs):
+            peers = json.loads(args[0])["peers"]
+            return json.dumps({
+                "compatibility_supported": True, "ha_active": True,
+                "ha_product": "sle-ha/15.6/x86_64" if host["id"] == "node-a" else "",
+                "time_synchronized": True,
+                "tools": {"crm": True, "crm_mon": True, "corosync-cfgtool": True},
+                "ssh_peer_connectivity": [{**peer, "reachable": True, "hosts_file_entry_present": True} for peer in peers],
+                "cluster_configured": False, "cluster_detected": False, "cluster_name": "",
+            })
+
+        with patch.object(api, "cockpit_host_record", side_effect=lambda host_id: {"id": host_id}), \
+             patch.object(api, "run_sudo_python", side_effect=preflight):
+            with self.assertRaisesRegex(RuntimeError, "active SLE HA product release could not be confirmed"):
+                api.cluster_bootstrap_preflight(plan, [first, second], "init", "node-a")
+
+    def test_suse_bootstrap_preflight_blocks_when_peer_name_is_missing_from_hosts_file(self) -> None:
+        first = {"id": "node-a", "hostname": "node-a", "address": "192.0.2.41", "port": 22, "username": "sles"}
+        second = {"id": "node-b", "hostname": "node-b", "address": "192.0.2.42", "port": 22, "username": "sles"}
+        plan = {"id": "plan-1", "name": "ha-lab", "host_ids": ["node-a", "node-b"]}
+
+        def preflight(host, _script, *, args, **_kwargs):
+            peers = json.loads(args[0])["peers"]
+            return json.dumps({
+                "compatibility_supported": True, "ha_active": True,
+                "time_synchronized": True,
+                "tools": {"crm": True, "crm_mon": True, "corosync-cfgtool": True},
+                "ssh_peer_connectivity": [{**peer, "reachable": True, "hosts_file_entry_present": False} for peer in peers],
+                "cluster_configured": False, "cluster_detected": False, "cluster_name": "",
+            })
+
+        with patch.object(api, "cockpit_host_record", side_effect=lambda host_id: {"id": host_id}), \
+             patch.object(api, "run_sudo_python", side_effect=preflight):
+            with self.assertRaisesRegex(RuntimeError, "cannot find selected peer names in /etc/hosts"):
+                api.cluster_bootstrap_preflight(plan, [first, second], "init", "node-a")
+
+    def test_suse_bootstrap_preflight_blocks_when_qnetd_is_unreachable(self) -> None:
+        first = {"id": "node-a", "hostname": "node-a", "address": "192.0.2.41", "port": 22, "username": "sles"}
+        second = {"id": "node-b", "hostname": "node-b", "address": "192.0.2.42", "port": 22, "username": "sles"}
+        plan = {"id": "plan-1", "name": "ha-lab", "host_ids": ["node-a", "node-b"],
+                "config": {"quorum": "qdevice", "qnetd_host": "witness.example.invalid"}}
+
+        def preflight(host, _script, *, args, **_kwargs):
+            request = json.loads(args[0])
+            self.assertEqual(request["qnetd_host"], "witness.example.invalid")
+            return json.dumps({
+                "compatibility_supported": True, "ha_active": True,
+                "time_synchronized": True,
+                "tools": {"crm": True, "crm_mon": True, "corosync-cfgtool": True},
+                "ssh_peer_connectivity": [{**peer, "reachable": True} for peer in request["peers"]],
+                "qnetd_tcp_connectivity": {"host": request["qnetd_host"], "port": 5403, "reachable": False},
+                "cluster_configured": False, "cluster_detected": False, "cluster_name": "",
+            })
+
+        with patch.object(api, "cockpit_host_record", side_effect=lambda host_id: {"id": host_id}), \
+             patch.object(api, "run_sudo_python", side_effect=preflight):
+            with self.assertRaisesRegex(RuntimeError, "cannot reach QNetd at witness.example.invalid:5403/TCP"):
+                api.cluster_bootstrap_preflight(plan, [first, second], "init", "node-a")
 
     def test_operation_queue_rejects_work_when_capacity_is_full(self) -> None:
         with api.connect_db() as db:
@@ -462,7 +1313,7 @@ class KvmApiTests(unittest.TestCase):
         with patch.object(api, "create_operation_job", return_value={"job_id": "00000000-0000-4000-8000-000000000002", "status": "queued"}) as queued:
             response = self.client.post(
                 f"/kvm-api/hosts/{host['id']}/vms/actions?vm_name=test-vm",
-                headers=self.headers("admin-token"), json={"action": "start"},
+                headers=self.headers("vm-operator-token"), json={"action": "start"},
             )
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.json()["status"], "queued")

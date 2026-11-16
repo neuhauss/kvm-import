@@ -90,9 +90,9 @@ export default defineComponent({
   font-size: 12px;
 }
 .toggle-pill.enabled {
-  border-color: #3b8458 !important;
-  color: #b9f0ca !important;
-  background: #173d2b !important;
+  border-color: color-mix(in srgb, var(--success, #45a86d) 65%, var(--border, #4b5563)) !important;
+  color: var(--success-text, var(--success, #287447)) !important;
+  background: color-mix(in srgb, var(--success, #45a86d) 16%, var(--body-bg, #fff)) !important;
 }
 .toggle-pill:disabled { cursor: wait; opacity: .72; }
 .vm-table-wrap { container-type:inline-size; container-name:vm-table; min-width:0; max-width:100%; overflow-x:auto; overscroll-behavior-x:contain; }

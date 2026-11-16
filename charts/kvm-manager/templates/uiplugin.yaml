@@ -11,9 +11,9 @@ spec:
     name: {{ .Chart.Name }}
     version: {{ .Chart.Version | quote }}
     endpoint: {{ .Values.plugin.endpoint | default (printf "%s/kvm-manager/%s" (trimSuffix "/" .Values.rancher.publicOrigin) .Chart.Version) | quote }}
-    # The extension is served from a versioned endpoint; do not let Rancher
-    # retain stale plugin metadata/assets after a local catalog upgrade.
-    noCache: true
+    # The extension uses immutable versioned URLs and HTTP cache headers;
+    # each release changes this version and therefore its asset URLs.
+    noCache: false
     noAuth: false
     metadata:
       catalog.cattle.io/display-name: KVM

@@ -1,9 +1,9 @@
 import { importTypes } from '@rancher/auto-import';
 import { IPlugin } from '@shell/core/types';
 import { defineAsyncComponent } from 'vue';
-import Hosts from './pages/Hosts.vue';
-import Clusters from './pages/Clusters.vue';
-import Deploy from './pages/Deploy.vue';
+const Hosts = defineAsyncComponent(() => import(/* webpackChunkName: "kvm-hosts" */ './pages/Hosts.vue'));
+const Clusters = defineAsyncComponent(() => import(/* webpackChunkName: "kvm-clusters" */ './pages/Clusters.vue'));
+const Deploy = defineAsyncComponent(() => import(/* webpackChunkName: "kvm-deploy" */ './pages/Deploy.vue'));
 const Backups = defineAsyncComponent(() => import('./pages/Backups.vue'));
 const ManagedKvmClusters = defineAsyncComponent(() => import('./pages/ManagedKvmClusters.vue'));
 const CloudNative = defineAsyncComponent(() => import(/* webpackChunkName: "kvm-cloud-native" */ './pages/CloudNative.vue'));

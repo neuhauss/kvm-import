@@ -31,9 +31,12 @@ spec:
         - /bin/sh
         - -ec
         args:
-        - mkdir -p /tmp/www && cp -R /usr/local/apache2/htdocs/. /tmp/www/ && gzip -dc /tmp/www/kvm-manager/0.8.0-unstable.22/plugin/kvm-manager-0.8.0-unstable.22.umd.min.148.js.gz > /tmp/www/kvm-manager/0.8.0-unstable.22/plugin/kvm-manager-0.8.0-unstable.22.umd.min.148.js && rm /tmp/www/kvm-manager/0.8.0-unstable.22/plugin/kvm-manager-0.8.0-unstable.22.umd.min.148.js.gz && gzip -dc /tmp/www/kvm-manager/0.8.0-unstable.22/plugin/kvm-manager-0.8.0-unstable.22.umd.min.177.js.gz > /tmp/www/kvm-manager/0.8.0-unstable.22/plugin/kvm-manager-0.8.0-unstable.22.umd.min.177.js && rm /tmp/www/kvm-manager/0.8.0-unstable.22/plugin/kvm-manager-0.8.0-unstable.22.umd.min.177.js.gz && gzip -dc /tmp/www/kvm-manager/0.8.0-unstable.22/plugin/kvm-manager-0.8.0-unstable.22.umd.min.303.js.gz > /tmp/www/kvm-manager/0.8.0-unstable.22/plugin/kvm-manager-0.8.0-unstable.22.umd.min.303.js && rm /tmp/www/kvm-manager/0.8.0-unstable.22/plugin/kvm-manager-0.8.0-unstable.22.umd.min.303.js.gz && gzip -dc /tmp/www/kvm-manager/0.8.0-unstable.22/plugin/kvm-manager-0.8.0-unstable.22.umd.min.37.js.gz
-          > /tmp/www/kvm-manager/0.8.0-unstable.22/plugin/kvm-manager-0.8.0-unstable.22.umd.min.37.js && rm /tmp/www/kvm-manager/0.8.0-unstable.22/plugin/kvm-manager-0.8.0-unstable.22.umd.min.37.js.gz && gzip -dc /tmp/www/kvm-manager/0.8.0-unstable.22/plugin/kvm-manager-0.8.0-unstable.22.umd.min.437.js.gz > /tmp/www/kvm-manager/0.8.0-unstable.22/plugin/kvm-manager-0.8.0-unstable.22.umd.min.437.js && rm /tmp/www/kvm-manager/0.8.0-unstable.22/plugin/kvm-manager-0.8.0-unstable.22.umd.min.437.js.gz && gzip -dc /tmp/www/kvm-manager/0.8.0-unstable.22/plugin/kvm-manager-0.8.0-unstable.22.umd.min.js.gz > /tmp/www/kvm-manager/0.8.0-unstable.22/plugin/kvm-manager-0.8.0-unstable.22.umd.min.js && rm /tmp/www/kvm-manager/0.8.0-unstable.22/plugin/kvm-manager-0.8.0-unstable.22.umd.min.js.gz && gzip -dc /tmp/www/kvm-manager/0.8.0-unstable.22/plugin/kvm-manager-0.8.0-unstable.22.umd.min.kvm-cloud-native.js.gz > /tmp/www/kvm-manager/0.8.0-unstable.22/plugin/kvm-manager-0.8.0-unstable.22.umd.min.kvm-cloud-native.js
-          && rm /tmp/www/kvm-manager/0.8.0-unstable.22/plugin/kvm-manager-0.8.0-unstable.22.umd.min.kvm-cloud-native.js.gz && gzip -dc /tmp/www/kvm-manager/0.8.0-unstable.22/plugin/kvm-manager-0.8.0-unstable.22.umd.min.kvm-vm-console.js.gz > /tmp/www/kvm-manager/0.8.0-unstable.22/plugin/kvm-manager-0.8.0-unstable.22.umd.min.kvm-vm-console.js && rm /tmp/www/kvm-manager/0.8.0-unstable.22/plugin/kvm-manager-0.8.0-unstable.22.umd.min.kvm-vm-console.js.gz && sed -e 's/^Listen 80$/Listen 8080/' -e 's#DocumentRoot "/usr/local/apache2/htdocs"#DocumentRoot "/tmp/www"#' -e 's#<Directory "/usr/local/apache2/htdocs">#<Directory "/tmp/www">#' -e 's/^#LoadModule deflate_module /LoadModule deflate_module /' -e '/^LoadModule deflate_module /a AddOutputFilterByType DEFLATE text/javascript application/javascript application/json text/css image/svg+xml' /usr/local/apache2/conf/httpd.conf > /tmp/httpd.conf && exec httpd -f /tmp/httpd.conf -DFOREGROUND
+        - mkdir -p /tmp/www && cp -R /usr/local/apache2/htdocs/. /tmp/www/ && gzip -dc /tmp/www/kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.148.js.gz > /tmp/www/kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.148.js && rm /tmp/www/kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.148.js.gz && gzip -dc /tmp/www/kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.150.js.gz > /tmp/www/kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.150.js && rm /tmp/www/kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.150.js.gz && gzip -dc /tmp/www/kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.208.js.gz > /tmp/www/kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.208.js && rm /tmp/www/kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.208.js.gz && gzip -dc /tmp/www/kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.303.js.gz
+          > /tmp/www/kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.303.js && rm /tmp/www/kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.303.js.gz && gzip -dc /tmp/www/kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.37.js.gz > /tmp/www/kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.37.js && rm /tmp/www/kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.37.js.gz && gzip -dc /tmp/www/kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.619.js.gz > /tmp/www/kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.619.js && rm /tmp/www/kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.619.js.gz && gzip -dc /tmp/www/kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.970.js.gz > /tmp/www/kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.970.js && rm
+          /tmp/www/kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.970.js.gz && gzip -dc /tmp/www/kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.js.gz > /tmp/www/kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.js && rm /tmp/www/kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.js.gz && gzip -dc /tmp/www/kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.kvm-cloud-native.js.gz > /tmp/www/kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.kvm-cloud-native.js && rm /tmp/www/kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.kvm-cloud-native.js.gz && gzip -dc /tmp/www/kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.kvm-clusters.js.gz > /tmp/www/kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.kvm-clusters.js && rm /tmp/www/kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.kvm-clusters.js.gz
+          && gzip -dc /tmp/www/kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.kvm-deploy.js.gz > /tmp/www/kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.kvm-deploy.js && rm /tmp/www/kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.kvm-deploy.js.gz && gzip -dc /tmp/www/kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.kvm-hosts.js.gz > /tmp/www/kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.kvm-hosts.js && rm /tmp/www/kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.kvm-hosts.js.gz && gzip -dc /tmp/www/kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.kvm-vm-console.js.gz > /tmp/www/kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.kvm-vm-console.js && rm /tmp/www/kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.kvm-vm-console.js.gz && gzip -dc /tmp/www/kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.kvm-vm-graphics-console.js.gz
+          > /tmp/www/kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.kvm-vm-graphics-console.js && rm /tmp/www/kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.kvm-vm-graphics-console.js.gz && sed -e 's/^Listen 80$/Listen 8080/' -e 's#DocumentRoot "/usr/local/apache2/htdocs"#DocumentRoot "/tmp/www"#' -e 's#<Directory "/usr/local/apache2/htdocs">#<Directory "/tmp/www">#' -e 's/^#LoadModule deflate_module /LoadModule deflate_module /' -e 's/^#LoadModule headers_module /LoadModule headers_module /' -e '/^LoadModule deflate_module /a AddOutputFilterByType DEFLATE text/javascript application/javascript application/json text/css image/svg+xml' /usr/local/apache2/conf/httpd.conf > /tmp/httpd.conf && printf '%s\n' '<LocationMatch "^/kvm-manager/[0-9]+[.][0-9]+[.][0-9]+(-[A-Za-z0-9.-]+)?(/|$)">' '  Header always set Cache-Control "public, max-age=31536000, immutable"' '</LocationMatch>' '<Location "/kvm-manager/catalog/index.yaml">' '  Header always
+          set Cache-Control "no-cache"' '</Location>' >> /tmp/httpd.conf && exec httpd -f /tmp/httpd.conf -DFOREGROUND
         ports:
         - name: http
           containerPort: 8080
@@ -62,32 +65,44 @@ spec:
       volumes:
       - name: assets
         configMap:
-          name: kvm-extension-assets-0-8-0-unstable-22
+          name: kvm-extension-assets-0-8-0-unstable-74
           items:
-          - key: files-0.8.0-unstable.22.txt
-            path: kvm-manager/0.8.0-unstable.22/files.txt
-          - key: package-root-0.8.0-unstable.22.json
-            path: kvm-manager/0.8.0-unstable.22/package.json
-          - key: package-0.8.0-unstable.22.json
-            path: kvm-manager/0.8.0-unstable.22/plugin/package.json
-          - key: kvm-manager-0.8.0-unstable.22.umd.min.148.js.gz
-            path: kvm-manager/0.8.0-unstable.22/plugin/kvm-manager-0.8.0-unstable.22.umd.min.148.js.gz
-          - key: kvm-manager-0.8.0-unstable.22.umd.min.177.js.gz
-            path: kvm-manager/0.8.0-unstable.22/plugin/kvm-manager-0.8.0-unstable.22.umd.min.177.js.gz
-          - key: kvm-manager-0.8.0-unstable.22.umd.min.303.js.gz
-            path: kvm-manager/0.8.0-unstable.22/plugin/kvm-manager-0.8.0-unstable.22.umd.min.303.js.gz
-          - key: kvm-manager-0.8.0-unstable.22.umd.min.37.js.gz
-            path: kvm-manager/0.8.0-unstable.22/plugin/kvm-manager-0.8.0-unstable.22.umd.min.37.js.gz
-          - key: kvm-manager-0.8.0-unstable.22.umd.min.437.js.gz
-            path: kvm-manager/0.8.0-unstable.22/plugin/kvm-manager-0.8.0-unstable.22.umd.min.437.js.gz
-          - key: kvm-manager-0.8.0-unstable.22.umd.min.js.gz
-            path: kvm-manager/0.8.0-unstable.22/plugin/kvm-manager-0.8.0-unstable.22.umd.min.js.gz
-          - key: kvm-manager-0.8.0-unstable.22.umd.min.kvm-cloud-native.js.gz
-            path: kvm-manager/0.8.0-unstable.22/plugin/kvm-manager-0.8.0-unstable.22.umd.min.kvm-cloud-native.js.gz
-          - key: kvm-manager-0.8.0-unstable.22.umd.min.kvm-vm-console.js.gz
-            path: kvm-manager/0.8.0-unstable.22/plugin/kvm-manager-0.8.0-unstable.22.umd.min.kvm-vm-console.js.gz
-          - key: asset-0.8.0-unstable.22-kvm.f932afc0.svg
-            path: kvm-manager/0.8.0-unstable.22/plugin/img/kvm.f932afc0.svg
+          - key: files-0.8.0-unstable.74.txt
+            path: kvm-manager/0.8.0-unstable.74/files.txt
+          - key: package-root-0.8.0-unstable.74.json
+            path: kvm-manager/0.8.0-unstable.74/package.json
+          - key: package-0.8.0-unstable.74.json
+            path: kvm-manager/0.8.0-unstable.74/plugin/package.json
+          - key: kvm-manager-0.8.0-unstable.74.umd.min.148.js.gz
+            path: kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.148.js.gz
+          - key: kvm-manager-0.8.0-unstable.74.umd.min.150.js.gz
+            path: kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.150.js.gz
+          - key: kvm-manager-0.8.0-unstable.74.umd.min.208.js.gz
+            path: kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.208.js.gz
+          - key: kvm-manager-0.8.0-unstable.74.umd.min.303.js.gz
+            path: kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.303.js.gz
+          - key: kvm-manager-0.8.0-unstable.74.umd.min.37.js.gz
+            path: kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.37.js.gz
+          - key: kvm-manager-0.8.0-unstable.74.umd.min.619.js.gz
+            path: kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.619.js.gz
+          - key: kvm-manager-0.8.0-unstable.74.umd.min.970.js.gz
+            path: kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.970.js.gz
+          - key: kvm-manager-0.8.0-unstable.74.umd.min.js.gz
+            path: kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.js.gz
+          - key: kvm-manager-0.8.0-unstable.74.umd.min.kvm-cloud-native.js.gz
+            path: kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.kvm-cloud-native.js.gz
+          - key: kvm-manager-0.8.0-unstable.74.umd.min.kvm-clusters.js.gz
+            path: kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.kvm-clusters.js.gz
+          - key: kvm-manager-0.8.0-unstable.74.umd.min.kvm-deploy.js.gz
+            path: kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.kvm-deploy.js.gz
+          - key: kvm-manager-0.8.0-unstable.74.umd.min.kvm-hosts.js.gz
+            path: kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.kvm-hosts.js.gz
+          - key: kvm-manager-0.8.0-unstable.74.umd.min.kvm-vm-console.js.gz
+            path: kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.kvm-vm-console.js.gz
+          - key: kvm-manager-0.8.0-unstable.74.umd.min.kvm-vm-graphics-console.js.gz
+            path: kvm-manager/0.8.0-unstable.74/plugin/kvm-manager-0.8.0-unstable.74.umd.min.kvm-vm-graphics-console.js.gz
+          - key: asset-0.8.0-unstable.74-kvm.f932afc0.svg
+            path: kvm-manager/0.8.0-unstable.74/plugin/img/kvm.f932afc0.svg
           - key: catalog-index.yaml
             path: catalog/index.yaml
       - name: tmp
@@ -121,16 +136,18 @@ metadata:
 spec:
   plugin:
     name: kvm-manager
-    version: 0.8.0-unstable.22
-    endpoint: https://rancher.example.com/kvm-manager/0.8.0-unstable.22
-    noCache: true
+    version: 0.8.0-unstable.74
+    endpoint: https://rancher.example.com/kvm-manager/0.8.0-unstable.74
+    noCache: false
     noAuth: false
     metadata:
       catalog.cattle.io/rancher-version: '>=2.15.0'
       catalog.cattle.io/ui-extensions-version: '>=3.0.0 <4.0.0'
       catalog.cattle.io/display-name: KVM
+      icon: https://rancher.example.com/kvm-manager/0.8.0-unstable.74/plugin/img/kvm.f932afc0.svg
       catalog.cattle.io/ui-component: plugins
       catalog.cattle.io/namespace: cattle-ui-plugin-system
+      catalog.cattle.io/ui-icon: https://rancher.example.com/kvm-manager/0.8.0-unstable.74/plugin/img/kvm.f932afc0.svg
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress

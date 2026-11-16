@@ -107,15 +107,63 @@ kvmManager:
     probing: Testando conexão...
     compatibilityOk: "Base compatível detectada: {os}; libvirt {libvirt} disponível."
     compatibilityWarning: "A compatibilidade não foi confirmada para {os} com libvirt {libvirt}. Consulte a matriz suportada antes de importar."
-    compatibilityMatrix: "Alvos: SLES 15 SP3–SP7 ou SLES 16.0 com virsh/libvirt dos repositórios oficiais SUSE. Outros hosts exibem um aviso."
+    compatibilityMatrix: "Alvos: SLES 15 SP3–SP7 ou SLES 16.0–16.1 com virsh/libvirt dos repositórios oficiais SUSE. Outros hosts exibem um aviso."
     auditSearch: Buscar eventos recentes
     allHosts: Todos os hosts
     allResults: Todos os resultados
+    success: Sucesso
+    failure: Falha
+    sshHostVerification: Verificação do host SSH
     exportCsv: Exportar CSV
     detail: Detalhes
     moreActions: "Mais ações"
   cloudNative:
     actions: Ações
+    images: Biblioteca de imagens
+    imageLibraryEyebrow: CATÁLOGO DE IMAGENS DO HOST
+    imageLibraryHelp: Armazene e organize instaladores ISO e modelos QCOW2 independentes neste host KVM. Selecione uma imagem do catálogo ao criar uma VM.
+    imageLibrary: Biblioteca de imagens
+    imageCatalog: Catálogo de imagens
+    uploadImage: Enviar imagem
+    refreshImages: Atualizar imagens
+    loadingImages: Carregando imagens do host...
+    noImages: Nenhuma imagem nesta biblioteca
+    noImagesHelp: Envie um instalador ISO ou modelo QCOW2 independente para usá-lo em novas VMs.
+    imageUploadHelp: Envie diretamente para um pool de diretório do libvirt em execução. São aceitas imagens de até 8 GiB.
+    imageName: Nome de exibição
+    imageType: Tipo de arquivo
+    imageCategory: Categoria
+    imageCategoryOperatingSystem: Sistema operacional
+    imageCategoryUtility: Utilitário
+    imageCategoryTest: Imagem de teste
+    imageCategoryOther: Outro
+    imageCategory_operating-system: Sistema operacional
+    imageCategory_utility: Utilitário
+    imageCategory_test: Imagem de teste
+    imageCategory_other: Outro
+    imageOs: Sistema operacional
+    imageVersion: Versão
+    imageDescription: Descrição
+    imageFile: Arquivo de imagem
+    imageFileHelp: "ISO: 40 KiB–8 GiB. QCOW2: imagem independente de até 8 GiB, sem arquivo base. O envio é validado por checksum."
+    imageSize: Tamanho do arquivo
+    imageVirtualSize: "Disco virtual: {size}"
+    imageImported: Importada em
+    deleteImage: Excluir imagem
+    reviewDeleteImage: Excluir “{name}” da biblioteca deste host?
+    imageDeleteWarning: "Um modelo QCOW2 ou ISO conectado a uma VM não pode ser excluído. A exclusão não remove VMs criadas a partir do modelo."
+    imageInvalidFile: Selecione um arquivo .iso ou .qcow2 correspondente de até 8 GiB.
+    imageUploading: Enviando e validando imagem ({percent}%)...
+    operationPhase_provisioning: Criando um disco virtual independente a partir do modelo selecionado...
+    isoImages: Instaladores ISO
+    qcow2Images: Modelos QCOW2
+    imageLibrarySafety: "As imagens originais são preservadas. Cada VM recebe uma cópia independente do modelo QCOW2."
+    bootFromImageLibrary: Usar biblioteca de imagens
+    selectLibraryImage: Item da biblioteca
+    selectImage: Selecione uma imagem
+    noImagesForVm: Não há imagens disponíveis neste host.
+    openImageLibrary: Abrir biblioteca de imagens
+    vmImageCopyHelp: "ISOs são conectadas como mídia de instalação. Imagens QCOW2 são copiadas para um novo disco da VM; o original do catálogo permanece intacto."
     consoleRequiresRunning: Inicie a máquina virtual para abrir o terminal.
     readOnly: Somente leitura
     updateData: Atualizar dados
@@ -619,9 +667,28 @@ kvmManager:
     runningCommand: Executando...
     terminalWarning: Os comandos são executados como o usuário SSH importado. O uso do terminal é auditado, mas o texto dos comandos não é armazenado.
     vmConsole: Terminal da máquina virtual
+    graphicsConsole: Console gráfico
+    graphicsConsoleWarning: Desktop VNC interativo encaminhado pela conexão SSH verificada deste host. A tela e os comandos de teclado ou mouse não são armazenados.
+    graphicsVncUnavailable: Esta VM não tem um dispositivo gráfico VNC compatível. Configure VNC no libvirt; telas SPICE não são compatíveis com este console.
+    graphicsOtherProtocolUnsupported: Esta VM usa outro protocolo gráfico. O console do navegador oferece somente VNC; a configuração gráfica existente foi mantida.
+    enableGraphics: Habilitar gráfico VNC
+    graphicsVncEnabled: O gráfico VNC restrito ao loopback foi adicionado. Inicie a VM para abrir o console gráfico.
+    graphicsEnableRequiresStopped: Desligue a VM antes de adicionar o dispositivo gráfico VNC. A alteração atualiza a definição persistente e entra em vigor na próxima inicialização.
+    graphicsPassword: Senha VNC
+    graphicsAuthenticate: Conectar
+    graphicsPasswordRequired: Esta tela VNC exige uma senha própria. Ela é enviada somente pelo túnel criptografado do console e não é salva.
+    graphicsAuthenticationFailed: A autenticação VNC falhou. Verifique a senha VNC da VM e reconecte.
+    graphicsConnectionError: Não foi possível conectar ao console gráfico. Verifique se a VM está em execução e se o VNC escuta no loopback; o encaminhamento TCP por SSH precisa estar disponível no host.
+    graphics_connecting: Conectando
+    graphics_connected: Conectado
+    graphics_disconnected: Desconectado
+    graphics_error: Erro
+    collapseGraphics: Reduzir console
+    expandGraphics: Expandir console
     hostTerminal: Terminal do host KVM
     sshTerminal: sessão SSH
     hostTerminalWarning: Os comandos são executados neste host como o usuário SSH importado. Use sudo somente se a conta tiver autorização. O texto digitado não é armazenado.
+    hostTerminalCommandStaged: O comando do cluster está preparado, mas não foi executado. Revise-o e pressione Enter para executar, ou edite-o antes.
     hostTerminalStarting: Conectando ao host KVM por SSH...
     hostTerminalConnectionError: Não foi possível conectar ao terminal SSH do host KVM.
     serialConsole: console serial
@@ -687,6 +754,31 @@ kvmManager:
     firstVmAction: Criar a primeira VM
     storagePools: "Pools de armazenamento do libvirt"
     noPool: "Nenhum pool de armazenamento do libvirt encontrado."
+    prepareStorage: Preparar armazenamento para VMs
+    storageSetupEyebrow: CONFIGURAÇÃO INICIAL OPCIONAL
+    storageSetupHelp: Revise os pools de diretório existentes ou prepare locais separados para discos de VMs e imagens ISO. A importação do host continua somente de leitura; esta ação altera o armazenamento apenas depois da revisão e aplicação do plano.
+    vmStorageRole: Discos de VMs
+    vmStorageRoleHelp: Escolha um pool de diretório existente ou crie um dedicado para os discos virtuais.
+    isoStorageRole: Imagens ISO
+    isoStorageRoleHelp: Escolha um pool de diretório existente ou crie um local separado para imagens de instalação.
+    storageSetupChoice: Opção de armazenamento
+    storageSetupCreateNew: Criar novo pool de diretório
+    storageSetupUseExisting: Usar pool de diretório existente
+    storageSetupExistingPool: Pool de diretório existente
+    storageSetupSafety: Esta etapa inclui apenas pools de diretório. A revisão mostra diretórios a criar, pools a definir e iniciar e alterações de inicialização automática. Arquivos existentes não serão movidos.
+    storageSetupReview: Revise as alterações planejadas
+    storageSetupFreeSpace: "Espaço livre agora: {free} em {mount}"
+    storageSetupCreateDirectory: Criar este diretório se ele ainda não existir
+    storageSetupDefinePool: Definir um pool de diretório no libvirt
+    storageSetupStartPool: Iniciar este pool
+    storageSetupEnableAutostart: Ativar inicialização automática do pool
+    storageSetupNoChange: Nenhuma alteração no host é necessária para este pool
+    storageSetupCapacityNote: Um pool de diretório não reserva espaço nem define uma cota. O espaço livre pode mudar depois desta verificação; escolha um sistema de arquivos com capacidade suficiente para os discos das VMs e arquivos ISO.
+    storageSetupPreviewButton: Verificar e revisar
+    storageSetupChecking: Verificando armazenamento do host...
+    storageSetupApply: Aplicar plano de armazenamento
+    storageSetupApplying: Preparando armazenamento...
+    storageSetupFailed: A preparação do armazenamento não foi concluída. Revise o estado do host e tente novamente.
     storageVolumes: Volumes de armazenamento
     storageVolumesHelp: Crie e remova volumes libvirt em pools de diretório ativos. Volumes conectados a uma VM não podem ser removidos.
     createVolume: Criar volume
@@ -819,6 +911,7 @@ kvmManager:
     mtu: "MTU"
   clusters:
     title: Clusters
+    eyebrow: Alta disponibilidade do SUSE Linux Enterprise
     subtitle: Verifique a prontidão do SLE HA nos hosts KVM e prepare a administração dos clusters.
     section_clusters: "Clusters"
     managedKvmClusters: Grupos de virtualização KVM
@@ -829,6 +922,38 @@ kvmManager:
     readinessVerify: Verifique serviços, quorum e fencing
     inventoryTitle: Clusters existentes
     inventoryDescription: Esta área lista somente clusters cuja identidade e associação de nós foram confirmadas pela pilha SUSE HA.
+    managedHaClustersTitle: Clusters SUSE HA gerenciados
+    managedHaClustersHelp: Os registros salvos permanecem aqui quando um host fica temporariamente indisponível. A associação e o estado continuam vindo de uma consulta ativa à pilha SUSE HA.
+    managedHaClusterMembers: "Membros informados: {members}"
+    managedHaClusterChecked: "Última verificação: {date}"
+    managedHaClusterSaved: Registro de cluster salvo
+    managedHaClusterLive: Estado ao vivo disponível
+    managedHaClusterUnavailableShort: Último registro conhecido
+    managedHaClusterUnavailable: Nenhum membro registrado está informando este cluster agora. Recupere um host e atualize a página.
+    syncHaClusterMembership: Sincronizar membros atuais
+    registerHaCluster: Adicionar aos clusters gerenciados
+    registeringHaCluster: Verificando e salvando…
+    planning: Planejamento
+    savedPlansTitle: Planos de cluster salvos
+    savedPlansHelp: Os planos são rascunhos privados. Salvar não configura hosts nem cria um cluster.
+    noSavedPlans: Ainda não há planos salvos. Inicie um plano e salve para continuar depois.
+    plansLoading: Carregando planos salvos...
+    plansError: Não foi possível carregar ou salvar o plano de cluster
+    newPlan: Novo plano
+    savePlan: Salvar rascunho
+    savingPlan: Salvando...
+    draftSaved: Rascunho salvo
+    draftState: Rascunho
+    unnamedPlan: Plano de cluster sem título
+    savedPlanType_suse-ha: Cluster SUSE HA
+    savedPlanType_kvm-virtualization: Grupo de virtualização KVM
+    kvmGroupPlanTitle: Este é um plano de grupo de virtualização KVM
+    kvmGroupPlanHelp: Grupos de hosts KVM são gerenciados separadamente dos clusters SUSE HA. O preflight de HA e o bootstrap do crm cluster não se aplicam a este plano.
+    preflightRequiredOnResume: As verificações de prontidão serão refeitas ao retomar
+    resumePlan: Retomar
+    deletePlan: Excluir rascunho
+    deletingPlan: Excluindo...
+    planNotFound: Este plano não está mais disponível. Atualize a página e tente novamente.
     haToolsPanelTitle: Ferramentas HA dos hosts
     haToolsPanelHelp: Instale o padrão SUSE HA nos hosts elegíveis de uma só vez. Até três hosts são processados em paralelo, com um resultado separado para cada host.
     viewHostReadiness: Prontidão detalhada
@@ -842,6 +967,8 @@ kvmManager:
     refresh: Atualizar estado do HA
     refreshing: Atualizando...
     loading: Verificando o estado do HA nos hosts registrados...
+    loadingReadinessProgressive: Carregando a prontidão dos hosts em segundo plano. Os planos e clusters salvos ficam disponíveis enquanto a verificação SSH dos hosts KVM é executada.
+    readinessRefreshFailed: Não foi possível atualizar a prontidão atual dos hosts KVM.
     loadError: Não foi possível verificar a prontidão do HA
     registeredHosts: Hosts registrados
     haEnabledHosts: Hosts com SLE HA
@@ -895,7 +1022,7 @@ kvmManager:
     templateResolveHelp_subscription: Abra as subscrições do host para ativar o SLE HA.
     templateResolveHelp_ha_stack: Instale o padrão SUSE HA e os agentes de recursos nos hosts afetados.
     templateResolveHelp_time_sync: Habilite o chronyd se uma fonte NTP confiável estiver configurada nos hosts afetados.
-    templateResolveHelp_workload_package: Instale o pacote necessário e habilite/inicie o serviço nos hosts afetados. A configuração do workload e do recurso Pacemaker permanece separada.
+    templateResolveHelp_workload_package: Instale o pacote e a unidade de serviço nos hosts afetados. Esta ação não habilita nem inicia o workload; o Pacemaker deve controlar o estado de execução.
     templateFixesTitle: Correções rápidas
     templateFixesHelp: Cada item corrige apenas o requisito indicado; confira o resultado e execute a verificação novamente.
     templateFixesNeedCheck: Verifique os hosts para encontrar as correções disponíveis
@@ -914,17 +1041,209 @@ kvmManager:
     templateResolveHelp_host_connectivity: Abra Hosts para conferir a conexão e as configurações de importação do host; depois execute a verificação novamente.
     templateManualChecks: Verifique antes de usar este perfil
     templatesSafety: O resultado candidato indica que os pré-requisitos SUSE HA detectados são compatíveis. Não confirma prontidão para produção e não configura nem instala o workload.
+    templatePrepareResource: Preparar primeiro recurso
+    templateResourceDraftTitle: "Rascunho de recurso · {template}"
+    templateResourceDraftHelp_service: O fluxo guiado de serviço/VIP verifica uma unidade systemd existente em todos os nós e cria um grupo de recursos parado.
+    templateResourceDraftHelp_vm: Configure uma VM existente usando os parâmetros mostrados pelo agente VirtualDomain. Confirme que os discos são acessíveis pelos nós; o recurso será criado parado e só mudará após a revisão e confirmação.
+    vmResourceInspectorTitle: Dados da VM existente
+    vmResourceInspectorHelp: Inventário somente leitura do host selecionado no cluster. Os dados ajudam a identificar a VM e suas origens de disco e rede; não comprovam que outro nó consegue acessá-las.
+    vmResourceInspectorRefresh: Atualizar VMs
+    vmResourceInspectorLoading: Carregando dados da VM…
+    vmResourceSelect: Máquina virtual existente
+    vmResourceSelectPlaceholder: Selecione uma VM para inspecionar
+    vmResourceState: Estado de energia
+    vmResourcePersistence: Definição persistente
+    vmResourceCpu: vCPUs configuradas
+    vmResourceMemory: Memória configurada
+    vmResourceDisks: Origens dos discos
+    vmResourceNetworks: Origens de rede
+    vmResourceNoFacts: Nenhum detalhe foi informado.
+    vmResourceManualCheckTitle: Ainda é necessário verificar todos os nós
+    vmResourceManualCheckHelp: A SUSE exige que a VM esteja desligada antes de ser adicionada, que o XML de configuração esteja em armazenamento compartilhado e que o XML não contenha caminhos locais não compartilhados. Esta verificação somente leitura testa autenticação SSH do root para os nomes dos outros nós usando as chaves conhecidas existentes e verifica permissões Unix dos discos com o UID/GID QEMU explicitamente configurado, quando disponível. Ela não simula SELinux/AppArmor ou o confinamento do serviço, não comprova armazenamento compartilhado nem valida toda a URI remota do libvirt.
+    vmResourceClusterNodes: Nós do cluster inspecionados
+    vmResourceAllMapped: todos os hosts mapeados
+    vmResourceMappingIncomplete: mapeamento incompleto
+    vmResourceAgentAllPresent: instalado em todos os nós
+    vmResourceAgentNeedsReview: ausente ou desconhecido em algum nó
+    vmResourceDiskLayout: Layout dos discos registrados
+    vmResourceNetworkLayout: Layout de rede registrado
+    vmResourceConsistent: consistente nas definições informadas
+    vmResourceDifferent: diferente entre as definições
+    vmResourceNotComparable: definições insuficientes para comparar
+    vmResourceHostUnmapped: nenhum registro de host exclusivo
+    vmResourceMapping: Mapeamento do host
+    vmResourceMappingMapped: mapeado
+    vmResourceMappingAmbiguous: ambíguo
+    vmResourceMappingMissing: ausente
+    vmResourceVm: Definição da VM
+    vmResourceVmPresent: presente
+    vmResourceVmNotDefined: não definida neste nó
+    vmResourceVmInspectionFailed: falha na inspeção
+    vmResourceNodeOffline: nó reportado offline; inspeção SSH ignorada
+    vmResourceVmNotChecked: não verificada
+    vmResourceAgentPresent: instalado
+    vmResourceAgentMissing: ausente
+    vmResourceAgentUnknown: desconhecido
+    vmResourceConfigPath: Caminho do XML de configuração compartilhado
+    vmResourceProbePaths: Verificar acesso ao cluster
+    vmResourceConfigPathHelp: O caminho XML é opcional. A verificação testa o SSH entre os nós e os discos de VM baseados em arquivo mesmo se este campo estiver vazio; quando informado, também lê o caminho XML e os metadados do mount. Nenhum arquivo é criado ou alterado.
+    vmResourceStorageCandidate: "Candidato: caminho e identidade do mount coincidem"
+    vmResourceStorageNotConsistent: O armazenamento compartilhado não foi estabelecido
+    vmResourceStorageCandidateHelp: Mounts coincidentes e caminhos existentes são apenas um candidato. Esta verificação não valida o clone Pacemaker DLM/GFS2 ativo, as restrições de ordem/colocação da VM, o fencing do armazenamento nem o suporte do sistema de arquivos na sua versão SUSE HA. Os resultados de SSH e acesso QEMU abaixo são verificações independentes e somente leitura.
+    vmResourceLockspaceGfs2Title: Comparação do lock-space com o mount GFS2 do Pacemaker
+    vmResourceLockspaceGfs2Help: Comparação somente leitura do caminho de lock-space do libvirt com o mount do recurso GFS2 configurado em cada nó. Identidades coincidentes são apenas um candidato e não comprovam a segurança do armazenamento compartilhado.
+    vmResourceLockspaceGfs2Candidate: Os dados do mount de lock-space coincidem em todos os nós online mapeados
+    vmResourceLockspaceGfs2Mismatch: Os dados do lock-space ou do mount GFS2 divergem ou não correspondem
+    vmResourceLockspaceGfs2Unknown: Não foi possível confirmar a identidade do lock-space e do GFS2 em todos os nós mapeados
+    vmResourceLockspaceGfs2NodeCandidate: configurado sob o mount GFS2 correspondente
+    vmResourceLockspaceGfs2NodeMismatch: configuração ou identidade do mount não corresponde
+    vmResourceStorageChecked: caminho verificado
+    vmResourceStorageUnknown: não foi possível verificar o caminho
+    vmResourceDirectoryPresent: diretório pai existe
+    vmResourceDirectoryMissing: diretório pai ausente
+    vmResourceDiskVisibleAll: o caminho existe em todos os nós inspecionados
+    vmResourceDiskNotVisibleAll: o caminho não existe em todos os nós inspecionados
+    vmResourceDiskProbeLimit: "{count} origem(ns) de disco não foram verificadas por não serem caminhos absolutos baseados em arquivo ou por excederem o limite de 32 caminhos. Revise-as manualmente."
+    vmResourceQemuIdentity: "Identidade QEMU configurada: {user}:{group}"
+    vmResourceQemuIdentityUnknown: Verificação de permissão Unix ignorada (user/group não estão ambos explícitos no qemu.conf)
+    vmSecurityTitle: Isolamento de segurança do host
+    vmSecurityHelp: Somente informações de leitura. Configurações semelhantes não provam que a VM está corretamente isolada nem que o failover é seguro; revise a política efetiva e os rótulos do libvirt/QEMU em cada destino.
+    vmSecurityConsistency: Consistência das políticas de segurança dos hosts
+    vmSecurityConsistent: Coincidem entre os nós inspecionados
+    vmSecurityDifferent: Diferem entre os nós; revise antes do failover
+    vmSecurityUnknown: Desconhecido ou incompleto
+    vmSecuritySelinux: Modo SELinux
+    vmSecurityApparmor: AppArmor
+    vmSecurityDrivers: Drivers de segurança configurados no libvirt
+    vmSecurityProcessContext: Contexto atual do processo da VM
+    vmSecurityEnabled: habilitado
+    vmSecurityDisabled: desabilitado
+    vmSecurityDefault: padrão/não configurado explicitamente
+    vmResourceQemu_read_only: A identidade QEMU configurada tem permissão de leitura
+    vmResourceQemu_read_write: A identidade QEMU configurada tem permissões de leitura e escrita
+    vmResourceQemu_access_denied: A identidade QEMU configurada não tem as permissões Unix necessárias
+    vmResourceQemu_identity_unknown: Verificação de permissão Unix ignorada (identidade desconhecida)
+    vmResourceQemu_path_missing: Caminho do disco ausente
+    vmResourceQemu_not_applicable: Verificação de permissão de arquivo não aplicável
+    vmResourceQemu_access_unknown: Falha na verificação de permissão Unix
+    vmResourceSshPeer: "SSH do root para {peer}"
+    vmResourceSsh_authenticated: autenticado (chave do host conhecida)
+    vmResourceSsh_authentication_failed: falhou (verifique chave, conta ou chave do host)
+    vmResourceSsh_timeout: tempo esgotado
+    vmResourceSsh_invalid_peer_name: ignorado (nome do nó inválido)
+    vmResourceSsh_check_failed: falha na verificação
+    vmResourceLockProfile: "Configuração de lock do VirtualDomain para SUSE HA 15 SP7 (somente leitura)"
+    vmResourceLockProfileHelp: Este perfil é específico da versão. Ele lê as configurações do gerenciador de locks do libvirt e o estado da unidade virtlockd; não verifica o clone Pacemaker DLM/GFS2 nem suas restrições.
+    vmResourceLockManager: lock_manager do qemu.conf
+    vmLockTopologyTitle: Topologia de lock compartilhado do VirtualDomain (SLE HA 15 SP7)
+    vmLockTopologyHelp: Resumo somente leitura dos recursos e das restrições do Pacemaker usados no procedimento SUSE para virtualização.
+    vmLockTopologyUnavailable: Não foi possível inspecionar a configuração do Pacemaker
+    vmLockDlmResources: Recursos DLM
+    vmLockGfs2Resources: Recursos de sistema de arquivos GFS2
+    vmLockGroup: Grupo compartilhado DLM/GFS2
+    vmLockClone: Clone de locks compartilhados
+    vmLockspaceDirectory: Diretório de locks configurado
+    vmLockspaceOnGfs2: Caminho configurado está sob o diretório do recurso GFS2
+    vmLockspaceNotOnGfs2: Caminho configurado não está sob o diretório do recurso GFS2 identificado
+    vmLockTopologyDetected: Recursos de lock SUSE HA e restrições das VMs configurados
+    vmLockStackReadyNoVm: Grupo e clone de locks DLM/GFS2 configurados; ainda não há recursos de VM para validar
+    vmLockTopologyIncomplete: A topologia de lock necessária está incompleta ou não foi identificada
+    vmLockTopologyScope: O estado de runtime dos nós vem do crm_mon no host selecionado do cluster. Confirme que o clone está saudável em todos os nós online, que o armazenamento é realmente compartilhado, que o fencing está saudável e que o QEMU consegue acessar os dispositivos antes de administrar VMs.
+    vmLockRuntimeStatus: Estado de runtime do clone de lock
+    vmLockRuntimeAll: Ativo em todos os nós online
+    vmLockRuntimePartial: Não está ativo em todos os nós online
+    vmLockRuntimeUnknown: Estado de runtime indisponível
+    vmLockRuntimeNodes: "Todos os componentes de lock ativos: {active} · Online: {online}"
+    vmLockOrdered: Ordenada após o clone de lock
+    vmLockOrderMissing: Ordenação após o clone de lock não identificada
+    vmLockColocated: Colocada junto ao clone de lock
+    vmLockColocationMissing: Colocação com o clone de lock não identificada
+    vmLockNoVmResources: Ainda não há recursos VirtualDomain do Pacemaker configurados.
+    vmResourceLockdConfigured: lockd configurado
+    vmResourceLockManagerMismatch: lockd não está configurado
+    vmResourceLockspace: file_lockspace_dir do qemu-lockd.conf
+    vmResourceVirtlockd: serviço/socket virtlockd
+    vmResourceServiceActive: ativo
+    vmResourceServiceInactive: inativo
+    vmResourceMount: mount
+    vmResourceUnknown: desconhecido
+    vmResourceNotConfigured: não configurado
+    vmPrepareTitle: Preparar VM para failover SUSE HA
+    vmPrepareStoppedBadge: Recurso permanecerá parado
+    vmPrepareHelp: A extensão verificará novamente o cluster, exportará o XML inativo do libvirt para GFS2 compartilhado e criará o recurso VirtualDomain com ordenação e colocação junto ao lock DLM/GFS2. A VM não será iniciada.
+    vmPrepareResourceId: ID do recurso Pacemaker
+    vmPrepareConfirmations: Confirmações necessárias para continuar
+    vmPrepareConfirmSharedDisks: Verifiquei que todos os discos da VM estão em armazenamento compartilhado com o mesmo caminho e identificadores estáveis em todos os nós.
+    vmPrepareConfirmNetworks: Verifiquei redes equivalentes em todos os nós e mantive a bridge da VM separada das redes de Corosync e gerenciamento.
+    vmPrepareConfirmRemoteLibvirt: Verifiquei SSH sem senha e com chave de host validada para a conexão libvirt qemu+ssh entre os nós.
+    vmPrepareConfirmFencing: Testei o fencing configurado e confirmei que ele pode desligar com segurança cada nó do cluster.
+    vmPrepareConfirmSecurity: Revisei acesso do QEMU, políticas SELinux/AppArmor e confinamento de segurança do libvirt em todos os nós.
+    vmPrepareReviewButton: Revisar preparação da VM
+    vmPrepareReviewTitle: Revise a preparação VirtualDomain
+    vmPrepareReviewSummary: "Exportar XML inativo de ‘{vm}’ para {path} e criar o recurso parado ‘{id}’, ordenado e colocado junto ao clone de lock SUSE."
+    vmPrepareConfirm: Exportar XML e criar recurso parado
+    vmPrepareRunning: Preparando…
+    vmPrepareBlocked: Preparação bloqueada
+    vmPrepareBlockedList: "Resolva estas verificações, atualize o preflight e revise novamente: {blockers}"
+    vmPrepareSucceeded: Recurso de failover da VM preparado
+    vmPrepareResult: "O recurso {id} está parado; o XML foi exportado para {path}."
+    vmPrepareStoppedNote: Nenhuma inicialização, migração ou ativação do recurso foi solicitada. Revise o estado e só inicie explicitamente após as verificações operacionais.
+    vmPrepareOperationTitle: Operação de preparação VirtualDomain
+    vmPrepareOperationStatus: "Operação {id}: {status}. O andamento pode ser retomado após atualizar ou reabrir esta página."
+    vmPrepareOperationFailed: A operação terminou sem confirmar o recurso VirtualDomain parado. Confira a operação e o estado atual do cluster antes de tentar novamente.
+    refreshOperation: Atualizar operação
+    vmPrepareUseGuidedFlow: Use o preflight e a preparação guiada de VirtualDomain; a criação genérica não pode criar esse agente.
+    vmPrepareBlocker_all_cluster_members_must_be_online_and_mapped: Todos os membros precisam estar online e mapeados para exatamente um host KVM registrado.
+    vmPrepareBlocker_source_vm_not_found: A VM de origem não foi encontrada.
+    vmPrepareBlocker_vm_must_be_shut_off_on_source: Desligue a VM de origem normalmente e atualize o preflight.
+    vmPrepareBlocker_vm_must_be_persistent: A VM de origem precisa ser persistente no libvirt.
+    vmPrepareBlocker_vm_autostart_must_be_disabled: Desative o início automático da VM no libvirt.
+    vmPrepareBlocker_vm_uuid_not_verified: Não foi possível confirmar um UUID estável e válido da VM.
+    vmPrepareBlocker_vm_is_running_on_cluster_node: A VM consta como ativa em um nó do cluster.
+    vmPrepareBlocker_vm_definition_must_exist_only_on_source: A definição da VM deve existir somente no nó de origem.
+    vmPrepareBlocker_virtualdomain_agent_missing: O agente VirtualDomain não está instalado em todos os nós.
+    vmPrepareBlocker_xml_path_must_be_on_consistent_shared_storage: O caminho do XML não foi confirmado como armazenamento compartilhado consistente.
+    vmPrepareBlocker_xml_parent_must_be_empty_existing_gfs2_mount_on_all_nodes: A pasta do XML deve existir, estar livre no caminho escolhido e ser GFS2 gravável em todos os nós.
+    vmPrepareBlocker_suse_gfs2_lockspace_profile_not_consistent: As configurações de lock DLM/GFS2 da SUSE não coincidem entre os nós.
+    vmPrepareBlocker_all_file_backed_vm_disks_must_be_verified_shared: Todos os discos baseados em arquivo devem estar visíveis no mesmo armazenamento compartilhado em todos os nós.
+    vmPrepareBlocker_qemu_identity_must_have_required_disk_access: A identidade QEMU configurada não tem acesso verificado a um disco da VM.
+    vmPrepareBlocker_host_security_profile_must_be_consistent: Não foi possível confirmar perfis de segurança consistentes nos hosts.
+    vmPrepareBlocker_passwordless_known_host_ssh_must_work_between_nodes: SSH sem senha e com chaves de host verificadas deve funcionar entre todos os nós.
+    vmPrepareBlocker_all_cluster_nodes_must_be_online_and_clean: Todos os nós precisam estar online e íntegros.
+    vmPrepareBlocker_cluster_must_have_confirmed_quorum: Pacemaker/Corosync precisa reportar quorum disponível.
+    vmPrepareBlocker_cluster_fencing_must_be_configured: O fencing compatível precisa estar configurado e disponível.
+    vmPrepareBlocker_every_online_node_must_have_registered_stonith_coverage: A cobertura STONITH registrada deve incluir todos os nós online.
+    vmPrepareBlocker_active_suse_dlm_gfs2_lock_clone_required: O clone de lock SUSE DLM/GFS2 deve estar ativo em todos os nós online.
+    vmPrepareBlocker_operator_confirmation_required_shared_disks_confirmed: Confirme caminhos compartilhados dos discos e identificadores estáveis.
+    vmPrepareBlocker_operator_confirmation_required_networks_confirmed: Confirme redes equivalentes e separação de rede.
+    vmPrepareBlocker_operator_confirmation_required_remote_libvirt_confirmed: Confirme autenticação SSH para libvirt remoto.
+    vmPrepareBlocker_operator_confirmation_required_fencing_tested: Confirme que o fencing foi testado.
+    vmPrepareBlocker_operator_confirmation_required_security_reviewed: Confirme que as configurações de segurança dos hosts foram revisadas.
+    vmPrepareBlocker_operator_confirmation_required: Falta uma confirmação obrigatória do operador.
+    vmResourceManual_shared_virtualdomain_xml: Coloque o XML do VirtualDomain em um armazenamento compartilhado por todos os nós do cluster.
+    vmResourceManual_shared_disk_access: Confirme que cada origem de disco da VM é compartilhada e usa o mesmo caminho em todos os nós.
+    vmResourceManual_remote_libvirt_authentication: Verifique a autenticação SSH/libvirt sem senha entre os nós para qemu+ssh.
+    vmResourceManual_equivalent_networks: Confirme nomes equivalentes de bridges ou redes virtuais e conectividade em todos os nós.
+    vmResourceManual_shared_locking: No SLE HA 15 SP7, configure o clone GFS2/DLM documentado, defina lock_manager=lockd e file_lockspace_dir em todos os nós e ordene/coloque os recursos de VM depois do clone de lock. Verifique o desenho de armazenamento suportado em outras versões do SLE HA.
+    vmResourceManual_separate_vm_bridge: Confirme que a bridge da VM existe em todos os nós e é separada das redes de Corosync e gerenciamento.
+    vmResourceManual_stable_storage_ids: Use identificadores estáveis para dispositivos compartilhados e mantenha o armazenamento das VMs separado do dispositivo SBD.
+    vmResourceManual_fencing_ready: Confirme que o fencing do cluster está configurado e saudável antes de permitir failover de VMs.
+    vmResourceManual_security_confinement: Revise o enforcement de SELinux/AppArmor, os drivers de segurança do libvirt e o rótulo efetivo do processo QEMU em cada host possível da VM.
+    templateResourceDraftHelp_web: Este passo prepara somente o recurso Apache. Informe os parâmetros necessários e configure o IP virtual, os agrupamentos e as dependências em seguida.
+    templateResourceDraftHelp_nfs: Este passo prepara somente o recurso Filesystem. O perfil NFS também exige nfsserver, exportfs, IP virtual e regras de ordem/colocação; confira o desenho de armazenamento antes de criar cada recurso.
+    templateAgentUnavailable: "O agente sugerido {agent} não está instalado neste cluster. Escolha um agente disponível ou resolva o pré-requisito antes de continuar."
     template_fit_not_checked: Execute a verificação de compatibilidade
     template_fit_select_hosts: Selecione hosts
     template_fit_candidate: Candidato — revise as verificações manuais
     template_fit_not_compatible: Requisitos não atendidos
+    template_fit_review_required: Verifique o estado do serviço antes de continuar
     templateReqTwoNodes: Pelo menos dois hosts elegíveis selecionados
-    templateReqConnectivity: Verificação SSH concluída em todos os hosts selecionados
+    templateReqConnectivity: Cada nó consegue alcançar a porta SSH dos demais nós selecionados
     templateReqSuseHa: SLE HA ativo e ferramentas de cluster SUSE presentes em todos os hosts selecionados
     templateReqCompatibility: Versão SLES compatível, arquitetura e versão iguais entre os hosts
     templateReqTools: crm e crm_mon disponíveis em todos os hosts selecionados
     templateReqTimeSync: Sincronização de horário ativa em todos os hosts selecionados
-    templateReqAgents: "Agentes de recursos SUSE necessários presentes em todos os hosts: {agents}"
+    templateReqAgents: "Agentes OCF SUSE necessários presentes em todos os hosts: {agents}"
     templateReqLibvirtStorage: "Pelo menos um pool de armazenamento libvirt detectado em cada host (mínimo encontrado: {count})"
     templateReqFencing: Confirme o fencing suportado para o workload e a topologia
     noneDetected: nenhum detectado
@@ -932,14 +1251,15 @@ kvmManager:
     templateVmCapacity: "Menor capacidade reportada entre os hosts selecionados: {cpu} núcleos de vCPU e {memory} GiB de RAM por nó. É a capacidade total do host, não a capacidade livre."
     templateVmCapacityUnknown: Inventário de CPU ou memória dos hosts não disponível nesta seleção.
     templateNextStep: "Próxima ação sugerida:"
-    templateNextCheckConnectivity: Restabeleça o SSH e execute a verificação novamente.
+    templateNextCheckConnectivity: Restabeleça o acesso SSH e adicione em /etc/hosts de cada nó os mapeamentos estáveis de FQDN e nome curto dos pares; depois execute a verificação novamente.
     templateNextCheckSles: Confira a versão do SLES e a compatibilidade com a versão SUSE HA selecionada.
     templateNextActivateHa: Ative a extensão SLE HA neste host.
     templateNextInstallTools: Instale o padrão SUSE ha_sles usando os repositórios SUSE configurados.
     templateNextSyncTime: Restabeleça a sincronização NTP/chrony e execute a verificação novamente.
-    templateNextInstallAgents: Instale/ative o pacote SUSE HA que fornece o agente OCF ausente.
+    templateNextInstallAgents: Instale/ative o padrão SUSE HA ou o pacote SUSE que fornece o agente OCF ausente e execute a verificação dos hosts novamente.
     templateNextConfigurePool: Crie e valide um pool libvirt antes de considerar failover de VMs.
-    templateNextInstallService: Instale e configure {service} de forma consistente neste host.
+    templateNextInstallService: Instale o pacote e a unidade de serviço de {service} neste host; deixe o Pacemaker controlar sua execução.
+    templateNextVerifyService: Confirme se {service} está instalado neste host; a resposta atual da API não comprova isso.
     selected: Selecionado
     notSelected: Não selecionado
     templateStatusPending: Não verificado
@@ -961,38 +1281,104 @@ kvmManager:
     templateStatusTimeOk: Relógio do host sincronizado
     templateStatusTimeMissing: Sincronização de horário ausente ou desconhecida
     templateStatusAgentEvidence: "Agentes OCF necessários encontrados: {count}/{total}"
+    templateStatusPeerEvidence: "Caminhos SSH entre pares alcançáveis: {count}/{total}"
     templateStatusPoolEvidence: "Pools libvirt: {pools}"
-    templateStatusAppOk: "Serviço {service} ativo"
-    templateStatusAppMissing: "Serviço {service} ausente ou inativo"
+    templateStatusAppInstalled: "Unidade de {service} instalada (estado systemd: {state}); o Pacemaker controla sua execução"
+    templateStatusAppMissing: "Pacote ou unidade de serviço de {service} não instalado"
+    templateStatusAppUnknown: "A API não informou se {service} está instalado; atualize a API da extensão e execute o preflight novamente"
     templateStatusNoPreflight: Execute a verificação somente leitura para inspecionar este host
-    templateReqApache: Serviço Apache ativo em todos os hosts selecionados
-    templateReqNfsServer: Serviço NFS ativo em todos os hosts selecionados
+    templateReqApache: Pacote e unidade do Apache instalados em todos os hosts; o Pacemaker controla a execução
+    templateReqNfsServer: Pacote e unidade do NFS instalados em todos os hosts; o Pacemaker controla a execução
     templateReqWebConfig: Confirme que configuração e conteúdo da aplicação são consistentes entre os nós de failover
-    template_service_resources: "Crie o agente de recurso suportado pela SUSE escolhido; opcionalmente adicione ocf:heartbeat:IPaddr2 para um endereço flutuante."
-    template_service_ordering: "Agrupe o endereço virtual e o serviço quando apropriado; defina ordem e colocation conforme o comportamento documentado do agente."
-    template_service_dependencies: "Escolha agente e parâmetros exatos nos metadados do OCF SUSE instalado; instalar aplicações não faz parte deste perfil."
+    template_service_resources: "Crie um recurso IPaddr2 para o IP virtual e um alias de serviço para uma unidade systemd existente, dentro de um grupo Pacemaker."
+    template_service_ordering: "O grupo inicia o VIP antes do serviço e os interrompe na ordem inversa; confirme se a aplicação pode vincular-se a esse endereço."
+    template_service_dependencies: "A mesma unidade de serviço inativa precisa estar instalada em todos os nós. Instalação e replicação da configuração da aplicação e alterações de rede ficam fora deste perfil."
     template_vm_resources: "Crie um recurso ocf:heartbeat:VirtualDomain para cada máquina virtual existente escolhida."
     template_vm_ordering: "Defina inicialização, colocation e recuperação somente após confirmar acesso seguro aos discos da VM por todos os nós-alvo."
     template_vm_dependencies: "A identidade do recurso e a visibilidade do armazenamento precisam ser consistentes; um pool libvirt listado não comprova armazenamento compartilhado."
-    template_web_resources: "Crie recursos ocf:heartbeat:apache e ocf:heartbeat:IPaddr2 para o serviço web e o endereço usado pelos clientes."
-    template_web_ordering: "Agrupe os recursos após revisar a ordem de failover pretendida para o endereço e o serviço."
+    template_web_resources: "Crie os recursos SUSE Apache e IPaddr em um grupo Pacemaker, seguindo o template crmsh documentado."
+    template_web_ordering: "O grupo inicia o Apache antes do IP virtual e os interrompe na ordem inversa, conforme o template Apache da SUSE. Revise se a configuração do Apache inicia antes de o endereço ser atribuído."
     template_web_dependencies: "Configuração Apache, certificados, conteúdo e dependências precisam ser consistentes em todos os nós."
-    template_nfs_resources: "A sequência documentada pela SUSE usa recursos Filesystem, nfsserver, exportfs e IPaddr2."
-    template_nfs_ordering: "Filesystem → nfsserver → exportfs → IP virtual, conforme o desenho de armazenamento e as orientações SUSE."
-    template_nfs_dependencies: "Valide propriedade do armazenamento, identidade das exportações, acesso dos clientes, fencing e recuperação NFS documentada pela SUSE antes de aplicar."
+    template_nfs_storage_drbd: "Antes de configurar o Pacemaker, prepare dois dispositivos com DRBD para /var/lib/nfs e os dados exportados. Configure o DRBD em todos os nós e valide a sincronização; este perfil não cria nem formata discos."
+    template_nfs_storage_shared: "Antes de configurar o Pacemaker, confirme que os dois dispositivos compartilhados têm identidades estáveis e estão visíveis em todos os nós, protegidos por fencing suportado."
+    template_nfs_resources: "Use dois recursos Filesystem (estado dos clientes e dados exportados), seguidos por nfsserver, exportfs e um IPaddr2 voltado aos clientes."
+    template_nfs_ordering_drbd: "Clone promotable do DRBD → grupo NFS; colocalize o grupo com a função Promoted. Dentro do grupo: filesystems → nfsserver → exportfs → IP virtual."
+    template_nfs_ordering_shared: "Mantenha os dois filesystems, nfsserver, exportfs e IP virtual no mesmo nó ativo; inicie nessa ordem e valide a propriedade exclusiva do armazenamento."
+    template_nfs_dependencies: "Confirme recuperação do estado dos clientes NFS, clientes/opções da exportação, comportamento de lease e fencing. Revise o procedimento SUSE de armazenamento escolhido antes de aplicar os recursos."
     templateReqNetwork: Confirme endereços estáticos, links Corosync redundantes, acesso de firewall e sincronização de horário
     templateReqVmStorage: Confirme que os discos das VMs estão em armazenamento acessível por todos os nós elegíveis e valide fencing e recuperação
     templateReqApplication: Confirme que a aplicação e seu agente de recursos SUSE suportado estão instalados e configurados
-    templateReqNfsStorage: Confirme armazenamento compartilhado ou replicado, propriedade do filesystem e requisitos de recuperação das exportações
+    templateNfsStorageMode: Desenho do armazenamento NFS
+    templateNfsStorageDrbd: Replicação DRBD do SUSE HA
+    templateNfsStorageShared: Armazenamento externo compartilhado em bloco
+    templateNfsStorageModeHelp_drbd: Requer o agente DRBD SUSE em todos os nós e dois dispositivos replicados preparados para estado dos clientes e dados exportados.
+    templateNfsStorageModeHelp_shared: Requer dois dispositivos de bloco compartilhados e visíveis de forma consistente em todos os nós elegíveis, com fencing e propriedade exclusiva do filesystem validados.
+    nfsConfigureService: Configurar serviço NFS
+    nfsWizardEyebrow: Workload SUSE HA
+    nfsWizardTitle: Configurar serviço NFS de alta disponibilidade
+    nfsWizardHelp: A extensão valida todos os nós do cluster e aplica os recursos Pacemaker do NFS em uma única configuração parada.
+    nfsWizardSafetyTitle: O armazenamento precisa estar preparado
+    nfsWizardSafetyHelp: Este fluxo nunca particiona, formata, inicializa ou monta discos, e nunca inicia recursos. Exige filesystems existentes e diretórios de montagem em todos os nós. Reserve o IP virtual antes de continuar.
+    nfsResourcePrefix: Prefixo dos IDs de recursos
+    nfsDrbdResource: Recurso DRBD existente
+    nfsStateDevice: Dispositivo do estado dos clientes NFS
+    nfsDataDevice: Dispositivo dos dados exportados
+    nfsExportDirectory: Diretório exportado
+    nfsFilesystem: Tipo do filesystem existente
+    nfsClientspec: Rede dos clientes NFS (CIDR)
+    nfsVirtualIp: IP virtual NFS reservado
+    nfsCidrNetmask: Prefixo do IP virtual
+    nfsSharedStorageConfirm: Verifiquei que são dois dispositivos de bloco diferentes, pré-formatados e compartilhados, referentes ao mesmo armazenamento em todos os nós do cluster.
+    nfsWizardPrerequisitesTitle: Verificações do cluster em execução
+    nfsWizardPrerequisitesHelp: A API verifica novamente quorum, fencing, associação dos hosts, agentes SUSE e serviços NFS instalados, serviço independente em execução, dispositivos de bloco, assinaturas de filesystem, pontos de montagem, sincronização DRBD e se esse IP já está atribuído.
+    nfsWizardQuorum: "Quorum: {state}"
+    nfsWizardFencing: "Fencing: {state}"
+    nfsWizardAgentsChecked: Agentes necessários verificados em todos os nós ao aplicar
+    nfsReviewTitle: Revisar configuração NFS
+    nfsReviewSummary: "Armazenamento: {mode}; prefixo: {prefix}; estado: {state}; dados: {data}; exportação: {directory}; clientes: {clients}; VIP: {vip}."
+    nfsReviewSafety: Os recursos do serviço e suas dependências serão criados no estado Parado. Nenhum armazenamento será inicializado e nenhum workload será iniciado.
+    nfsCreateStopped: Criar configuração parada
+    nfsCreating: Validando nós e criando configuração…
+    nfsCreatedTitle: Perfil Pacemaker NFS criado
+    templateReqNfsStorage_drbd: "Valide dois dispositivos DRBD preparados entre os nós: um para o estado de clientes NFS (/var/lib/nfs) e outro para exportações. Pools libvirt locais não são compartilhados."
+    templateReqNfsStorage_shared: "Valide dois dispositivos externos compartilhados para o estado dos clientes NFS (/var/lib/nfs) e exportações; confirme identidade persistente e fencing."
+    templateReqNfsStorageSafety: A extensão não particiona nem formata discos; prepare e revise o armazenamento antes de criar recursos do Pacemaker.
     template_service_category: Uso geral
     template_service_title: Serviço existente com IP virtual
-    template_service_description: Um ponto de partida guiado para um serviço já instalado nos hosts, gerenciado pelo Pacemaker com endereço flutuante opcional.
+    template_service_description: Um fluxo guiado para um serviço já instalado em todos os nós, gerenciado pelo Pacemaker por trás de um IP virtual.
+    serviceVipConfigure: Configurar serviço e VIP
+    serviceVipEyebrow: Workload SUSE HA
+    serviceVipTitle: Configurar serviço existente com IP virtual
+    serviceVipHelp: Escolha uma unidade de serviço instalada e um VIP reservado para clientes. A extensão verifica todos os nós registrados antes de criar o grupo Pacemaker.
+    serviceVipSafetyTitle: Somente serviço e rede existentes
+    serviceVipSafetyHelp: Este fluxo não instala nem configura a aplicação, não altera a rede e não inicia serviços. Ele recusa unidades ativas fora do cluster e cria o grupo Pacemaker parado para revisão.
+    serviceVipUnit: Unidade de serviço existente
+    serviceVipNetworkConfirm: Confirmei que este VIP está reservado, livre e disponível na mesma rede de clientes em todos os nós do cluster.
+    serviceVipPrerequisitesHelp: Use a mesma configuração da aplicação e a mesma unidade em todos os nós. Confirme que a aplicação aceita o VIP e não depende de estado local que seria perdido no failover.
+    serviceVipAllNodesCheck: Unidade, alias de serviço Pacemaker, agente IP, rota e VIP verificados em cada nó registrado ao aplicar
+    serviceVipReviewTitle: Revisar configuração de failover do serviço
+    serviceVipReviewSummary: "Prefixo: {prefix}; unidade: {unit}; VIP: {vip}."
+    serviceVipReviewSafety: O grupo Pacemaker será criado no estado Parado. A ordem será VIP primeiro e depois a aplicação. Nenhum serviço ou configuração de rede será alterado.
+    serviceVipCreateStopped: Criar configuração parada
+    serviceVipCreating: Verificando todos os nós e criando configuração…
+    serviceVipCreatedTitle: Perfil de failover do serviço criado
+    apacheConfigureService: Configurar perfil SUSE Apache
+    apacheWizardTitle: Configurar Apache com IP virtual
+    apacheWizardHelp: Use o template Apache e IPaddr documentado pela SUSE. O Apache inicia antes do VIP. A configuração existente do Apache precisa estar presente e válida em todos os membros.
+    apacheSafetyTitle: Perfil de recurso SUSE Apache
+    apacheSafetyHelp: Este fluxo não instala o Apache, altera sua configuração, habilita ou desabilita unidades systemd nem inicia o grupo Pacemaker. Ele valida o arquivo principal escolhido, verifica todos os membros e cria o grupo parado.
+    apacheConfigfile: Arquivo principal de configuração Apache existente
+    apacheStartOrderConfirm: Revisei que o Apache pode iniciar antes da atribuição do IP virtual, conforme a ordem do grupo Apache da SUSE.
+    apachePrerequisitesHelp: Instale o Apache e os agentes Apache/IPaddr da SUSE em todos os membros. Mantenha o arquivo principal de configuração idêntico; sincronize e revise separadamente arquivos incluídos, certificados, módulos, conteúdo e estado da aplicação. Garanta que o Apache inicia antes da atribuição do VIP.
+    apacheReviewTitle: Revisar perfil de failover SUSE Apache
+    apacheReviewSummary: "Prefixo: {prefix}; unidade: {unit}; arquivo principal: {configfile}; VIP: {vip}."
+    apacheReviewSafety: "O grupo será criado no estado Parado e na ordem SUSE: Apache primeiro, depois o IP virtual. O hash do arquivo principal será comparado em todos os membros; arquivos incluídos e conteúdo exigem revisão separada. Nenhuma configuração de serviço do host ou rede será alterada."
     template_vm_category: Virtualização
     template_vm_title: Failover de máquina virtual KVM
     template_vm_description: Perfil para gerenciar uma VM existente como recurso do Pacemaker quando o armazenamento e a recuperação permitem failover.
     template_web_category: Serviço de aplicação
     template_web_title: Serviço web com IP virtual
-    template_web_description: Perfil para serviço web sem estado, usando endereço flutuante e o agente de recursos suportado disponível no host.
+    template_web_description: Perfil guiado do template Apache crmsh da SUSE, usando endereço flutuante e os agentes Apache e IPaddr instalados da SUSE.
     template_nfs_category: Serviços de arquivos
     template_nfs_title: Serviço NFS de alta disponibilidade
     template_nfs_description: Perfil NFS coordenando recursos de armazenamento, filesystem, exportação, serviço e endereço virtual para clientes.
@@ -1068,8 +1454,80 @@ kvmManager:
     openNodes: Revisar estado dos hosts
     readyForPlanning: Disponível para planejamento
     twoNodeTitle: "Topologia com dois nós: planeje um voto de quorum independente"
+    quorumRecommendationTitle: "Recomendação de quorum da SUSE para {count} nós"
+    quorumRecommendationQdevice: A SUSE recomenda QDevice/QNetd para clusters com número par de nós, especialmente dois. Mantenha a testemunha QNetd fora do cluster e informe o endereço real abaixo.
+    quorumRecommendationStandard: O quorum por maioria dos votos dos nós é a escolha inicial para uma quantidade ímpar de nós. Revise os cenários de falha e configure um mecanismo de fencing compatível antes de usar em produção.
+    applyQuorumRecommendation: Aplicar recomendação de quorum
     twoNodeHelp: A SUSE recomenda QDevice com QNetd para clusters com número par de nós, especialmente com dois nós. Sem um voto independente, uma divisão de rede pode deixar ambos os lados sem maioria.
     qnetdPlacement: Mantenha o servidor QNetd fora do cluster e, se possível, em uma rede ou domínio de falha separado dos links Corosync.
+    qnetdHostLabel: Host ou endereço do QNetd
+    qnetdPlacementLabel: Posicionamento do witness
+    qnetdHostPlaceholder: qnetd.example.com ou endereço IP
+    qnetdHostHelp: Informe o servidor testemunha estável usado na configuração interativa do SUSE. Antes, prepare um servidor SLES separado e registrado, com a extensão SLE HA ativa e o pacote corosync-qnetd instalado. Cada nó selecionado será verificado apenas quanto ao acesso TCP na porta 5403; a extensão não confirma a identidade do servidor.
+    qnetdServerChecklistTitle: Prepare a testemunha externa antes de configurar o cluster
+    qnetdServerChecklistHelp: A SUSE exige um servidor SLES separado e registrado, com SLE HA e corosync-qnetd instalados. Use na testemunha a mesma conta Linux com sudo dos nós do cluster; confirme que ela existe e pode usar sudo. O prompt interativo SUSE pode solicitar a senha e configurar as chaves SSH.
+    qdevicePackagesTitle: 'Pacotes cliente do QDevice nos nós do cluster'
+    qdevicePackagesNeedPreflight: 'Execute um preflight atualizado para verificar corosync-qdevice em cada nó selecionado.'
+    qdevicePackagesMissing: 'corosync-qdevice está ausente em {hosts}.'
+    qdevicePackagesInstalled: 'corosync-qdevice está instalado em todos os nós selecionados.'
+    prepareQdevicePackages: 'Preparar pacotes ausentes nos nós'
+    qdevicePrepareReviewTitle: 'Revise a instalação dos pacotes QDevice'
+    qdevicePrepareReviewText: 'Instalar somente corosync-qdevice nestes nós selecionados: {hosts}.'
+    qdevicePrepareReviewWarning: 'A ação usa o registro SLE HA e os repositórios zypper existentes. Não altera subscrições, inicia serviços nem configura o quorum.'
+    confirmPrepareQdevice: 'Instalar corosync-qdevice'
+    qnetdRegisteredHost: 'Testemunha externa registrada: {host}'
+    qnetdPackageInstalled: 'corosync-qnetd está instalado.'
+    qnetdPackageMissing: 'corosync-qnetd não está instalado.'
+    qnetdHostHaRequired: 'Ative a extensão SLE HA neste host em Subscriptions antes de instalar o pacote QNetd.'
+    qnetdHostNotRegistered: 'O endpoint QNetd não corresponde a um host registrado único.'
+    qnetdHostNotRegisteredHelp: 'Cadastre abaixo este servidor SLES independente ou use um host KVM externo já importado. A conta da testemunha pode ser diferente da conta SSH dos nós do cluster.'
+    registerStandaloneQnetd: 'Cadastrar testemunha SLES independente'
+    registerStandaloneQnetdHelp: 'Isso cria um registro SSH exclusivo para a testemunha; não instala KVM nem Cockpit. Use um servidor SLES com SLE HA registrado e uma conta autorizada a usar sudo. A senha fica criptografada no banco da extensão. A chave SSH será verificada antes de salvar.'
+    qnetdWitnessName: 'Nome de exibição'
+    sshPort: 'Porta SSH'
+    sshUsername: 'Usuário SSH Linux'
+    sshPassword: 'Senha SSH Linux'
+    getQnetdFingerprint: 'Obter impressão digital SSH'
+    qnetdFingerprintBeforeCredentials: 'Confira a impressão digital SSH antes de a extensão enviar seu usuário ou senha a este servidor.'
+    verifyQnetdWitness: 'Verificar prontidão do SLES'
+    qnetdWitnessProbeComplete: 'SSH verificado: {host}'
+    sshHostFingerprint: 'Impressão digital da chave SSH'
+    confirmQnetdFingerprint: 'Verifiquei que esta impressão digital pertence ao meu servidor QNetd.'
+    saveQnetdWitness: 'Cadastrar testemunha'
+    qnetdStandaloneWitness: 'Testemunha SLES independente: {host}'
+    refreshQnetdWitness: 'Atualizar verificações da testemunha'
+    qnetdHaInactive: 'SLE HA não está ativo'
+    qnetdWitnessPackageState: 'Estado do pacote: {state}'
+    removeQnetdWitness: 'Remover testemunha'
+    removeQnetdWitnessReviewTitle: 'Remover este cadastro de testemunha?'
+    removeQnetdWitnessReviewText: 'Isso apaga a senha SSH e a chave salvas de {host}; não altera o servidor nem o cluster.'
+    qnetdWitnessSshAuthFailed: 'A autenticação SSH falhou. Verifique usuário e senha da testemunha.'
+    qnetdWitnessSshUnreachable: 'Não foi possível conectar à testemunha por SSH. Verifique o endereço e a porta SSH.'
+    qnetdWitnessSudoRequired: 'A conta da testemunha precisa executar a verificação de pré-requisitos com sudo.'
+    qnetdWitnessProbeFailed: 'Não foi possível verificar a testemunha independente. Confira SLES, SLE HA, SSH e sudo e tente novamente.'
+    prepareQnetdPackage: 'Preparar pacote QNetd'
+    qnetdPrepareReviewTitle: 'Revise a instalação do pacote na testemunha'
+    qnetdPrepareReviewText: 'Instalar somente corosync-qnetd em {host}.'
+    qnetdPrepareReviewWarning: 'A ação usa o registro SLE HA e os repositórios zypper existentes. Não altera subscrições, inicia ou habilita serviços, altera firewall nem configura o QDevice.'
+    qnetdPreparing: 'Preparando pacote...'
+    confirmPrepareQnetd: 'Instalar corosync-qnetd'
+    qnetdPrepareUnsupported: 'Esta testemunha registrada não é um host SLES suportado para o fluxo SUSE HA.'
+    qnetdPrepareTimeSync: 'Sincronize o relógio da testemunha antes de preparar o pacote QNetd.'
+    qnetdPrepareAddress: 'O endereço registrado da testemunha é atribuído dinamicamente. Use um endereço estático ou reservado antes da preparação do pacote.'
+    qnetdPrepareFailed: 'A preparação do pacote falhou. Verifique os repositórios SUSE do host, o acesso SSH e o sudo sem senha, depois tente novamente.'
+    qnetdPreparePlanChanged: 'O plano QDevice salvo ou a prontidão dos hosts mudou. Revise e salve o plano e execute o preflight novamente.'
+    qnetdEndpointPromptLabel: Informe este valor no prompt do QNetd
+    qnetdConnectivityTitle: Conectividade de rede do QNetd
+    qnetdConnectivityScope: Verifica somente se cada nó consegue abrir a porta TCP 5403. Não confirma a identidade ou configuração do QNetd nem a autenticação do QDevice.
+    qnetdReachable: TCP alcançável
+    qnetdUnreachable: TCP inacessível
+    qnetdBootstrapTimingTitle: A conectividade do QNetd é validada na etapa correta
+    qnetdBootstrapTimingHelp: A porta TCP/5403 pode ainda não estar escutando antes da inicialização do primeiro nó. O comando crm cluster init da SUSE configura o QDevice e inicia o QNetd; esta verificação é informativa nessa primeira etapa e precisa passar antes de adicionar os demais nós.
+    qnetdOutsideClusterConfirm: Confirmo que o QNetd ficará em um servidor fora dos nós selecionados.
+    qnetdMustBeExternal: O endereço QNetd não pode ser igual ao endereço ou nome de um dos nós selecionados.
+    qnetdExternalConfirmed: Externo aos nós selecionados (declarado pelo operador)
+    qnetdExternalUnconfirmed: Posicionamento externo ainda não confirmado
+    qnetdBootstrapReminder: Use o valor user@host mostrado quando solicitado; para acesso root, somente o host é exibido.
     evenNodeTitle: "Número par de nós: revise o comportamento do quorum"
     evenNodeHelp: A SUSE recomenda QDevice/QNetd para clusters com número par de nós. O plano final deve mostrar quais falhas cada partição consegue suportar.
     oddNodeTitle: Número ímpar de nós selecionado
@@ -1088,7 +1546,7 @@ kvmManager:
     practiceFencingHelp: Planeje um dispositivo de fencing suportado ou SBD/watchdog antes de depender do cluster para cargas de trabalho.
     practiceNetwork: Use links confiáveis para o cluster
     practiceNetworkHelp: Verifique endereços estáveis, sincronização de horário, latência e caminhos Corosync redundantes.
-    planSafety: A instalação do padrão ha_sles é iniciada somente após revisão e confirmação. A extensão ainda não automatiza o bootstrap interativo de crm cluster init/join.
+    planSafety: A extensão abre somente o comando crm cluster init/join revisado em um terminal restrito. A SUSE mantém interativas as perguntas de rede, quorum e fencing; o plano Corosync orienta o operador e não configura a rede do host.
     runPreflight: Executar pré-verificação somente leitura
     preflightRunning: Verificando os hosts selecionados...
     preflightReadOnly: Conecta aos hosts selecionados e consulta o estado do sistema; nenhuma alteração é feita.
@@ -1108,9 +1566,15 @@ kvmManager:
     reviewIncomplete: Conclua as decisões de configuração primeiro
     reviewIncompleteHelp: Informe um nome de cluster válido, escolha a estratégia de quorum e selecione um método de fencing para continuar.
     bootstrapRequirements: Volte à revisão, resolva os bloqueios das verificações automáticas, instale as ferramentas HA ausentes e escolha as opções de quorum e fencing.
+    bootstrapUserMismatchTitle: Use o mesmo usuário Linux em todos os nós
+    bootstrapUserMismatchHelp: O SUSE crmsh exige que o usuário sudo usado para inicializar o primeiro nó também exista nos nós adicionais. Atualize as credenciais SSH importadas para usar o mesmo usuário em todos os hosts e execute a pré-verificação novamente.
     bootstrapInteractiveTitle: A SUSE conclui a configuração do cluster de forma interativa
-    bootstrapInteractiveHelp: O plano registra o quorum como "{quorum}" e o fencing como "{fencing}". O crmsh ainda solicita a configuração final de rede, quorum e fencing; confirme essas escolhas no host antes de prosseguir.
+    bootstrapInteractiveHelp: O plano registra o quorum como "{quorum}" e o fencing como "{fencing}". O comando de entrada usa o usuário SSH e o endereço cadastrado do primeiro nó. O crmsh ainda solicita a configuração final de rede, quorum e fencing; confirme que esse endereço é alcançável entre os nós e revise as escolhas no host antes de prosseguir.
+    bootstrapFirewallHelp: O crm cluster init da SUSE abre durante o bootstrap as portas de firewall necessárias. A pré-verificação da extensão é somente leitura; confira as interfaces, os endereços escolhidos e as políticas de rede externas com seu administrador.
     preflightError: Não foi possível concluir a pré-verificação
+    preflightHostListRejected: A API do KVM esperava host_ids como lista, mas recebeu {received}. Atualize a página Clusters e selecione os hosts novamente. Se persistir, será necessário investigar a rota ou o processamento da requisição na API.
+    preflightHostListRejectedUnknown: A API do KVM rejeitou a lista de hosts antes de executar a pré-verificação. Atualize a página Clusters e selecione os hosts novamente. Se persistir, será necessário investigar a rota ou o processamento da requisição na API.
+    preflightApiVersion: (versão da API {version})
     preflightResults: Resultados por host
     checked: Verificado
     checkFailed: Falha na verificação
@@ -1124,12 +1588,57 @@ kvmManager:
     toolsCheckOk: Ferramentas principais de HA encontradas
     toolsCheckMissing: Falta uma ou mais ferramentas principais de HA
     networkCheckManual: "{count} interface(s) de rede ativa(s) encontrada(s); conectividade Corosync e endereços estáveis ainda precisam ser validados"
-    fencingCheckManual: "{count} dispositivo(s) watchdog encontrado(s); este teste não configura nem valida o fencing"
+    registeredAddressDynamic: O endereço cadastrado do host está marcado como dinâmico pelo kernel. A SUSE recomenda endereços estáticos; reserve este endereço antes de configurar o cluster.
+    registeredAddressNotMarkedDynamic: O endereço cadastrado está presente e não foi marcado como dinâmico pelo kernel. Confirme que ele está reservado estaticamente; esta verificação não comprova isso.
+    registeredAddressUnknown: Não foi possível associar o endereço cadastrado a uma interface ativa. Verifique o endereço estático primário e o nome do host antes da configuração.
+    sharedNetworkCandidatesTitle: Sub-redes candidatas para revisar no Corosync
+    sharedNetworkCandidatesHelp: Estas sub-redes IP foram encontradas em todos os hosts selecionados. Confira a interface indicada em cada nó ao escolher os links do cluster.
+    noSharedNetworkCandidates: Nenhuma sub-rede IP idêntica foi encontrada em todos os hosts. Links Corosync roteados ainda podem funcionar; revise rotas e endereços manualmente.
+    sharedNetworkCandidatesCaveat: Uma sub-rede em comum não comprova conectividade Corosync entre nós, liberação no firewall, redundância nem adequação para produção. Esta é apenas uma indicação de leitura e não configura o host.
+    interfaceUnknown: interface desconhecida
+    corosyncPlanTitle: Plano de comunicação do Corosync
+    corosyncPlanHelp: Escolha as sub-redes em comum que pretende usar como canais Corosync. O bootstrap SUSE ainda solicita os endereços de forma interativa; este plano orienta essas perguntas, mas não configura os hosts.
+    corosyncRing0Label: Canal principal · ring0
+    corosyncRing1Label: Canal redundante opcional · ring1
+    corosyncManualChoice: Escolher o endereço durante o bootstrap SUSE
+    corosyncNoSecondChannel: Sem segundo canal (por exemplo, ao usar uma interface bond)
+    corosyncNetworkConfirm: Confirmei que os endereços informados serão estáticos/reservados e que um segundo canal usará outra sub-rede.
+    corosyncNetworkReviewedYes: Confirmado pelo operador
+    corosyncNetworkReviewedNo: Não confirmado
+    corosyncNetworkPreviouslyReviewed: Revisado anteriormente; será necessário confirmar novamente ao retomar
+    corosyncNetworkNotReviewed: Plano de endereçamento ainda não revisado
+    corosyncNetworkConfirmHelp: A descoberta não comprova configuração estática, reserva DHCP, VLAN, firewall ou conectividade Corosync. Verifique esses pontos antes de continuar.
+    corosyncNetworkDynamicWarning: O preflight detectou endereços dinâmicos em {hosts} nesta sub-rede. Verifique a configuração estática ou reserva antes de usá-la.
+    corosyncNetworkUnavailable: Uma sub-rede selecionada não aparece mais em todos os nós. Execute o preflight novamente e atualize o plano.
+    corosyncNetworkBootstrapInstruction: A extensão não responde automaticamente às perguntas do crm. Durante init e cada join, informe endereços do plano revisado; mantenha os mesmos canais em todos os nós e use outra sub-rede para ring1.
+    corosyncNetworkNoSelection: Nenhuma sub-rede em comum foi selecionada. Revise um link bond ou escolha endereços estáveis durante o bootstrap SUSE.
+    corosyncNetworkPromptLabel: Guia para as perguntas de rede SUSE
+    sshPeerConnectivityTitle: Conectividade SSH entre os nós
+    sshPeerConnectivityScope: Esta verificação somente de leitura testa o acesso SSH entre pares e se o nome de cada host consta em /etc/hosts. A comparação de endereço usa o IP SSH cadastrado; ele pode ser diferente quando o tráfego HA usa outra rede. O teste não valida links Corosync, firewall nem prontidão para produção.
+    peerNameMapped: nome consta em /etc/hosts
+    peerNameMissing: FQDN/nome curto ausente em /etc/hosts
+    peerNameUnknown: esta versão da API não verificou o mapeamento
+    peerNameAddresses: "endereço(s) mapeado(s): {addresses}"
+    peerAddressMatchesSsh: /etc/hosts inclui o endereço SSH cadastrado
+    peerAddressDiffersFromSsh: /etc/hosts usa outro endereço; confira o mapeamento da rede HA
+    peerAddressComparisonUnknown: Não foi possível comparar o endereço mapeado com o endereço SSH
+    sshPeerReachable: Porta TCP acessível
+    sshPeerUnreachable: Porta TCP inacessível
+    watchdogQueryOk: "O SBD encontrou um watchdog: {summary}"
+    watchdogQueryFailed: "O SBD não conseguiu consultar um watchdog: {summary}"
+    watchdogQueryUnavailable: "O utilitário SBD não está disponível; {count} dispositivo(s) watchdog foram encontrados apenas pelo caminho. Isso não impede o uso de fencing STONITH externo."
+    watchdogQueryNoDetails: Nenhum detalhe adicional do watchdog foi retornado
+    watchdogQuerySafety: "Esta consulta verifica apenas a disponibilidade do watchdog; não testa o fencing. Não execute test-watchdog aqui: um teste bem-sucedido reinicia o host. A SUSE recomenda watchdogs de hardware em produção; softdog é para testes."
     compatibilityWarning: Compatibilidade precisa ser revisada
     compatibilitySupported: Versão SLES suportada para a configuração de HA.
     compatibilityUnsupported: Esta versão do SLES está fora da matriz de compatibilidade de HA documentada atualmente pela extensão.
     architectureMismatch: Os hosts selecionados informam arquiteturas de CPU diferentes.
     releaseMismatch: Os hosts selecionados informam versões diferentes do sistema operacional.
+    haProduct: Produto SLE HA ativo
+    haProductUnknown: Não confirmado
+    haProductCheck: "Produto SLE HA ativo: {product}"
+    haProductMismatch: Os hosts selecionados informam versões diferentes do produto SLE HA ativo. Alinhe a versão do SLE HA em todos os nós antes de inicializar o cluster; versões mistas só são aceitas temporariamente durante uma atualização contínua.
+    haProductUnconfirmed: Não foi possível confirmar a versão ativa do produto SLE HA em todos os hosts. Confira o SUSEConnect em cada host e execute a pré-verificação novamente.
     clusterAdministration: ADMINISTRAÇÃO DO CLUSTER
     sectionPreviewTitle: Área disponível após detectar um cluster ativo
     sectionPreviewHelp: Conecte um host membro de um cluster SLE HA ativo para ver o estado e habilitar as operações correspondentes.
@@ -1207,14 +1716,95 @@ kvmManager:
     actionSucceeded: Operação enviada
     nodeActionSafety: As ações de standby e manutenção mudam a colocação e o gerenciamento dos recursos. Verifique quorum e capacidade restante antes de continuar.
     fencingDetailDescription: Leituras de quorum e dispositivos STONITH fornecidas pelas ferramentas SUSE HA do host.
+    fencingCreateSafetyTitle: O fencing pode desligar nós do cluster
+    fencingCreateSafetyHelp: Crie cada dispositivo para um nó-alvo atual e valide as credenciais e o acesso fora de banda antes de iniciá-lo. Os novos dispositivos ficam Parados; iniciá-los habilita o fencing do Pacemaker e pode desligar o nó-alvo durante uma recuperação. Mantenha ao menos um caminho de fencing validado para cada nó.
+    addFencingDevice: Adicionar dispositivo de fencing
+    fencingConfiguration: Configuração SUSE STONITH
+    fencingFormHelp: Escolha um agente instalado no SLE HA, selecione o nó que ele deverá cercar e informe apenas os parâmetros mostrados nos detalhes SUSE do agente.
+    fencingResourceId: ID do recurso de fencing
+    fencingAgent: Agente STONITH
+    selectFencingAgent: Selecione um agente STONITH instalado
+    fencingTargetNode: Nó-alvo
+    selectClusterNode: Selecione um nó do cluster
+    fencingMonitorInterval: Intervalo de verificação do dispositivo
+    fencingMonitorTimeout: Tempo limite da verificação do dispositivo
+    fencingParameters: Parâmetros do dispositivo
+    fencingParametersHelp: O mapeamento do nó-alvo é definido automaticamente. Campos com aparência de credenciais ficam ocultos e seus valores não são gravados na auditoria nem em mensagens de erro.
+    editFencingDevice: Editar dispositivo de fencing
+    fencingEditHelp: Altere parâmetros somente com o dispositivo de fencing parado. Os valores existentes nunca são carregados de volta no formulário.
+    fencingEditPreservesTarget: O mapeamento do alvo fica bloqueado
+    fencingEditPreservesTargetHelp: Este formulário aceita somente dispositivos associados a um nó atual. O mapeamento existente e as operações de monitoramento são preservados.
+    fencingEditParametersHelp: Deixe em branco um valor existente para mantê-lo. Digite um valor novo para substituí-lo ou marque Remover. Novos parâmetros precisam de nome e valor.
+    fencingKeepCurrentValue: O valor salvo será mantido se ficar em branco
+    reviewFencingEdit: Revisar alterações
+    reviewEditFencing: "Atualizar dispositivo de fencing {id} para {node}: alterar {changes} parâmetro(s) e remover {removals}. Valores secretos são omitidos."
+    fencingEditValidation_invalid_parameters: Confira nomes, valores, duplicidades e o limite de 40 parâmetros.
+    fencingEditValidation_reserved_parameter: O mapeamento do alvo gerenciado pela extensão não pode ser editado aqui.
+    fencingEditValidation_no_changes: Digite um valor de substituição, adicione um parâmetro ou marque um parâmetro para remoção.
+    showFencingSecret: Mostrar valor
+    hideFencingSecret: Ocultar valor
+    fencingAgentGuide: Detalhes do agente SUSE · {agent}
+    fencingAgentsUnavailable: Não foi possível carregar os agentes de fencing SUSE
+    fencingAgentsEmpty: Nenhum agente SUSE STONITH instalado foi encontrado neste host.
+    fencingDevicesTitle: Dispositivos de fencing
+    fencingDevicesHelp: Esta lista mostra recursos STONITH do Pacemaker. O SBD sem disco não aparece como recurso e é informado no estado acima. Uma entrada configurada não comprova acesso ao hardware; teste o fencing durante o procedimento de manutenção.
+    noFencingDevices: Não há recursos STONITH do Pacemaker configurados.
+    manageInResources: Abrir controles do recurso
+    reviewFencingCreate: Revisar dispositivo
+    reviewCreateFencing: Criar {id} com {agent} para o nó {node} ({count} parâmetros fornecidos); o dispositivo ficará Parado.
+    reviewDeleteFencing: Remover o recurso de fencing parado {id}. Verifique se ainda há um caminho de fencing funcional para cada nó.
+    fencingValidation_invalid_id: Use um ID válido com letras, números, pontos, sublinhados ou hífens.
+    fencingValidation_invalid_agent: Selecione um agente SUSE STONITH instalado válido.
+    fencingValidation_invalid_target: Selecione um nó atual deste cluster.
+    fencingValidation_invalid_parameters: Verifique nomes, valores, duplicidades e o limite de 40 parâmetros.
+    fencingValidation_reserved_parameter: A extensão define pcmk_host_list pelo nó-alvo selecionado; remova esse parâmetro.
+    fencingValidation_invalid_monitor: Informe intervalo e tempo limite entre 1 segundo e 24 horas.
     quorumReadable: Saída de quorum disponível
     fencingReadable: Saída de fencing disponível
     quorate: Com quorum
     notQuorate: Sem quorum
-    fencingConfigured: Dispositivo de fencing detectado
-    fencingNotConfigured: Nenhum dispositivo de fencing detectado
+    fencingConfigured: Configuração de fencing de nó detectada
+    fencingNotConfigured: Nenhuma configuração SBD ou STONITH detectada
+    fencingSbdConfigured: SBD ({type}) informado como configurado em {host}
+    fencingSbdSummary: "SBD {type} está configurado no nó consultado ({host}). Confira o estado do SBD e do watchdog em todos os membros antes de depender do fencing."
+    fencingSbdScopeHelp: Este estado vem somente do nó consultado e confirma a configuração, não um teste de fencing bem-sucedido. Verifique crm sbd status em cada membro e valide o watchdog antes de usar em produção.
+    fencingSbdNoResourceTitle: SBD sem disco não cria recurso de fencing no Pacemaker
+    fencingSbdNoResourceHelp: "Isso é esperado no SBD sem disco: a SUSE configura o fencing pelo SBD e pelo watchdog, sem recurso fence_sbd. O estado acima vem apenas do nó consultado; confira todos os membros."
     quorumHelp: A ferramenta de quorum não retornou dados. Revise Corosync e o estado de quorum no host.
+    qdeviceConnected: QDevice conectado ao QNetd
+    qdeviceDisconnected: QDevice sem conexão com o QNetd
+    qdeviceNotConfigured: QDevice não configurado
+    qdeviceStatusUnknown: Estado do QDevice indisponível
+    qdeviceStatusHelp: Estado atual informado pelo crmsh da SUSE. Uma testemunha conectada participa do quorum, mas isso não comprova o funcionamento do fencing nem a prontidão para produção.
+    qdeviceNotConfiguredHelp: A ferramenta de quorum não informa voto do QDevice. Clusters com quantidade par de nós, especialmente com dois nós, devem avaliar a recomendação SUSE de QDevice/QNetd.
+    qdeviceUnknownHelp: A API atual ou as ferramentas SUSE não forneceram dados suficientes para determinar o estado do QDevice. Atualize o estado do cluster antes de tirar conclusões.
+    qdeviceTlsLabel: TLS do QNetd
+    qdeviceTlsActive: Ativo
+    qdeviceTlsInactive: Inativo
+    qdeviceDetails: Diagnóstico do QDevice
+    configureQdevice: Configurar testemunha QDevice
+    qdeviceConfigureRisk: Executa a configuração interativa QDevice da SUSE no primeiro nó do cluster. Pode exigir janela de manutenção ou reinício dos serviços do cluster; revise os prompts da SUSE e não execute durante uma indisponibilidade de cargas sem aprovação.
+    qdeviceConfigurePrerequisites: Termine a inicialização do cluster e adicione todos os nós selecionados. Confirme o servidor externo SLES com QNetd, a extensão SLE HA, o pacote corosync-qnetd, a conta de acesso, as rotas e o plano de manutenção.
+    qdeviceConfigureReviewWarning: Isso inicia a operação interativa SUSE crm cluster init qdevice no primeiro membro selecionado. Ela pode configurar certificados e acesso SSH do QNetd, atualizar a configuração de quorum e exigir manutenção ou reinício dos serviços do cluster. A SUSE alerta que cargas dependentes de DLM podem precisar de indisponibilidade; a extensão não ativa modo de manutenção nem reinicia serviços.
+    bootstrapConfigureQdevice: configurar a testemunha QDevice/QNetd
+    bootstrapErrorQdeviceAlreadyConfigured: O QDevice já está configurado. Atualize o estado do cluster e confira a conexão ativa com QNetd antes de outra ação.
+    bootstrapErrorQdevicePreflight: A pré-verificação do QDevice não passou. Confirme que todos os nós selecionados pertencem ao mesmo cluster ativo com quorum e que o plano externo QNetd está correto.
     fencingHelp: A ferramenta de fencing não retornou dados. Isso não prova que o fencing está configurado ou funcional.
+    fencingTargetCoverageTitle: Quais nós têm um caminho de fencing registrado?
+    fencingTargetCoverageHelp: Consulta somente de leitura do Pacemaker que lista os dispositivos registrados capazes de aplicar fencing em cada nó atual. Um nó sem cobertura precisa de um mapeamento STONITH revisado ou de um projeto SBD verificado separadamente.
+    fencingTargetCoverageUnknown: O Pacemaker não conseguiu determinar a cobertura de dispositivos para todos os nós. Atualize o estado ou confira crm status e os recursos de fencing no cluster.
+    fencingTargetCovered: Mapeamento de dispositivo STONITH encontrado
+    fencingTargetUncovered: Nenhum dispositivo STONITH registrado encontrado
+    fencingTargetUnknown: Cobertura desconhecida
+    fencingTargetCoverageCaveat: Esta consulta verifica somente o mapeamento registrado no Pacemaker. Ela não acessa o dispositivo físico nem executa uma ação de fencing; o SBD é avaliado separadamente acima.
+    fencingStatusCheckTitle: Verificação manual do dispositivo de fencing
+    fencingStatusCheckHelp: Esta ação acessa o dispositivo configurado pelo Pacemaker. A SUSE alerta que alguns equipamentos de gerenciamento de energia podem ficar sobrecarregados ou rejeitar verificações simultâneas; por isso, a extensão limita a consulta a uma por dispositivo a cada três horas. Ela não cerca nem reinicia um nó e não comprova que uma operação real de fencing terá sucesso.
+    checkFencingStatus: Verificar estado do dispositivo
+    fencingStatusChecking: Verificando dispositivo…
+    fencingStatus_query_succeeded: Consulta de estado do dispositivo concluída
+    fencingStatus_query_failed: A consulta de estado falhou; verifique os logs do Pacemaker e o acesso ao dispositivo
+    fencingStatus_unknown: Estado do dispositivo desconhecido
+    fencingStatusNextCheck: Próxima consulta disponível {time}
     fencingBestPractice: Com 2 nós, a SUSE recomenda QDevice/QNetd para um voto independente. Em qualquer topologia, valide STONITH/SBD antes de executar cargas de trabalho; ler a configuração não comprova que o fencing funciona.
     installHaStackTitle: Instalar as ferramentas do cluster SUSE HA
     installHaStackHelp: Instala o padrão oficial ha_sles com zypper nos hosts selecionados. A extensão SLE HA precisa estar ativa e os repositórios acessíveis. Pacemaker, Corosync e Hawk são iniciados pelo fluxo suportado de inicialização do cluster.
@@ -1257,6 +1847,14 @@ kvmManager:
     sbdPlan: SBD (validar armazenamento compartilhado ou watchdog)
     externalFencingPlan: Dispositivo externo de fencing suportado
     fencingPlanLater: Ainda não decidido
+    fencingRequiredBeforeBootstrapTitle: O bootstrap exige um plano de fencing
+    fencingRequiredBeforeBootstrapHelp: Você pode salvar este plano como rascunho, mas não iniciar o cluster com o fencing indefinido. Escolha SBD após validar watchdog e armazenamento, ou selecione um dispositivo externo de fencing suportado.
+    fencingAdvisorSbdTitle: SBD é uma opção candidata para revisão
+    fencingAdvisorSbdHelp: Em cada host, a consulta SBD somente de leitura identificou um dispositivo watchdog cujo driver não é softdog. Isso não comprova que o watchdog seja adequado para hardware, não testa o fencing nem valida o desenho de armazenamento do SBD. Confirme o layout SBD suportado pela SUSE e o comportamento do watchdog antes de escolhê-lo; nunca execute um teste de watchdog em host de produção, pois ele pode reiniciar o nó.
+    fencingAdvisorReviewTitle: O fencing precisa de uma análise separada
+    fencingAdvisorReviewHelp: A pré-verificação não conseguiu associar, em todos os hosts, a saída do SBD a um watchdog de hardware identificado. Avalie um dispositivo externo de fencing suportado ou verifique os pré-requisitos de watchdog e armazenamento do SBD. Não prossiga com o fencing indefinido.
+    fencingAdvisorTwoNodeHelp: Em clusters com dois nós, a SUSE informa que SBD sem disco não resolve split brain sem QDevice. SBD baseado em disco requer armazenamento de blocos compartilhado acessível por todos os nós.
+    fencingAdvisorChooseSbd: Selecionar SBD neste plano
     notChosen: Não definido
     quorum_pending: Não decidido
     quorum_qdevice: QDevice/QNetd planejado
@@ -1282,15 +1880,61 @@ kvmManager:
     openHawk: Abrir Hawk
     bootstrapGuide: FLUXO CRM SHELL SUSE
     bootstrapTitle: Inicializar e adicionar nós com crmsh
-    bootstrapHelp: Abra o terminal da extensão em cada host selecionado e execute o comando correspondente. O crmsh solicitará as opções de rede, fencing, QDevice e serviços.
+    bootstrapHelp: Salve o plano, revise uma pré-verificação atual e execute o comando SUSE correspondente no terminal restrito da extensão. O crmsh solicitará as opções de rede, fencing, QDevice e serviços.
+    bootstrapJoinProgress: 'Participação confirmada pelo SUSE: {joined} de {total} nós selecionados.'
+    bootstrapJoinWaitingForInit: Inicialize o primeiro nó antes de adicionar os demais. Cada inclusão abre seu próprio terminal SUSE para revisão.
+    bootstrapJoinNext: 'Próximo nó: {host}. Adicione os nós um por vez; a etapa seguinte é liberada após uma nova pré-verificação confirmar a participação atual.'
+    bootstrapJoinComplete: Todos os nós selecionados reportam participação neste cluster. Continue com QDevice se selecionado e valide a saúde do cluster.
+    bootstrapJoinStatus_confirmed: Participação confirmada
+    bootstrapJoinStatus_next: Próxima etapa
+    bootstrapJoinStatus_waiting: Aguardando o nó anterior
+    bootstrapJoinStatus_needs-review: O estado atual do cluster precisa ser revisado
+    reviewNextJoinNode: Revisar próximo nó
     clusterNameInvalid: Use de 1 a 64 letras, números, pontos, sublinhados ou hífens; comece com letra ou número.
     initializeFirstNode: Inicializar o primeiro nó ({host})
     joinAdditionalNode: Adicionar este host ({host}) ao primeiro nó
     copyCommand: Copiar comando
     openHostTerminal: Abrir terminal do host
+    reviewBootstrap: Revisar etapa do bootstrap
+    bootstrapTerminalTitle: Bootstrap SUSE HA restrito
+    bootstrapTerminalNote: Esta sessão executa somente o comando salvo crm cluster init ou join. Ela não abre um shell geral do host.
+    bootstrapCloseWarning: Fechar este terminal desconecta a configuração interativa da SUSE e pode deixar o cluster parcialmente configurado. Sempre que possível, mantenha-o aberto até o crmsh terminar.
+    bootstrapCloseConfirm: Desconectar mesmo assim
+    bootstrapCloseKeepOpen: Manter configuração aberta
+    bootstrapNoReconnect: Esta operação de bootstrap não pode ser reconectada nem repetida neste terminal. Verifique a associação dos nós e execute uma nova pré-verificação antes de continuar.
+    bootstrapPreflightRunning: Verificando novamente SUSE HA, estado dos nós, sincronização de horário e conectividade entre pares...
+    bootstrapCommandFailed: O comando de bootstrap SUSE terminou com o código {status}.
+    bootstrapCredentialHardening: Inicialização concluída. Antes de disponibilizar o Hawk, altere a senha da conta hacluster no host com `sudo passwd hacluster` e guarde a nova credencial com segurança.
+    bootstrapOperationConflict: Já existe outra operação de cluster em andamento em um dos hosts selecionados. Aguarde, atualize a pré-verificação e tente novamente.
+    bootstrapErrorGeneric: A configuração do cluster SUSE não pôde continuar. Revise a conexão do host e a pré-verificação mais recente e tente novamente.
+    bootstrapErrorSshAuthentication: A autenticação SSH deste host falhou. Confira o usuário e as credenciais importadas e execute a pré-verificação novamente.
+    bootstrapErrorSshHostKey: A chave SSH do host não corresponde à chave fixada para ele. Verifique a identidade do host antes de alterar a chave e tente novamente.
+    bootstrapErrorSshTimeout: O host não respondeu antes do tempo limite SSH. Verifique se está disponível e acessível pela rede e tente novamente.
+    bootstrapErrorSshConnectivity: A extensão não conseguiu abrir uma sessão SSH com o host. Confira serviço SSH, endereço, porta e firewall.
+    bootstrapErrorSudo: A conta Linux importada precisa de acesso sudo funcional para configurar o cluster SUSE. Confira a política sudo e tente novamente.
+    bootstrapErrorUnsupportedSles: Este host não usa uma versão do SUSE Linux Enterprise compatível com este fluxo de HA.
+    bootstrapErrorHaProductUnconfirmed: Não foi possível confirmar a versão ativa do produto SLE HA em todos os nós selecionados. Confira se SUSEConnect mostra a extensão HA ativa em cada host e execute a pré-verificação novamente.
+    bootstrapErrorHaProductMismatch: Os nós selecionados têm versões diferentes do produto SLE HA ativo. Alinhe a versão do SLE HA em todos os nós antes de inicializar um novo cluster.
+    bootstrapErrorHaNotReady: A extensão SLE HA ou as ferramentas crmsh e Corosync necessárias não estão ativas neste host. Revise Subscriptions e Modules & Extensions.
+    bootstrapErrorTimeSync: A sincronização de horário não está pronta neste host. Configure e valide chrony/NTP em todos os nós selecionados.
+    bootstrapErrorQnetd: O witness QNetd selecionado está inacessível na porta TCP 5403. Confira endereço, rota e firewall.
+    bootstrapErrorPeerNames: Um nó não consegue resolver o nome dos outros nós. Adicione mapeamentos estáveis em todos os hosts e execute a pré-verificação novamente.
+    bootstrapErrorPeerConnectivity: Os nós selecionados não conseguem alcançar a porta SSH de um peer. Confira endereços e firewall e execute a pré-verificação novamente.
+    bootstrapErrorExistingCluster: Um host selecionado já possui configuração Corosync. Revise a associação HA existente antes de continuar.
+    bootstrapErrorInitializeFirst: O primeiro nó selecionado não está reportando o cluster planejado. Inicialize ou recupere-o e atualize a pré-verificação.
+    bootstrapErrorMembershipMismatch: Os hosts selecionados reportam nomes de cluster HA diferentes. Revise a associação e corrija o plano antes de continuar.
+    bootstrapErrorPreflightConnectivity: Não foi possível concluir as verificações atualizadas dos hosts. Verifique o SSH e execute a pré-verificação novamente.
+    bootstrapReviewTitle: Revise o bootstrap do cluster SUSE
+    bootstrapReviewText: A extensão executará {operation} em {host} após uma nova pré-verificação em tempo real.
+    bootstrapReviewWarning: O crmsh é interativo e altera o estado do Corosync e do Pacemaker. Confirme rede, testemunha de quorum, fencing e ordem dos nós antes de continuar.
+    bootstrapInitialize: inicializar o primeiro nó
+    bootstrapJoin: adicionar este nó ao cluster inicializado
+    bootstrapPreparing: Salvando o plano e verificando os hosts...
+    bootstrapConfirm: Abrir terminal de bootstrap restrito
+    bootstrapPreflightChanged: As verificações mais recentes não permitem esta etapa. Revise a pré-verificação e a associação dos nós antes de tentar novamente.
     commandCopied: Comando copiado
     copyFailed: O navegador bloqueou a área de transferência; selecione e copie o comando manualmente.
-    bootstrapSafety: Execute a pré-verificação primeiro. O terminal abre um shell SSH real; cada comando crmsh altera o host ou cluster e deve ser revisado antes de executar. O bootstrap SUSE é interativo.
+    bootstrapSafety: Cada ação fica limitada a um comando salvo crm cluster init ou join e só começa após uma nova pré-verificação no servidor. O bootstrap SUSE é interativo e altera o estado do Corosync e Pacemaker.
     preflightRequiredForBootstrap: Conclua uma pré-verificação bem-sucedida em todos os hosts selecionados. Confirme manualmente os endereços estáveis, conectividade Corosync, fencing e posicionamento do quorum.
     createResource: Criar recurso
     resourceConfiguration: CONFIGURAÇÃO DE RECURSO
@@ -1300,13 +1944,44 @@ kvmManager:
     resourceAgent: Agente de recurso
     selectResourceAgent: Selecione um agente instalado
     resourceParameters: Parâmetros do agente
-    resourceParametersPlaceholder: "ip=192.168.10.50\nmonitor_interval=30s"
-    resourceParametersHelp: Informe um parâmetro por linha no formato chave=valor. Consulte os requisitos do agente selecionado. Os valores não são gravados no log de auditoria da extensão.
+    resourceParametersHelp: Adicione somente os parâmetros exigidos pelo agente selecionado. Use os detalhes fornecidos pelo SUSE abaixo para conferir nomes e valores. Os valores não são gravados no log de auditoria da extensão.
+    addResourceParameter: Adicionar parâmetro
+    removeResourceParameter: Remover parâmetro {number}
+    removeResourceParameterShort: Remover
+    resourceParameterName: Nome do parâmetro {number}
+    resourceParameterValue: Valor do parâmetro {number}
+    noResourceParameters: Nenhum parâmetro adicionado. Confira os detalhes do agente selecionado para saber se algum é obrigatório.
     resourceAgentGuide: Detalhes do agente · {agent}
     resourceAgentsUnavailable: Não foi possível carregar os agentes de recurso
     resourceAgentsEmpty: Nenhum agente OCF ou systemd instalado foi encontrado neste host.
-    resourceParameterFormat: Parâmetro inválido na linha {line}. Use chave=valor com um valor não vazio.
+    resourceParameterFormat: A linha de parâmetro {row} está incompleta ou inválida. Informe um nome válido e um valor em uma única linha.
+    resourceParameterDuplicate: A linha {row} repete um nome de parâmetro. Cada nome precisa ser único.
+    resourceParameterLimit: Um recurso pode ter até 40 parâmetros.
     reviewResourceCreate: Revisar recurso
+    monitorOperations: Verificações de saúde
+    monitorOperationsHelp: O Pacemaker chama o agente do recurso em cada intervalo. Você pode usar intervalo 0 para uma sondagem; deixar Função vazio omite o qualificador. Para um clone promovível, configure verificações explícitas e distintas para Promoted e Unpromoted antes de criar o clone.
+    addMonitorOperation: Adicionar verificação
+    editMonitorOperations: Verificações de saúde
+    editMonitorOperationsTitle: Verificações de saúde · {id}
+    editMonitorOperationsHelp: Edite somente as operações de monitoramento. O recurso deve estar parado; os parâmetros e os demais tipos de operação serão preservados.
+    monitorInterval: Intervalo
+    monitorIntervalNumber: Intervalo da verificação {number}
+    monitorRole: Função
+    monitorDefaultRole: Sem função explícita
+    monitorTimeout: Tempo limite (opcional)
+    monitorTimeoutNumber: Tempo limite da verificação {number}
+    removeMonitorOperation: Remover verificação {number}
+    promotableMonitorTitle: Pré-requisitos do clone promovível
+    promotableMonitorHelp: Configure intervalos distintos e funções explícitas Promoted e Unpromoted. Uma verificação sem função não satisfaz nenhuma das duas verificações específicas. Confirme se o agente escolhido suporta promote e demote. Uma verificação com função Stopped é um teste separado do Pacemaker.
+    monitorOperationIdMissing: As verificações têm IDs ausentes ou excedem o limite seguro deste formulário.
+    monitorValidation_count: Configure de uma a 16 verificações de saúde.
+    monitorValidation_interval: Informe 0 para um teste do Pacemaker ou um intervalo de 1 segundo a 24 horas (por exemplo, 30s ou 1min).
+    monitorValidation_timeout: Informe um tempo limite opcional entre 1 segundo e 24 horas.
+    monitorValidation_duplicate_interval: Cada verificação precisa usar um intervalo diferente.
+    monitorValidation_role: Selecione uma função Pacemaker suportada.
+    monitorValidation_id: O ID de uma verificação é inválido ou está repetido.
+    reviewMonitorEdit: Revisar alteração das verificações
+    reviewMonitorOperations: Definir {count} verificações de saúde em {id}. O recurso deve permanecer Parado durante a aplicação.
     editResource: Editar
     deleteResource: Remover
     editResourceTitle: Editar recurso · {id}
@@ -1322,12 +1997,80 @@ kvmManager:
     attributeValue: Valor
     reviewResourceEdit: Revisar alteração
     reviewResourceChangeTitle: Revise a alteração de configuração
-    reviewCreateResource: Criar {id} usando {agent} com {count} parâmetros e deixá-lo Parado.
+    reviewCreateResource: Criar {id} usando {agent} com {count} parâmetros e {monitorCount} verificações de saúde e deixá-lo Parado.
     reviewDeleteResource: Remover {id} da configuração do Pacemaker. O recurso precisa estar parado e sem falhas pendentes.
     reviewEditResource: "{action} o atributo {attribute} de {id}."
     resourceChangeSafety: Esta alteração modifica a configuração ativa do Pacemaker. Revise os requisitos do agente e o impacto esperado antes de aplicar.
     resourceChangeRunning: Aplicando alteração...
     resourceChangeSucceeded: Configuração do recurso atualizada
+    createResourceGroup: Criar grupo
+    createResourceClone: Criar clone
+    createResourceCloneHelp: Um clone permite que o Pacemaker execute um serviço em vários nós elegíveis. Ele é criado parado; revise o posicionamento e os requisitos do agente antes de iniciá-lo.
+    cloneId: ID do clone
+    cloneType: Modo do clone
+    cloneStandard: Clone padrão
+    clonePromotable: Clone promovível
+    cloneChildResource: Primitivo parado ou grupo de nível superior
+    cloneSafetyTitle: Revise o comportamento do clone
+    cloneStandardHelp: Um clone padrão pode executar em vários nós. Selecione um primitivo independente parado ou um grupo de recursos de nível superior parado; o clone será criado parado.
+    clonePromotableHelp: Use somente um agente primitivo que anuncie as ações promote e demote e tenha operações monitor separadas para as funções Promoted e Unpromoted. Esta interface não presume suporte a grupos. O clone será criado parado.
+    promotableCloneNeedsPrimitive: Este fluxo cria clones promovíveis apenas a partir de um primitivo. Para grupos, use um clone padrão.
+    promotableCloneNeedsMonitors: Configure primeiro, neste primitivo parado, operações de monitoramento distintas e com funções explícitas Promoted e Unpromoted.
+    cloneSelectionInvalid: Informe um ID de clone válido e selecione um primitivo independente, elegível e parado.
+    noCloneableResources: Não há primitivos independentes ou grupos de nível superior parados. Crie um recurso ou pare e remova um do grupo ou clone atual.
+    reviewCloneCreate: Revisar criação do clone
+    reviewCreateClone: "Criar o clone {kind} {id} envolvendo o recurso parado {resource}. O clone permanecerá parado até ser iniciado."
+    editCloneTitle: Editar opções do clone · {id}
+    editCloneHelp: Ajuste os limites de instâncias e posicionamento compatíveis com este clone parado.
+    editCloneOptions: Editar opções
+    cloneOptions: Opções do clone
+    cloneOptionsHelp: Defina somente as opções que deseja sobrescrever. Campos vazios mantêm os padrões do Pacemaker.
+    cloneMeta_clone-max: Máximo de instâncias do clone
+    cloneMeta_clone-node-max: Máximo de instâncias por nó
+    cloneMeta_globally-unique: Instâncias globalmente únicas
+    cloneMeta_notify: Enviar ações de notificação
+    cloneMeta_interleave: Intercalar com outros clones
+    cloneMeta_promoted-max: Máximo de instâncias promovidas
+    cloneMeta_promoted-node-max: Máximo de instâncias promovidas por nó
+    cloneOptionDefault: Usar padrão
+    cloneOptionEmptyDefault: Limpar um valor remove essa sobrescrita e restaura o padrão do Pacemaker.
+    cloneEditStoppedOnly: O clone deve permanecer parado durante a alteração das opções. Iniciá-lo é uma ação separada e revisada.
+    cloneOptionsUnchanged: Altere ao menos uma opção do clone antes de revisar.
+    cloneEditUnavailable: Este clone está ativo, com falha, aninhado ou tem uma estrutura não compatível. Atualize o estado e resolva a situação primeiro.
+    deleteClone: Excluir clone
+    reviewDeleteClone: "Excluir o clone parado {id} e o primitivo filho {child} da configuração do Pacemaker. As duas definições serão removidas; primeiro remova quaisquer regras relacionadas."
+    cloneMetadata_invalid: As opções do clone estão incompletas ou inválidas.
+    cloneMetadata_number: Os limites de instâncias devem ser números inteiros entre 1 e 4096.
+    cloneMetadata_boolean: Escolha verdadeiro ou falso para a opção selecionada.
+    reviewCloneEdit: "Atualizar as opções do clone parado {id}: {options}. O recurso filho será preservado."
+    resourceGroup: GRUPO DE RECURSOS
+    editResourceGroup: Editar grupo · {id}
+    resourceGroupHelp: Agrupe primitivos parados que fazem parte do mesmo serviço. O grupo inicia os membros na ordem definida e os para na ordem inversa. O SUSE mantém todos os membros do grupo no mesmo nó.
+    groupOrderingTitle: Ordem de inicialização e posicionamento
+    groupOrderingHelp: Coloque primeiro os pré-requisitos, como um sistema de arquivos antes da aplicação. O Pacemaker mantém os membros juntos no mesmo nó. Crie ou edite grupos somente com todos os membros parados.
+    resourceGroupId: ID do grupo
+    groupMembersOrder: Selecione os membros e defina a ordem de inicialização
+    noGroupableResources: Não há primitivos gerenciados, parados e sem grupo disponíveis. Crie um primitivo ou pare e remova um recurso do grupo atual.
+    moveGroupMemberUp: Mover {resource} para antes na ordem de inicialização
+    moveGroupMemberDown: Mover {resource} para depois na ordem de inicialização
+    groupMemberAction: Alteração de associação
+    addGroupMember: Adicionar um primitivo
+    removeGroupMember: Remover um primitivo
+    reorderGroupMembers: Alterar ordem de inicialização
+    reorderGroupHelp: Coloque os pré-requisitos antes dos serviços que dependem deles. O grupo precisa permanecer parado durante a alteração da ordem.
+    groupMemberActionHelp: Os membros precisam estar parados. Ao adicionar, o primitivo entra no fim da ordem; ao remover, ele permanece configurado como recurso independente.
+    reviewGroupChange: Revisar alteração do grupo
+    groupSelectionInvalid: Informe um ID de grupo válido e selecione um ou mais primitivos elegíveis e distintos.
+    groupOrderUnchanged: O grupo já está usando esta ordem.
+    resourceMembersLabel: "Membros: {members}"
+    groupMembersLabel: "Inicia nesta ordem: {members}"
+    editGroupMembers: Editar membros
+    deleteGroup: Excluir grupo
+    reviewCreateGroup: "Criar o grupo parado {id} com esta ordem de inicialização: {members}."
+    reviewDeleteGroup: Excluir o grupo {id} e seus primitivos membros ({members}) da configuração do Pacemaker. Essas definições de recursos serão removidas.
+    reviewReorderGroup: "Alterar a ordem de inicialização do grupo parado {id} para: {members}."
+    reviewAddGroupMember: Adicionar o primitivo parado {resource} ao grupo {group}; ele iniciará por último.
+    reviewRemoveGroupMember: Remover o primitivo parado {resource} do grupo {group}; ele continuará configurado como recurso independente.
     addConstraint: Adicionar regra
     constraintConfiguration: CONFIGURAÇÃO DE REGRAS
     constraintEditorHelp: Crie uma regra de localização, ordem ou colocação do Pacemaker usando recursos e nós reportados pelo cluster.
@@ -1339,6 +2082,9 @@ kvmManager:
     selectNode: Selecione um nó
     constraintScore: Pontuação
     orderKind: Comportamento da ordem
+    orderMandatory: Obrigatória
+    orderOptional: Opcional
+    orderSerialize: Serializar
     reviewConstraint: Revisar regra
     reviewConstraintTitle: Revise a alteração da regra do cluster
     reviewCreateConstraint: Criar regra de {kind} {id} para {resource} e {other} (pontuação {score}).
@@ -1502,6 +2248,7 @@ kvmManager:
     scopeHelp: Isso cria um grupo de hosts gerenciado pela extensão. Não configura SUSE HA, armazenamento compartilhado, redes comuns, failover, agendamento ou migração ao vivo.
     createTitle: Criar grupo KVM
     createHelp: Selecione pelo menos dois hosts prontos. Cada host pode pertencer a apenas um grupo.
+    notEnoughFreeHosts: São necessários pelo menos dois hosts prontos que ainda não pertençam a outro grupo KVM.
     name: Nome do grupo
     ready: Pronto
     creating: Criando…
@@ -1515,8 +2262,55 @@ kvmManager:
     checked: Inventário consultado
     capabilityTitle: Operações entre hosts ainda não estão habilitadas
     capabilityHelp: Compare os hosts nesta tela. A migração de VMs continuará desabilitada até que seja possível validar o armazenamento compartilhado, redes correspondentes e uma operação segura.
+    assessmentEyebrow: CAPACIDADE E COMPATIBILIDADE
+    assessmentTitle: Visão geral de prontidão do grupo
+    assessmentHostsReady: "{ready} de {total} hosts conectados"
+    assessmentHostsIncomplete: "{ready} de {total} hosts conectados; atualize ou corrija os hosts indisponíveis"
+    architecture: Arquitetura
+    architectureMismatch: Arquiteturas incompatíveis
+    architectureUnknown: Não confirmada
+    aggregateVcpu: Total agregado de vCPUs
+    aggregateMemory: Memória agregada
+    aggregateAvailableMemory: "{value} disponíveis nos hosts"
+    virtualMachineCount: Máquinas virtuais
+    runningVirtualMachineCount: "{count} em execução"
+    commonStorageNames: Pools com o mesmo nome em todos os hosts
+    matchingPoolDefinition: tipo e caminho de destino visíveis são iguais
+    differentPoolDefinition: tipo ou caminho de destino visível é diferente
+    poolBackingFilesystem: filesystem de apoio
+    matchingFilesystemIdentity: tipo, origem e mountpoint informados pelo filesystem são iguais
+    sharedNfsCandidateReview: Os pools ativos usam a mesma exportação NFS e o mesmo caminho de montagem informados. Isto é apenas um candidato a armazenamento compartilhado; valide as opções da exportação, o acesso do QEMU, o locking e a compatibilidade do cache dos discos antes da migração.
+    differentFilesystemIdentity: a identidade informada do filesystem difere entre os hosts
+    unknownFilesystemIdentity: não foi possível identificar o filesystem de apoio em todos os hosts
+    noCommonStorageNames: Nenhum pool com nome comum encontrado
+    storageNamesAreNotProof: Nomes iguais não comprovam armazenamento compartilhado nem caminhos compatíveis.
+    inactiveStoragePools: "{count} pool(s) de armazenamento libvirt estão inativos. Inicie-os na página Storage do host antes de usar os discos das VMs."
+    unknownStoragePoolStates: "Não foi possível confirmar o estado de {count} pool(s) libvirt; atualize o inventário antes de planejar operações de VMs."
+    commonNetworkNames: Redes com o mesmo nome em todos os hosts
+    matchingNetworkDefinition: modo e bridge visíveis são iguais
+    differentNetworkDefinition: modo ou bridge visível é diferente
+    bridgeInterfacePresent: interface da bridge encontrada
+    bridgeInterfaceMissing: interface da bridge não encontrada
+    bridgeInterfaceUnknown: interface da bridge não informada
+    bridgePresentOnAllHosts: interface da bridge encontrada em todos os hosts
+    bridgeMissingOnHosts: interface da bridge ausente em um ou mais hosts
+    bridgePresenceUnknown: presença da interface da bridge não verificada
+    noCommonNetworkNames: Nenhuma rede com nome comum encontrada
+    networkNamesAreNotProof: Nomes iguais não comprovam a mesma bridge, VLAN, MTU ou caminho físico.
+    inactiveLibvirtNetworks: "{count} rede(s) libvirt estão inativas. Inicie a rede selecionada no host antes de criar ou iniciar uma VM que a utilize."
+    unknownLibvirtNetworkStates: "Não foi possível confirmar o estado de {count} rede(s) libvirt; atualize o inventário antes de planejar operações de VMs."
+    libvirtState:
+      active: Ativo
+      inactive: Inativo
+      unknown: Estado desconhecido
+    assessmentCaveat: A capacidade é a soma dos hosts, não um pool agendável. Armazenamento compartilhado, equivalência de rede, migração ao vivo e failover continuam sem verificação e desativados.
     host: Host
     hostState: Conexão
+    inventoryError:
+      ssh_auth_failed: A autenticação SSH falhou. Atualize as credenciais SSH salvas deste host e tente novamente.
+      ssh_unreachable: Não foi possível acessar o host por SSH. Verifique endereço, porta, rota e firewall e atualize novamente.
+      host_services_unavailable: Não foi possível ler o inventário do host. Verifique os serviços libvirt/QEMU e as permissões sudo do usuário SSH e tente novamente.
+      inventory_failed: Não foi possível coletar o inventário do host. Verifique a conexão SSH, os serviços do host e as permissões e tente novamente.
     vms: VMs
     storage: Pools de armazenamento
     networks: Redes libvirt

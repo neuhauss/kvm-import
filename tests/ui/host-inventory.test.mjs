@@ -24,8 +24,8 @@ test('host identity distinguishes the Rancher display name from the detected hos
   assert.deepEqual(hostIdentity({ name: 'test-kvm-host', hostname: 'test-kvm-node-01' }), {
     displayName: 'test-kvm-host', detectedHostname: 'test-kvm-node-01',
   });
-  assert.deepEqual(hostIdentity({ name: 'kvm-sles-01', hostname: 'kvm-sles-01' }), {
-    displayName: 'kvm-sles-01', detectedHostname: '',
+  assert.deepEqual(hostIdentity({ name: 'node-a', hostname: 'node-a' }), {
+    displayName: 'node-a', detectedHostname: '',
   });
   assert.deepEqual(hostIdentity({ name: '', hostname: 'kvm-sles-02' }), {
     displayName: 'kvm-sles-02', detectedHostname: '',

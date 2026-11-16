@@ -149,19 +149,30 @@ for doc in ui_docs:
             " -e 's#DocumentRoot \"/usr/local/apache2/htdocs\"#DocumentRoot \"/tmp/www\"#'"
             " -e 's#<Directory \"/usr/local/apache2/htdocs\">#<Directory \"/tmp/www\">#'"
             " -e 's/^#LoadModule deflate_module /LoadModule deflate_module /'"
+            " -e 's/^#LoadModule headers_module /LoadModule headers_module /'"
             " -e '/^LoadModule deflate_module /a AddOutputFilterByType DEFLATE text/javascript application/javascript application/json text/css image/svg+xml'"
             " /usr/local/apache2/conf/httpd.conf > /tmp/httpd.conf"
+            " && printf '%s\\n' '<LocationMatch \"^/kvm-manager/[0-9]+[.][0-9]+[.][0-9]+(-[A-Za-z0-9.-]+)?(/|$)\">' '  Header always set Cache-Control \"public, max-age=31536000, immutable\"' '</LocationMatch>' '<Location \"/kvm-manager/catalog/index.yaml\">' '  Header always set Cache-Control \"no-cache\"' '</Location>' >> /tmp/httpd.conf"
             " && exec httpd -f /tmp/httpd.conf -DFOREGROUND"
         )
         doc["spec"]["template"]["spec"]["containers"][0]["args"] = [init_assets]
     if doc.get("kind") == "UIPlugin" and doc.get("metadata", {}).get("name") == "kvm-manager":
         doc["spec"]["plugin"]["version"] = version
         doc["spec"]["plugin"]["endpoint"] = f"{public_origin}/kvm-manager/{version}"
-        # Versioned plugin URLs change per release; disable extension caching
-        # so the Rancher UI does not keep loading the previous bundle.
-        doc["spec"]["plugin"]["noCache"] = True
+        # The endpoint changes with each release, so immutable versioned assets
+        # can use browser caching without retaining a previous plugin bundle.
+        doc["spec"]["plugin"]["noCache"] = False
+        logo_files = sorted((ROOT / "dist" / "img").glob("kvm.*.svg"))
+        if len(logo_files) != 1:
+            raise SystemExit(f"Expected one built KVM logo in dist/img, found {len(logo_files)}")
+        # Serve the installed extension icon from the same Rancher-owned asset
+        # endpoint as the plugin. A versioned local URL is available immediately
+        # during preview deploys and does not depend on a public GitHub tag.
+        logo_url = f"{public_origin}/kvm-manager/{version}/plugin/img/{logo_files[0].name}"
         doc["spec"]["plugin"].setdefault("metadata", {}).update({
             "catalog.cattle.io/display-name": "KVM",
+            "icon": logo_url,
+            "catalog.cattle.io/ui-icon": logo_url,
             "catalog.cattle.io/ui-component": "plugins",
             "catalog.cattle.io/namespace": "cattle-ui-plugin-system",
         })

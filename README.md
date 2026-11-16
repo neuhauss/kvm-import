@@ -60,6 +60,8 @@ For the short local preview workflow, see [LOCAL-DEPLOYMENT.md](docs/LOCAL-DEPLO
 
 - [Rancher RBAC mapping](docs/rbac.md)
 - [KVM host compatibility](docs/host-compatibility.md)
+- [Host image library](docs/image-library.md)
+- [VM graphical console](docs/graphics-console.md)
 - [API performance telemetry](docs/performance-telemetry.md)
 
 Publishing a GitHub Release tagged `kvm-manager-<version>` builds the API image on GHCR and publishes the extension chart to GitHub Pages. Make the GHCR package public for community installs. Docker Hub publishing is an optional secondary target and requires the repository secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`.
